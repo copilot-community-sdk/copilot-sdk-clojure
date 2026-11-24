@@ -11,9 +11,9 @@
 
 (defn auto-tier-keyword->string "Preserve the complete Auto-tier identifier, including a keyword namespace." [v] (let [tier (auto-tier-string->keyword v)] (when tier (subs (str tier) 1))))
 
-(def ^{:private true} attachment-type-wire->idiom {"file" :file, "directory" :directory, "selection" :selection, "github_reference" :github-reference, "blob" :blob, "extension_context" :extension-context})
+(def ^{:private true} attachment-type-wire->idiom {"github_file" :github-file, "github_actions_job" :github-actions-job, "github_url" :github-url, "github_tree_comparison" :github-tree-comparison, "blob" :blob, "github_reference" :github-reference, "directory" :directory, "github_snippet" :github-snippet, "github_commit" :github-commit, "github_release" :github-release, "github_file_diff" :github-file-diff, "file" :file, "selection" :selection, "extension_context" :extension-context, "github_repository" :github-repository})
 
-(def ^{:private true} attachment-type-idiom->wire {:file "file", :directory "directory", :selection "selection", :github-reference "github_reference", :blob "blob", :extension-context "extension_context"})
+(def ^{:private true} attachment-type-idiom->wire {:extension-context "extension_context", :github-reference "github_reference", :github-tree-comparison "github_tree_comparison", :github-url "github_url", :directory "directory", :github-actions-job "github_actions_job", :file "file", :github-commit "github_commit", :blob "blob", :github-release "github_release", :github-file-diff "github_file_diff", :github-snippet "github_snippet", :github-file "github_file", :github-repository "github_repository", :selection "selection"})
 
 (defn attachment-type-string->keyword "Convert a wire attachment discriminator to its closed idiomatic keyword domain." [v] (cond (nil? v) nil (keyword? v) (if (contains? attachment-type-idiom->wire v) v (throw (ex-info "Unknown attachment type" {:value v}))) (string? v) (or (get attachment-type-wire->idiom v) (throw (ex-info "Unknown attachment type" {:value v}))) :else (throw (ex-info "Expected attachment type string or keyword" {:value v, :value-class (class v)}))))
 

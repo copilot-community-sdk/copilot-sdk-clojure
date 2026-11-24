@@ -1,4 +1,10 @@
-# Matched Node/Clojure Benchmarks
+# Archived 1.x Node/Clojure Benchmarks
+
+These results measure the **1.x TCP SDKs**, not the native 2.x SDK. To use
+the commands below, open a separate checkout of the
+[pinned 1.x source](https://github.com/copilot-community-sdk/copilot-sdk-clojure/tree/01246672fc5fb8e8f2b50437eea6a55145e54934).
+For the measured revisions, input hashes, and tool versions, see the
+[confirmatory report](evidence/2026-08-13-confirmatory/REPORT.md#evidence).
 
 Run both SDKs through the same deterministic TCP JSON-RPC fixture. The harness
 measures implementation overhead without model, network, or live Copilot

@@ -4,13 +4,15 @@ Guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-This is a **Clojure port of the GitHub Copilot SDK**. The upstream repository is [github/copilot-sdk](https://github.com/github/copilot-sdk).
+This is the native Clojure port of the [Microsoft Copilot SDK](https://github.com/microsoft/copilot-sdk).
+The 2.x source, tests and JAR use `github.copilot-sdk`. There is no separate
+source profile or 1.x client on the runtime classpath.
 
 ### Design Philosophy
 
 We do **NOT** blindly copy the upstream implementation. Instead, we create an idiomatic Clojure library that:
 
-- Leverages Clojure language features and idioms (immutability, functional programming, state-mangement and
+- Leverages Clojure language features and idioms (immutability, functional programming, state management and
    concurrency features)
 - Would be natural to integrate in Clojure projects
 - Would make sense to expert Clojure programmers
@@ -23,8 +25,8 @@ We do **NOT** blindly copy the upstream implementation. Instead, we create an id
 
 When porting features or investigating behavior:
 
-1. **Primary reference**: [nodejs implementation](https://github.com/github/copilot-sdk/tree/main/nodejs) (JavaScript/TypeScript)
-2. **Secondary reference**: [python implementation](https://github.com/github/copilot-sdk/tree/main/python) for additional clarity
+1. **Primary reference**: [nodejs implementation](https://github.com/microsoft/copilot-sdk/tree/main/nodejs) (JavaScript/TypeScript)
+2. **Secondary reference**: [python implementation](https://github.com/microsoft/copilot-sdk/tree/main/python) for additional clarity
 3. **Local upstream checkout**: Resolve the upstream repo with
    `bash .github/skills/update-upstream/scripts/resolve-upstream.sh`. This
    works from normal checkouts and linked worktrees; set
@@ -35,7 +37,12 @@ When porting features or investigating behavior:
 
 ### API Compatibility Rules
 
-This SDK must maintain **strict API parity** with the official Node.js SDK (`@github/copilot-sdk`).
+This SDK follows the stable public contracts of the official Node.js SDK
+(`@github/copilot-sdk` in 1.x, `@microsoft/copilot-sdk` in 2.x). For the
+native-only 2.x release, parity covers stable in-process capabilities, not
+subprocess, TCP, or parent-extension transports. The Clojure 2.x client binds
+the Rust C interface directly with generic JNA; do not use the Copilot Java
+SDK, its internal stream host, or a parallel Java implementation.
 
 1. **Only expose what the official SDK exposes.** The CLI protocol often defines more options than the SDK surfaces. Do NOT add config options or methods just because the CLI accepts them — only add them when the Node.js SDK's `SessionConfig`, `CopilotClient`, etc. include them.
 
@@ -44,9 +51,11 @@ This SDK must maintain **strict API parity** with the official Node.js SDK (`@gi
    - `copilot-sdk/nodejs/src/client.ts` — `CopilotClient` methods and what params are sent on the wire
    - `copilot-sdk/nodejs/src/session.ts` — `CopilotSession` methods
 
-3. **Experimental/CLI-only features** may be kept if clearly marked as experimental in docstrings and docs,
-   with a note that they are not part of the official SDK API. Example: `:large-output` is accepted by the
-   CLI protocol but not exposed in the Node.js SDK.
+3. **Experimental features** require explicit approval and clear documentation.
+   For example, the SDK supports named BYOK catalogs with fixed credentials,
+   not the experimental rotating bearer provider. Startup permission mode,
+   sandbox, and diagnostics have experimental backing types and remain deferred.
+   Do not promote a generated RPC type to a public API by inference.
 
 4. **Clojure-only additions** (convenience macros, core.async wrappers, internal tuning knobs) are fine
    as long as they don't conflict with the official API surface.
@@ -61,15 +70,15 @@ A stable recertification is a complete public-surface inventory at an exact
 upstream pin, not a scan of changed generated files.
 
 1. Inventory package-root exports and public types, `CopilotClient` builders and
-   methods, `CopilotSession` methods, extension/join paths, and relevant stable
+   methods, `CopilotSession` methods, extension/join exclusions, and relevant stable
    tests. Generated RPC and CLI sources are wire evidence, not independent
    parity requirements.
 2. Classify every delta as stable public, experimental, internal,
-   generated-only, or language-specific before deciding whether to port it.
+   generated-only, language-specific, or an excluded transport.
    Experimental subsystems require an explicit maintainer decision, accepted
    ADR, or direct request.
-3. Trace each stable delta end to end: public export/type, applicable
-   create/resume/join or method builder, exact wire and omission semantics,
+3. Trace each stable in-process delta end to end: public export/type, applicable
+   create/resume or method builder, exact wire and omission semantics,
    idiom spec/fdef/API snapshot, tests, docs, examples, and changelog.
 4. Apply the optional-field proof matrix in
    `.github/skills/update-upstream/references/PROJECT.md`. Omission and JSON
@@ -86,7 +95,7 @@ durable source mapping.
 Use `.github/skills/update-upstream/SKILL.md` to check or sync upstream
 changes. At minimum:
 
-1. Review merged PRs: https://github.com/github/copilot-sdk/pulls?q=is%3Apr+is%3Aclosed
+1. Review merged PRs: https://github.com/microsoft/copilot-sdk/pulls?q=is%3Apr+is%3Aclosed
 2. Compare with recent commits in this repository
 3. For each upstream change, assess:
    - **Should it be ported?** (code changes yes, docs/CI/language-specific changes usually no)
@@ -98,21 +107,25 @@ changes. At minimum:
 ### Running Tests
 
 ```bash
-# Unit tests only
+# Hermetic unit, contract and framed protocol tests
 bb test
 
-# Full test suite including E2E tests (REQUIRED before committing)
-COPILOT_E2E_TESTS=true bb test
+# Use native-linux-x64 instead on glibc Linux x64.
+bb test:native native-darwin-arm64
+bb jar
+bb test:artifact native-darwin-arm64
 ```
 
-**Copilot Coding Agent**: When running as a Copilot Coding Agent, `COPILOT_GITHUB_TOKEN` is set
-by `copilot-setup-steps.yml`. Use it to authenticate E2E tests and examples:
+Native tests exercise the released classifier and local fixtures. The
+artifact test starts a fresh consumer and resolves the built JAR's dependencies
+from its POM; the application supplies the matching classifier. Neither gate
+requires a Copilot account or a CLI executable. The CI matrix covers macOS
+arm64 and glibc Linux x64, not every upstream platform.
 
-```bash
-export COPILOT_GITHUB_TOKEN="${COPILOT_GITHUB_TOKEN:-$GITHUB_TOKEN}"
-COPILOT_E2E_TESTS=true bb test
-./run-all-examples.sh
-```
+Only the protected release dispatch runs authenticated acceptance. Absence of
+`COPILOT_NATIVE_SMOKE_TOKEN` fails that gate; do not substitute a personal
+account, skip the gate, or log credentials. A source-level test, a successful
+ping, and an offline fixture do not establish live authentication.
 
 ### Instrumented Testing
 
@@ -120,8 +133,8 @@ All public API functions have `clojure.spec` fdefs defined in `instrument.clj`.
 When `github.copilot-sdk.instrument` is required (which happens automatically during
 integration tests), every public function call is validated against its spec at runtime.
 
-This means integration tests run with full spec checking — any argument or return
-value that violates a spec will throw immediately. When adding new public functions:
+Instrumentation checks call arguments. Test actual return values, channel
+closure and failure behavior separately. When adding new public functions:
 
 1. Add a `register-fdef!` form in `src/github/copilot_sdk/instrument.clj` (same syntax as
    `s/fdef`, but also records the symbol in a single registry so `instrument-all!` /
@@ -131,42 +144,13 @@ value that violates a spec will throw immediately. When adding new public functi
 
 ### Public API Surface Guard
 
-`resources/github/copilot_sdk/api_surface.edn` is the versioned compatibility
-snapshot for these supported namespaces:
-
-- `github.copilot-sdk`
-- `github.copilot-sdk.client`
-- `github.copilot-sdk.workflow`
-- `github.copilot-sdk.helpers`
-- `github.copilot-sdk.instrument`
-- `github.copilot-sdk.logging`
-- `github.copilot-sdk.session`
-- `github.copilot-sdk.specs`
-- `github.copilot-sdk.tool-set`
-- `github.copilot-sdk.tools`
-
-The snapshot guards namespace membership; curated public non-`no-doc` var
-names; function/macro/value kind; canonical arglists;
-dynamic/deprecated/experimental markers; normalized public fdef forms; and
-curated idiom spec-key membership. It intentionally excludes docstrings, source
-metadata, values, full idiom spec definitions, internal namespaces, and
-generated wire namespaces.
-
-Compiler-generated vars are not API merely because `ns-publics` returns them.
-The guard has named, reasoned, stale-checked exclusions for the generated
-`WorkflowHandle` and `CopilotSession` record constructors, plus a narrow validated
-predicate for the two private non-closing stdio proxy class interns. Any other
-record factory or proxy intern in a supported namespace fails generation until
-it is reviewed. Fdefs are loaded without retaining the instrumentation side
-effect of `github.copilot-sdk.instrument`; the generator restores the shared
-JVM's exact prior instrumentation state.
-
-After an intentional contract change, run `bb api-surface:update` and review the
-generated EDN diff. To add a supported namespace, enroll it explicitly in
-`test/github/copilot_sdk/api_surface.clj`, document its public status, regenerate
-the snapshot, and review the complete new namespace block. Add a generated-var
-exclusion only for a specific compiler artifact, with a reason and a stale-entry
-test; never filter arbitrary name prefixes.
+`resources/github/copilot_sdk/api_surface.edn` records the published namespaces'
+qualified names, arglists, function/macro/value kind, fdefs, and curated spec
+keys. The guard checks that Codox documents exactly those namespaces. Run `bb api-surface:update`
+after an intentional change and review the diff. The surface snapshot does
+not establish stable capability parity, safe resource ownership, or correct
+runtime behavior. Do not expose the generated wire namespace, opaque handles'
+constructors or raw protocol just to satisfy a surface count.
 
 ### Running Examples
 
@@ -194,26 +178,30 @@ clj -T:build install
 
 ### Version Management
 
-This project uses 4-segment versioning: `UPSTREAM.CLJ_PATCH` (e.g., `0.1.22.0`).
-First 3 segments track the upstream copilot-sdk release, 4th is Clojure-specific.
+This project uses 4-segment versioning: `UPSTREAM.CLJ_PATCH`. The first three
+segments track the upstream SDK; the fourth is Clojure-specific. For example,
+`2.0.1.0-SNAPSHOT` is a development version targeting 2.0.1. The platform
+runtime artifact uses the upstream SDK version, not the community version or
+the runtime engine version.
 
 ```bash
-# Sync to new upstream release (updates build.clj, README.md)
-clj -T:build sync-version :upstream '"0.1.23"'
+# Keep the community version unpublished when syncing a development checkout.
+clj -T:build sync-version :upstream '"2.0.1"' :snapshot true
 
-# Bump Clojure patch: 0.1.22.0 -> 0.1.22.1
-clj -T:build bump-version
+# Bump the Clojure-specific development patch.
+clj -T:build bump-version :snapshot true
 ```
 
 ## Commit and Deploy Guidelines
 
 ### Before Committing
 
-1. Run full CI: `bb ci:full` (requires copilot CLI + auth)
-   - This runs: E2E tests, examples, doc validation, and jar build
-2. If copilot CLI is not available, run `bb ci` (unit/integration tests, doc validation, jar)
-3. Run documentation validation: `bb validate-docs`
-4. **Always ask for my review before committing** - do not commit autonomously
+1. Run `bb ci:full native-darwin-arm64` or `bb ci:full native-linux-x64` for
+   the current host. If no tested classifier is available, run `bb ci`
+   (hermetic tests, documentation validation, JAR) and report the missing gates.
+2. For public surface or docs changes, regenerate and check the relevant
+   outputs before running the gate. No SDK transport may depend on a CLI.
+3. **Always ask for my review before committing** - do not commit autonomously.
 
 ### Deployment
 
@@ -227,8 +215,8 @@ clj -T:build bump-version
 This project emphasizes **rigor and correctness**, particularly for:
 
 - **Async code** (core.async channels, go blocks)
-- **Protocol/wire code** (JSON-RPC communication with CLI server)
-- **Sound process and resource management** robust error handling and cleanup to avoid leaking resources
+- **Protocol/wire code** (framed JSON-RPC to the native runtime)
+- **Native resource management** (upcall lifetime, close barriers and isolation between clients)
 
 ### Async and Lifecycle Invariants
 
@@ -255,7 +243,7 @@ This project emphasizes **rigor and correctness**, particularly for:
 
 - Unit tests for pure functions
 - Integration tests using the real protocol and deterministic mock server
-- E2E tests against real Copilot CLI
+- End-to-end tests against the pinned native runtime
 - All examples serve as additional integration tests
 - Prefer table-driven and property-based tests for contract state spaces
 - Prefer real lightweight implementations over mocks of internal behavior
@@ -270,30 +258,25 @@ Do not make cross-language parity or superiority claims from unmatched
 microbenchmarks or live service calls. Matched public SDK paths, fresh process
 pairs, predeclared analysis/abort rules, no trajectory-based selection, complete
 raw provenance, and careful non-significance language are non-negotiable.
-`benchmarks/README.md` and `benchmarks/METHODOLOGY.md` own the full protocol.
+`benchmarks/README.md` and `benchmarks/METHODOLOGY.md` own the historical
+protocol. The 1.x TCP benchmark results do **not** measure the native SDK.
 
 ## Project Structure
 
 ```
-src/github/copilot_sdk.clj   # Top-level public API namespace (github.copilot-sdk):
-                             # re-exports + curated public `event-types` / `session-events` sets
-src/github/copilot_sdk/
-├── client.clj       # Main client API (create-client, create-session, etc.)
-├── session.clj      # Session operations (send!, send-and-wait!, etc.)
-├── workflow.clj     # Experimental Dynamic Workflows and durable run operations
-├── helpers.clj      # Convenience functions (query, query-seq!, query-chan, etc.)
-├── tools.clj        # Helper functions for defining tools (define-tool, result-success, etc.)
-├── tool_set.clj     # Source-qualified tool filter patterns (:available-tools/:excluded-tools)
-├── specs.clj        # clojure.spec definitions for all data shapes
-├── instrument.clj   # Function specs (fdefs) and instrumentation
-├── util.clj         # Wire conversion (camelCase ↔ kebab-case), MCP helpers
-├── protocol.clj     # JSON-RPC 2.0 protocol over NIO channels
-├── process.clj      # CLI process management (spawning, lifecycle)
-├── teardown.clj     # Shared teardown-outcome contract (expected vs unexpected cleanup failures)
-├── logging.clj      # Logging facade via clojure.tools.logging
-└── generated/       # AUTO-GENERATED — produced by `bb codegen`. Do not edit.
-    ├── event_specs.clj  # clojure.spec for upstream session events
-    └── coerce.clj       # field-level wire↔idiom coercion (Instants, etc.)
+src/github/copilot_sdk.clj           # Public native Clojure facade
+src/github/copilot_sdk/native_host.clj  # Verified library, core C functions, UI actions and callback barrier
+src/github/copilot_sdk/native_client.clj # Owns clients, session handles and teardown
+src/github/copilot_sdk/protocol.clj  # Framed, bidirectional in-memory JSON-RPC
+src/github/copilot_sdk/turn.clj      # Native turn completion and event subscriptions
+src/github/copilot_sdk/session_options.clj # Pure wire builders
+src/github/copilot_sdk/native_callbacks.clj # Bounded broadcast callbacks and manual responses
+src/github/copilot_sdk/reverse.clj   # One reverse dispatcher per native client
+src/github/copilot_sdk/native_interaction.clj # Interactive requests and hooks
+src/github/copilot_sdk/discovery.clj # Model and request trace providers
+src/github/copilot_sdk/credentials.clj # Session token callbacks
+src/github/copilot_sdk/native_fs.clj # Host-provided session filesystem operations
+src/github/copilot_sdk/generated/    # Generated by bb codegen; do not edit
 
 script/codegen/          # Babashka generator (build-time only; not in JAR)
 schemas/       # Pinned upstream JSON Schemas (committed)
@@ -335,10 +318,8 @@ All these must be updated as appropriate when making changes:
 - `doc/reference/API.md` - Detailed API reference - read this to understand the current API design
 - `doc/getting-started.md` - Step-by-step tutorial for new users
 - `doc/style.md` - Documentation authoring style guide
-- `doc/auth/index.md` - Authentication guide (all methods, priority order)
-- `doc/auth/byok.md` - BYOK (Bring Your Own Key) provider guide
-- `doc/mcp/overview.md` - MCP server configuration guide
-- `doc/mcp/debugging.md` - MCP debugging and troubleshooting
+- `doc/guides/native-2x.md` - Migration from the 1.x transports and example inventory
+- `examples/README.md` - Runnable offline examples and their assertions
 - `benchmarks/README.md` - Benchmark usage, evidence, and interpretation
 - `benchmarks/METHODOLOGY.md` - Confirmatory study protocol
 - `CHANGELOG.md` - Version history and changes (see below)
@@ -352,6 +333,10 @@ Examples are executable contract evidence. Keep them portable, bounded,
 fail-loud, and explicit about client, session, subscription, process, and
 channel cleanup. Generated API HTML is never an editing surface: fix canonical
 source/docstrings or Markdown, then regenerate it.
+
+Keep historical ADRs and sealed 1.x evidence at their original revision.
+Update current guides and link to the original for removed 1.x behavior;
+do not maintain a second 1.x manual.
 
 ### Changelog
 
@@ -367,4 +352,4 @@ source/docstrings or Markdown, then regenerate it.
 4. **Mark breaking changes** with `**BREAKING**:` prefix.
 5. On release, the maintainer moves `[Unreleased]` entries to a versioned section and updates comparison links at the bottom.
    The Clojure SDK version (`UPSTREAM.CLJ_PATCH`, e.g., `0.1.24.0`) encodes which upstream release is included,
-   so the sync annotations in the changelog and the release version together show upstream parity.
+   but the version identifies the target only. Certification requires contract and runtime evidence.

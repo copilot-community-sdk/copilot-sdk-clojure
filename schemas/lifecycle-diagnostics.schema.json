@@ -1,0 +1,436 @@
+{
+  "$ref": "#/definitions/LifecycleDiagnosticEvent",
+  "definitions": {
+    "LifecycleDiagnosticEvent": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RuntimeLifecycleSystemStateDiagnosticEvent"
+        },
+        {
+          "$ref": "#/definitions/RuntimeLifecycleProgressStateDiagnosticEvent"
+        }
+      ],
+      "description": "Union of experimental lifecycle diagnostic event variants emitted by the Copilot CLI runtime.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleBlocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blockerId": {
+          "type": "string",
+          "description": "Opaque blocker identifier, stable for one guard lifetime and scoped to its owner."
+        },
+        "requirement": {
+          "type": "string",
+          "description": "System-owned capability required by the blocker owner."
+        },
+        "system": {
+          "type": "string",
+          "description": "System that owns the awaited operation."
+        },
+        "operationId": {
+          "type": "string",
+          "description": "Opaque awaited operation identifier."
+        },
+        "operationRevision": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "description": "Awaited operation revision observed by this blocker."
+        },
+        "currentPhase": {
+          "type": "string",
+          "description": "Current phase of the awaited operation."
+        },
+        "currentStep": {
+          "type": "string",
+          "description": "Current production boundary of the awaited operation."
+        },
+        "operationDisposition": {
+          "description": "How the awaited operation ended when the real wait remains active.",
+          "$ref": "#/definitions/RuntimeLifecycleDisposition"
+        },
+        "timing": {
+          "description": "Timing of this dependency wait.",
+          "$ref": "#/definitions/RuntimeLifecycleBlockerTiming"
+        }
+      },
+      "required": [
+        "blockerId",
+        "requirement",
+        "system",
+        "operationId",
+        "operationRevision",
+        "currentPhase",
+        "currentStep",
+        "timing"
+      ],
+      "title": "RuntimeLifecycleBlocker",
+      "description": "Exact lifecycle operation awaited by a real dependency wait.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleBlockerTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blockingSince": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when this dependency began blocking its owner.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "blockingSince"
+      ],
+      "title": "RuntimeLifecycleBlockerTiming",
+      "description": "Timing of one real dependency wait.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleDisposition": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "failed",
+        "cancelled",
+        "timed_out",
+        "superseded",
+        "abandoned"
+      ],
+      "title": "RuntimeLifecycleDisposition",
+      "description": "How a settled lifecycle operation or progress record ended.",
+      "stability": "experimental",
+      "x-enumDescriptions": {
+        "succeeded": "The work completed.",
+        "failed": "The work ended without reaching its intended boundary.",
+        "cancelled": "Cancellation ended the work.",
+        "timed_out": "A deadline ended the work.",
+        "superseded": "Newer work replaced this work.",
+        "abandoned": "The owner stopped observing the work without settling it."
+      },
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "description": "Opaque operation identifier, unique within the lifecycle incarnation and system."
+        },
+        "operationRevision": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "description": "Orders transitions of this operation."
+        },
+        "trigger": {
+          "type": "string",
+          "description": "System-owned reason the operation started."
+        },
+        "phase": {
+          "type": "string",
+          "description": "System-owned lifecycle stage."
+        },
+        "step": {
+          "type": "string",
+          "description": "System-owned production boundary within the phase."
+        },
+        "disposition": {
+          "description": "How the operation ended. Absent while the operation remains active.",
+          "$ref": "#/definitions/RuntimeLifecycleDisposition"
+        },
+        "timing": {
+          "description": "Timestamps recorded by the lifecycle service for this operation revision.",
+          "$ref": "#/definitions/RuntimeLifecycleOperationTiming"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RuntimeLifecycleBlocker"
+          },
+          "description": "Complete dependency blocker set after this operation change."
+        }
+      },
+      "required": [
+        "operationId",
+        "operationRevision",
+        "trigger",
+        "phase",
+        "step",
+        "timing",
+        "blockers"
+      ],
+      "title": "RuntimeLifecycleOperation",
+      "description": "Observed state of one readiness or convergence operation.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleOperationTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when the operation began.",
+          "format": "date-time"
+        },
+        "phaseStartedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when the current phase began.",
+          "format": "date-time"
+        },
+        "transitionedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when this operation revision was recorded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "startedAt",
+        "phaseStartedAt",
+        "transitionedAt"
+      ],
+      "title": "RuntimeLifecycleOperationTiming",
+      "description": "Fixed timestamps for one observed operation revision.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleProgressOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Kind of the originating progress record."
+        },
+        "progressId": {
+          "type": "string",
+          "description": "Identifier of the originating progress record."
+        }
+      },
+      "required": [
+        "kind",
+        "progressId"
+      ],
+      "title": "RuntimeLifecycleProgressOrigin",
+      "description": "Immutable causal origin of a progress record with independent identity and settlement.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleProgressStateData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session whose lifecycle owns this progress."
+        },
+        "incarnationId": {
+          "type": "string",
+          "description": "Opaque identity for one session registry generation."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Progress-owner-defined kind."
+        },
+        "progressId": {
+          "type": "string",
+          "description": "Opaque progress identifier, unique within the incarnation and kind."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Agent that owns this progress. Absent for the primary agent and progress without an agent owner."
+        },
+        "revision": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "description": "Orders changes to this progress record."
+        },
+        "phase": {
+          "type": "string",
+          "description": "Progress-owner-defined phase."
+        },
+        "disposition": {
+          "description": "How the progress record ended. Absent while it remains active.",
+          "$ref": "#/definitions/RuntimeLifecycleDisposition"
+        },
+        "origin": {
+          "description": "Immutable causal origin, when another lifecycle progress record caused this one.",
+          "$ref": "#/definitions/RuntimeLifecycleProgressOrigin"
+        },
+        "timing": {
+          "description": "Timestamps recorded by the lifecycle service for this progress revision.",
+          "$ref": "#/definitions/RuntimeLifecycleProgressTiming"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RuntimeLifecycleBlocker"
+          },
+          "description": "Complete dependency blocker set after this progress change."
+        }
+      },
+      "required": [
+        "sessionId",
+        "incarnationId",
+        "kind",
+        "progressId",
+        "revision",
+        "phase",
+        "timing",
+        "blockers"
+      ],
+      "title": "RuntimeLifecycleProgressStateData",
+      "description": "Experimental, observational-only state of runtime progress and the lifecycle operations that block it. Observation and delivery never control runtime or model behavior. Process death, diagnostic projection loss, transport loss, or serialization failure can prevent external delivery.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleProgressStateDiagnosticEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "runtime.lifecycle.progress_state",
+          "description": "Type discriminator. Always \"runtime.lifecycle.progress_state\"."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the lifecycle diagnostic event was projected."
+        },
+        "data": {
+          "$ref": "#/definitions/RuntimeLifecycleProgressStateData",
+          "description": "Experimental, ephemeral, observational-only state of runtime progress and the lifecycle operations that block it. Observation and delivery never control runtime or model behavior. Process death, diagnostic projection loss, transport loss, or serialization failure can prevent external delivery."
+        }
+      },
+      "required": [
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Lifecycle diagnostic event \"runtime.lifecycle.progress_state\". Experimental, ephemeral, observational-only state of runtime progress and the lifecycle operations that block it. Observation and delivery never control runtime or model behavior. Process death, diagnostic projection loss, transport loss, or serialization failure can prevent external delivery.",
+      "title": "RuntimeLifecycleProgressStateDiagnosticEvent",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleProgressTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when the progress record began.",
+          "format": "date-time"
+        },
+        "phaseStartedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when the current phase began.",
+          "format": "date-time"
+        },
+        "transitionedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp when this progress revision was recorded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "startedAt",
+        "phaseStartedAt",
+        "transitionedAt"
+      ],
+      "title": "RuntimeLifecycleProgressTiming",
+      "description": "Fixed timestamps for one observed progress revision.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleSystemStateData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session whose lifecycle owns this system."
+        },
+        "incarnationId": {
+          "type": "string",
+          "description": "Opaque identity for one session registry generation."
+        },
+        "system": {
+          "type": "string",
+          "description": "Stable subsystem identifier."
+        },
+        "systemRevision": {
+          "type": "integer",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "description": "Orders every observed change to this system in the incarnation."
+        },
+        "condition": {
+          "type": "string",
+          "description": "Authoritative condition retained after this change. Initial shared values are `current`, `disabled`, `degraded`, and `quiescent`; integrations can add bounded values as the contract matures."
+        },
+        "changedOperation": {
+          "description": "Operation transition that produced this system revision.",
+          "$ref": "#/definitions/RuntimeLifecycleOperation"
+        },
+        "activeOperations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RuntimeLifecycleOperation"
+          },
+          "description": "Complete active operation set after applying the change."
+        }
+      },
+      "required": [
+        "sessionId",
+        "incarnationId",
+        "system",
+        "systemRevision",
+        "changedOperation",
+        "activeOperations"
+      ],
+      "title": "RuntimeLifecycleSystemStateData",
+      "description": "Experimental, observational-only state of one runtime system after an operation transition. Observation and delivery never control runtime work. Process death, diagnostic projection loss, transport loss, or serialization failure can prevent external delivery.",
+      "stability": "experimental",
+      "visibility": "internal"
+    },
+    "RuntimeLifecycleSystemStateDiagnosticEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "runtime.lifecycle.system_state",
+          "description": "Type discriminator. Always \"runtime.lifecycle.system_state\"."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the lifecycle diagnostic event was projected."
+        },
+        "data": {
+          "$ref": "#/definitions/RuntimeLifecycleSystemStateData",
+          "description": "Experimental, ephemeral, observational-only state of one runtime system after an operation transition. Observation and delivery never control runtime work. Process death, diagnostic projection loss, transport loss, or serialization failure can prevent external delivery."
+        }
+      },
+      "required": [
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Lifecycle diagnostic event \"runtime.lifecycle.system_state\". Experimental, ephemeral, observational-only state of one runtime system after an operation transition. Observation and delivery never control runtime work. Process death, diagnostic projection loss, transport loss, or serialization failure can prevent external delivery.",
+      "title": "RuntimeLifecycleSystemStateDiagnosticEvent",
+      "stability": "experimental",
+      "visibility": "internal"
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "JSON Schema for experimental lifecycle diagnostic events emitted by the Copilot CLI runtime.",
+  "visibility": "internal"
+}

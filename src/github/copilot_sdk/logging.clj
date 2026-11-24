@@ -1,4 +1,4 @@
-(ns github.copilot-sdk.logging
+(ns ^:no-doc github.copilot-sdk.logging
   "Logging facade for the Copilot SDK using clojure.tools.logging.
    
    This wraps clojure.tools.logging to provide SDK-specific defaults.
@@ -50,16 +50,3 @@
   "Log an error message. A leading Throwable is attached to the log event."
   [& args]
   (log-form :error args))
-
-;; Legacy compatibility - no-op since logging config is via SLF4J backend
-(defn set-log-level!
-  "Set log level. Note: With tools.logging, configure via your SLF4J backend instead.
-   This function is kept for API compatibility but has no effect."
-  [_level]
-  nil)
-
-(defn get-log-level
-  "Get current log level. Returns :info as default.
-   Actual level is determined by your SLF4J backend configuration."
-  []
-  :info)

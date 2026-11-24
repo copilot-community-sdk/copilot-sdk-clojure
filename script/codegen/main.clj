@@ -3,14 +3,13 @@
 ;; emits Clojure source files under src/github/copilot_sdk/generated/.
 ;;
 ;; Usage:
-;;   bb codegen          ;; regenerate everything
+;;   bb codegen
 ;;
 ;; CI enforces drift via `git diff --exit-code` after running this script;
 ;; see .github/workflows/codegen-check.yml.
 
 (ns codegen.main
   (:require [babashka.fs :as fs]
-            [clojure.java.io :as io]
             [codegen.core :as cc]
             [codegen.emit-coerce :as ec]
             [codegen.emit-specs :as es]))
@@ -18,19 +17,12 @@
 (def repo-root
   (-> *file* fs/parent fs/parent fs/parent fs/canonicalize str))
 
-(def schemas-dir
-  (str (fs/path repo-root "schemas")))
-
-(def gen-dir
-  (str (fs/path repo-root "src" "github" "copilot_sdk" "generated")))
-
-(defn -main [& _args]
-  (let [events-path (str (fs/path schemas-dir "session-events.schema.json"))
+(defn -main []
+  (let [gen-dir (fs/path repo-root "src" "github" "copilot_sdk" "generated")
+        events-path (str (fs/path repo-root "schemas" "session-events.schema.json"))
         coerce-path (str (fs/path repo-root "script" "codegen" "coercions.edn"))]
     (when-not (fs/exists? events-path)
-      (println (format "Schema not found at %s — run `bb schemas:fetch` first."
-                       events-path))
-      (System/exit 1))
+      (throw (ex-info "Pinned schema not found" {:path events-path})))
     (println "Loading" events-path)
     (let [root  (cc/load-schema events-path)
           forms (es/emit-event-specs-ns root)

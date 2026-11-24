@@ -1,81 +1,15 @@
 (ns github.copilot-sdk.teardown-test
-  "Teardown diagnostics and failed-connect cleanup (R7: COR-001, IDI-001, IDI-002).
-
-   These tests pin observable behavior: a rejected handshake must retain no
-   transport resources, a Throwable must reach the logging backend as a
-   Throwable, expected close outcomes must stay quiet, and unexpected ones must
-   be reported with the identity of the resource that failed."
+  "Logging, interrupt, and error-preserving cleanup on native transport teardown."
   (:require [clojure.core.async :as async]
-            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [clojure.tools.logging :as ctl]
             [clojure.tools.logging.impl :as impl]
             [clojure.tools.logging.test :as log-test]
-            [github.copilot-sdk :as sdk]
-            [github.copilot-sdk.client :as client]
             [github.copilot-sdk.logging :as log]
-            [github.copilot-sdk.mock-server :as mock]
-            [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.teardown :as teardown])
   (:import [java.io IOException]
            [java.nio.channels ClosedChannelException ReadableByteChannel WritableByteChannel]))
-
-;; -----------------------------------------------------------------------------
-;; COR-001 - a rejected handshake must not retain transport resources
-;; -----------------------------------------------------------------------------
-
-(deftest rejected-handshake-releases-connection-and-allows-retry
-  (testing "connect-with-streams! releases the connection it built when the
-            protocol version is rejected, so a caller can retry without
-            performing cleanup of its own"
-    (let [server (mock/create-mock-server)
-          _ (reset! (:protocol-version server) 2)
-          _ (mock/start-mock-server! server)
-          c (sdk/client {:auto-start? false})
-          [in out] (mock/client-streams server)
-          rejected-conn (atom nil)
-          real-connect protocol/connect]
-      (try
-        (with-redefs [protocol/connect (fn [i o state-atom]
-                                         (let [conn (real-connect i o state-atom)]
-                                           (reset! rejected-conn conn)
-                                           conn))]
-          (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                #"(?i)protocol.*version"
-                                (client/connect-with-streams! c in out))))
-
-        (let [s @(:state c)]
-          (is (= :error (:status s)))
-          (is (false? (some? (:connection s))) "connection state must be released")
-          (is (false? (some? (:connection-io s))) "connection IO must be released"))
-
-        (let [conn @rejected-conn]
-          (is (some? conn) "the reproducer must have observed the built connection")
-          (is (.isShutdown ^java.util.concurrent.ThreadPoolExecutor
-               (:request-executor conn))
-              "the reverse-request executor must be shut down")
-          (let [^Thread read-thread (:read-thread conn)]
-            (.join read-thread 2000)
-            (is (not (.isAlive read-thread))
-                "the reader thread must have exited")))
-
-        (finally
-          (mock/stop-mock-server! server)))
-
-      ;; Retry against a fresh server with no caller-side cleanup at all.
-      (let [server2 (mock/start-mock-server! (mock/create-mock-server))
-            [in2 out2] (mock/client-streams server2)]
-        (try
-          (client/connect-with-streams! c in2 out2)
-          (is (= :connected (:status @(:state c))))
-          (finally
-            (try (sdk/disconnect! c) (catch Exception _))
-            (mock/stop-mock-server! server2)))))))
-
-;; -----------------------------------------------------------------------------
-;; IDI-001 - the logging facade must preserve Throwable-first semantics
-;; -----------------------------------------------------------------------------
 
 (deftest throwable-reaches-the-logging-backend-as-a-throwable
   (testing "a leading Throwable is handed to the backend as a throwable, not
@@ -182,9 +116,7 @@
   (let [primary (InterruptedException. "body interrupted")
         cleaned? (atom false)
         caught (try
-                 (teardown/call-with-cleanup
-                  #(throw primary)
-                  #(reset! cleaned? true))
+                 (teardown/with-cleanup #(reset! cleaned? true) (throw primary))
                  nil
                  (catch Throwable failure
                    failure))
@@ -202,9 +134,7 @@
         cleanup (InterruptedException. "cleanup interrupted")]
     (try
       (let [caught (try
-                     (teardown/call-with-cleanup
-                      #(throw primary)
-                      #(throw cleanup))
+                     (teardown/with-cleanup #(throw cleanup) (throw primary))
                      nil
                      (catch Throwable failure
                        failure))
@@ -219,9 +149,7 @@
 (deftest cleanup-only-failure-is-rethrown
   (let [cleanup (ex-info "cleanup only" {})
         caught (try
-                 (teardown/call-with-cleanup
-                  (constantly :ok)
-                  #(throw cleanup))
+                 (teardown/with-cleanup #(throw cleanup) :ok)
                  nil
                  (catch Throwable failure
                    failure))]
@@ -288,205 +216,3 @@
           conn (fault-injecting-conn closed nil)]
       (is (= [] (protocol/disconnect conn)))
       (is (= [] (protocol/disconnect conn))))))
-
-(deftest unexpected-process-teardown-failure-is-reported
-  (testing "destroy! reports a process that cannot be waited on"
-    (let [p (proxy [Process] []
-              (destroy [] nil)
-              (destroyForcibly [] this)
-              (isAlive [] true)
-              (waitFor
-                ([] 0)
-                ([_timeout _unit] (throw (IOException. "waitFor exploded")))))
-          failures (proc/destroy! (proc/map->ManagedProcess {:process p}) 10)]
-      (is (seq failures) "an unexpected process failure must be reported")
-      (is (every? #(= :process (:resource (ex-data %))) failures))
-      (is (some #(= :wait-for-exit (:operation (ex-data %))) failures)))))
-
-(deftest process-teardown-without-failure-reports-nothing
-  (testing "a process that exits promptly produces no teardown failures"
-    (let [p (proxy [Process] []
-              (destroy [] nil)
-              (destroyForcibly [] this)
-              (isAlive [] false)
-              (waitFor
-                ([] 0)
-                ([_timeout _unit] true)))]
-      (is (= [] (proc/destroy! (proc/map->ManagedProcess {:process p}) 10))))))
-
-(defn- surviving-process
-  "A Process that never dies: every wait reports that it is still running."
-  []
-  (proxy [Process] []
-    (destroy [] nil)
-    (destroyForcibly [] this)
-    (isAlive [] true)
-    (waitFor
-      ([] 0)
-      ([_timeout _unit] false))
-    (exitValue [] (throw (IllegalThreadStateException.)))
-    (getInputStream [] nil)
-    (getOutputStream [] nil)
-    (getErrorStream [] nil)))
-
-(deftest process-surviving-forced-kill-is-reported
-  (testing "a child that outlives the forced kill window is an unexpected
-            failure, not a clean teardown"
-    (let [failures (proc/destroy! (proc/map->ManagedProcess {:process (surviving-process)}) 10)]
-      (is (seq failures) "a surviving process must never report clean teardown")
-      (let [survival (first (filter #(= :forcible (:stage (ex-data %))) failures))]
-        (is (some? survival) "the forced-kill stage must be identified")
-        (is (= {:operation :wait-for-exit :resource :process :stage :forcible}
-               (select-keys (ex-data survival) [:operation :resource :stage])))
-        (is (pos? (:timeout-ms (ex-data survival)))
-            "the failure must carry the window that elapsed")))))
-
-(deftest stop-retains-the-handle-of-a-process-it-could-not-kill
-  (testing "stop! surfaces the surviving process and keeps the only handle to it"
-    (let [c (sdk/client {:auto-start? false})
-          mp (proc/map->ManagedProcess {:process (surviving-process)})]
-      (swap! (:state c) assoc :status :connected :process mp)
-      (let [errors (client/stop! c)]
-        (is (some #(= :process (:resource (ex-data %))) errors)
-            "the surviving process must reach the caller")
-        (is (identical? mp (:process @(:state c)))
-            "the handle to a live process must not be discarded")))))
-
-(defn- exiting-process
-  "A Process that dies as soon as it is asked to."
-  []
-  (proxy [Process] []
-    (destroy [] nil)
-    (destroyForcibly [] this)
-    (isAlive [] false)
-    (waitFor
-      ([] 0)
-      ([_timeout _unit] true))
-    (exitValue [] 0)
-    (getInputStream [] nil)
-    (getOutputStream [] nil)
-    (getErrorStream [] nil)))
-
-(deftest force-stop-retains-the-handle-of-a-process-that-survives-the-kill
-  (testing "force-stop! confirms the forced kill: a child that ignores it is
-            logged with its resource identity and its handle is kept"
-    (let [c (sdk/client {:auto-start? false})
-          mp (proc/map->ManagedProcess {:process (surviving-process)})]
-      (swap! (:state c) assoc :status :connected :process mp)
-      (log-test/with-log
-        (is (nil? (client/force-stop! c)) "force-stop! still returns nil")
-        (let [warnings (filter (comp #{:warn :error} :level) (log-test/the-log))]
-          (is (seq warnings) "a surviving process must be logged")
-          (is (some #(some-> (:throwable %) ex-data :resource (= :process)) warnings)
-              "the log entry must carry the failing resource as a Throwable")
-          (is (some #(some-> (:throwable %) ex-data :stage (= :forcible)) warnings)
-              "the forced-kill stage must be identified")))
-      (is (identical? mp (:process @(:state c)))
-          "the handle to a live process must not be discarded")
-      (is (= :disconnected (:status @(:state c)))))))
-
-(deftest force-stop-clears-the-handle-of-a-process-it-killed
-  (testing "a confirmed forced kill releases the handle and stays quiet"
-    (let [c (sdk/client {:auto-start? false})
-          mp (proc/map->ManagedProcess {:process (exiting-process)})]
-      (swap! (:state c) assoc :status :connected :process mp)
-      (log-test/with-log
-        (is (nil? (client/force-stop! c)) "force-stop! still returns nil")
-        (is (empty? (filter (comp #{:warn :error} :level) (log-test/the-log)))
-            "a confirmed kill must not be reported as a failure"))
-      (is (nil? (:process @(:state c)))
-          "a confirmed-dead process must release its handle")
-      (is (= :disconnected (:status @(:state c)))))))
-
-(deftest forcible-destroy-confirms-exit
-  (testing "destroy-forcibly! reports [] only when the child is confirmed gone"
-    (is (= [] (proc/destroy-forcibly!
-               (proc/map->ManagedProcess {:process (exiting-process)}))))
-    (let [failures (proc/destroy-forcibly!
-                    (proc/map->ManagedProcess {:process (surviving-process)}))]
-      (is (seq failures) "a signal that was merely sent must not report success")
-      (let [survival (first failures)]
-        (is (= {:operation :wait-for-exit :resource :process :stage :forcible}
-               (select-keys (ex-data survival) [:operation :resource :stage])))
-        (is (pos? (:timeout-ms (ex-data survival))))))))
-
-;; -----------------------------------------------------------------------------
-;; stderr classification depends on whether the child is still alive
-;; -----------------------------------------------------------------------------
-
-(defn- exploding-stderr-stream
-  [^IOException boom]
-  (proxy [java.io.InputStream] []
-    (read
-      ([] (throw boom))
-      ([_b] (throw boom))
-      ([_b _off _len] (throw boom)))))
-
-(defn- read-stderr-until-closed!
-  "Drain a stderr channel until the reader thread closes it."
-  [ch]
-  (loop [] (when (some? (async/<!! ch)) (recur))))
-
-(deftest stderr-failure-while-process-is-alive-is-reported
-  (testing "losing stderr while the child still runs hides its diagnostics, so
-            it is warned with the Throwable and resource identity"
-    (let [boom (IOException. "stderr exploded")
-          mp (proc/map->ManagedProcess {:stderr (exploding-stderr-stream boom)
-                                        :process (surviving-process)})]
-      (log-test/with-log
-        (read-stderr-until-closed! (proc/stderr-reader mp))
-        (let [warnings (filter (comp #{:warn :error} :level) (log-test/the-log))]
-          (is (seq warnings) "a live-process stderr failure must be warned")
-          (is (some #(identical? boom (:throwable %)) warnings)
-              "the Throwable must reach the backend intact")
-          (is (some #(str/includes? (str (:message %)) "stderr") warnings)
-              "the log must identify the failing resource"))))))
-
-(deftest stderr-failure-after-process-exit-stays-quiet
-  (testing "once the child is gone its stderr is expected to fail"
-    (let [dead (proxy [Process] []
-                 (isAlive [] false)
-                 (destroy [] nil)
-                 (destroyForcibly [] this)
-                 (waitFor ([] 0) ([_t _u] true)))
-          mp (proc/map->ManagedProcess {:stderr (exploding-stderr-stream (IOException. "closed"))
-                                        :process dead})]
-      (log-test/with-log
-        (read-stderr-until-closed! (proc/stderr-reader mp))
-        (is (empty? (filter (comp #{:warn :error} :level) (log-test/the-log)))
-            "an expected stderr close must not be warned")))))
-
-;; -----------------------------------------------------------------------------
-;; Client teardown contract wiring
-;; -----------------------------------------------------------------------------
-
-(deftest stop-surfaces-transport-failures-in-its-error-vector
-  (testing "stop! reports an unexpected connection teardown failure through its
-            existing return contract"
-    (let [c (sdk/client {:auto-start? false})
-          closed (atom [])]
-      (swap! (:state c) assoc
-             :status :connected
-             :connection-io (fault-injecting-conn closed #(IOException. "boom")))
-      (let [errors (client/stop! c)]
-        (is (some #(= :read-channel (:resource (ex-data %))) errors)
-            "the failure must reach the caller")
-        (is (nil? (:connection-io @(:state c)))
-            "state must still be released")
-        (is (= :disconnected (:status @(:state c))))))))
-
-(deftest force-stop-logs-transport-failures
-  (testing "force-stop! keeps returning nil but makes the failure observable"
-    (let [c (sdk/client {:auto-start? false})
-          closed (atom [])]
-      (swap! (:state c) assoc
-             :status :connected
-             :connection-io (fault-injecting-conn closed #(IOException. "boom")))
-      (log-test/with-log
-        (is (nil? (client/force-stop! c)))
-        (is (seq (filter (comp #{:warn :error} :level) (log-test/the-log)))
-            "an unexpected teardown failure must be logged")
-        (is (some #(some-> (:throwable %) ex-data :resource (= :read-channel))
-                  (log-test/the-log))
-            "the log entry must carry the failing resource as a Throwable"))
-      (is (nil? (:connection-io @(:state c)))))))

@@ -41,10 +41,9 @@ jobs:
           restore-keys: cljdeps-
       - name: Symlink tools to standard PATH
         run: |
-          sudo ln -sf $(which bb) /usr/local/bin/bb
-          sudo ln -sf $(which clj) /usr/local/bin/clj
-          sudo ln -sf $(which clojure) /usr/local/bin/clojure
-          sudo ln -sf $(which java) /usr/local/bin/java
+          for tool in bb clj clojure java; do
+            sudo ln -sf "$(command -v "$tool")" "/usr/local/bin/$tool"
+          done
       - name: Pre-download Clojure deps and ensure global access
         run: |
           # Download Maven deps via system clojure
@@ -73,12 +72,6 @@ jobs:
           # /root/ paths, so bb finds them regardless of $HOME.
           # Ensure deps directories are readable by any user
           chmod -R a+rX ~/.m2/repository ~/.deps.clj 2>/dev/null || true
-      - name: Export Copilot token for SDK E2E tests
-        run: |
-          # Make the GitHub token available as COPILOT_GITHUB_TOKEN so the
-          # Copilot SDK E2E tests and examples can authenticate with the
-          # same token the Copilot Coding Agent uses.
-          echo "COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-$GITHUB_TOKEN}" >> "$GITHUB_ENV"
       - name: Install gh-aw extension
         uses: github/gh-aw/actions/setup-cli@v0.48.1
         with:

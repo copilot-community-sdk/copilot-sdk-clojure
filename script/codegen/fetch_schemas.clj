@@ -723,7 +723,7 @@
         (.write output content))
       total-bytes)))
 
-(defn- write-readme! [staging-dir source asset-name version]
+(defn- write-readme! [staging-dir source asset-name version isolated-archive-hash]
   (spit
    (str (fs/path staging-dir "README.md"))
    (str
@@ -748,8 +748,14 @@
            (format "while requesting schema version `%s`, " version)
            "and verified against the SHA-256 "
            "supplied via `COPILOT_CLI_RELEASE_SHA256`.\n\n"))
-    "**Do not edit by hand.** To update, run `bb schemas:fetch` after "
-    "bumping `.copilot-schema-version`.\n\n"
+    (if isolated-archive-hash
+      (format (str "Archive SHA-256: `%s`\n\n"
+                   "**Do not edit by hand.** To reproduce in a new directory, run:\n\n"
+                   "```sh\nCOPILOT_CLI_SCHEMA_OUTPUT=./fresh-schemas "
+                   "bb script/codegen/fetch_schemas.clj --version %s\n```\n\n")
+              isolated-archive-hash version)
+      (str "**Do not edit by hand.** To update, run `bb schemas:fetch` after "
+           "bumping `.copilot-schema-version`.\n\n"))
     (format "Schema version: `%s`\n" version))))
 
 (defn- release-source []
@@ -938,7 +944,6 @@
          (extract-schema! archive staging-dir extracted-bytes member))
        0
        members)
-      (write-readme! staging-dir source asset-name version)
       (mapv first members))))
 
 (defn- fetch-schemas! [args]
@@ -957,6 +962,8 @@
           (let [schema-names
                 (prepare-staged-schemas!
                  archive staging-dir source asset-name version)]
+            (write-readme! staging-dir source asset-name version
+                          (when-not replace-existing? expected-hash))
             (install-schemas! staging-dir path replace-existing?)
             (doseq [schema-name schema-names]
               (println

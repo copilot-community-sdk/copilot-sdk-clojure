@@ -1,126 +1,28 @@
 (ns github.copilot-sdk.util-test
-  (:require [camel-snake-kebab.core :as csk]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [github.copilot-sdk.util :as util]))
 
-(defn- names-of-length
-  [alphabet length]
-  (if (zero? length)
-    [""]
-    (for [prefix (names-of-length alphabet (dec length))
-          character alphabet]
-      (str prefix character))))
+(deftest protocol-keys-and-opaque-keys-have-distinct-rules
+  (let [metadata {"tenant/id" 1 "account/id" 2 "Mixed_case" [{"child-key" false}]}
+        idiom {:tool-call-id "t" :metadata metadata}
+        wire {:toolCallId "t" :metadata metadata}]
+    (is (= metadata (util/opaque-json->wire {:tenant/id 1 "account/id" 2 :Mixed_case [{:child-key false}]})))
+    (is (= wire (util/clj->wire idiom)))
+    (is (= idiom (util/wire->clj wire)))
+    (is (= {:sha-256 "hash" :parent-id nil} (util/wire->clj {:sha256 "hash" :parent_id nil})))))
 
-(deftest case-conversion-fast-path-preserves-library-results
-  (let [key-cases (map keyword
-                       (mapcat #(names-of-length [\a \b \z \0 \1 \9 \-] %)
-                               (range 1 5)))]
-    (is (every?
-         (fn [key]
-           (= (csk/->kebab-case-keyword key)
-              (first (keys (util/wire->clj {key true})))))
-         key-cases))
-    (is (every?
-         (fn [key]
-           (= (csk/->camelCaseKeyword key)
-              (first (keys (util/clj->wire {key true})))))
-         key-cases))))
+(deftest opaque-json-rejects-ambiguous-or-unserializable-values
+  (doseq [value [{:ns/name nil "ns/name" false} {"nested" [{:key 1 "key" 2}]}
+                 {1 true} {:key :keyword-value} #{1} [##NaN] 1/3 (Object.)
+                 (lazy-seq (throw (AssertionError. "A JSON encoder must not realize arbitrary sequences")))]]
+    (is (thrown? clojure.lang.ExceptionInfo (util/opaque-json->wire value)))))
 
-(deftest simple-keywords-bypass-case-conversion
-  (testing "inbound conversion delegates only keys that can change"
-    (let [original csk/->kebab-case-keyword
-          converted (atom [])]
-      (with-redefs [csk/->kebab-case-keyword
-                    (fn [key]
-                      (swap! converted conj key)
-                      (original key))]
-        (is (= {:jsonrpc "2.0"
-                :method "session.event"
-                :params {:session-id "s"
-                         :sha-256 "hash"
-                         :event {:parent-id nil
-                                 :data {:content "ok"}}}}
-               (util/wire->clj
-                {:jsonrpc "2.0"
-                 :method "session.event"
-                 :params {:sessionId "s"
-                          :sha256 "hash"
-                          :event {:parent_id nil
-                                  :data {:content "ok"}}}})))
-        (is (= #{:sessionId :sha256 :parent_id} (set @converted))))))
-
-  (testing "outbound conversion delegates only keys that can change"
-    (let [original csk/->camelCaseKeyword
-          converted (atom [])]
-      (with-redefs [csk/->camelCaseKeyword
-                    (fn [key]
-                      (swap! converted conj key)
-                      (original key))]
-        (is (= {:jsonrpc "2.0"
-                :method "session.send"
-                :params {:sessionId "s"
-                         :sha256 "hash"
-                         :prompt "hi"}}
-               (util/clj->wire
-                {:jsonrpc "2.0"
-                 :method "session.send"
-                 :params {:session-id "s"
-                          :sha256 "hash"
-                          :prompt "hi"}})))
-        (is (= [:session-id] @converted)))))
-
-  (testing "namespaced and punctuated keys preserve library semantics"
-    (doseq [key [:my.app/user_id :already.kebab/key-name :question? :dot.name
-                 :-leading :trailing- :repeated--separator :utf8 :sha256
-                 :v1beta2 :line10col5]]
-      (is (= (csk/->kebab-case-keyword key)
-             (first (keys (util/wire->clj {key true})))))
-      (is (= (csk/->camelCaseKeyword key)
-             (first (keys (util/clj->wire {key true}))))))))
-
-(deftest opaque-json-conversion-preserves-key-identity
-  (is (= {"tenant/id" 1
-          "account/id" 2
-          "plain" {"nested/key" true}}
-         (util/opaque-json->wire
-          {:tenant/id 1
-           :account/id 2
-           :plain {:nested/key true}}))))
-
-(deftest opaque-json-conversion-rejects-colliding-wire-keys
-  (doseq [[value expected-keys]
-          [[{:foo 1 "foo" 2}
-            #{"foo"}]
-           [{:nested [{:foo-bar 1 "foo-bar" 2}]}
-            #{"foo-bar"}]
-           [{:tenant/id 1 "tenant/id" 2}
-            #{"tenant/id"}]]]
-    (let [error
-          (try
-            (util/opaque-json->wire value)
-            nil
-            (catch clojure.lang.ExceptionInfo e
-              e))]
-      (is (instance? clojure.lang.ExceptionInfo error))
-      (when error
-        (is (re-find #"Duplicate opaque JSON keys after wire conversion"
-                     (ex-message error)))
-        (is (= expected-keys
-               (:duplicate-wire-keys (ex-data error))))))))
-
-(deftest opaque-json-conversion-rejects-non-array-collections
-  (is (thrown-with-msg?
-       clojure.lang.ExceptionInfo
-       #"Unsupported opaque JSON collection"
-       (util/opaque-json->wire {:values #{1 2 3}}))))
-
-(deftest opaque-json-conversion-is-stack-safe
+(deftest opaque-json-keeps-nested-empty-and-null-values
+  (is (nil? (util/opaque-json->wire nil)))
+  (is (= [nil [] {} false] (util/opaque-json->wire [nil [] {} false])))
   (let [depth 10000
-        nested (reduce (fn [value _] [value]) :leaf (range depth))
-        converted (util/opaque-json->wire nested)]
-    (is (= :leaf
-           (loop [value converted
-                  remaining depth]
-             (if (zero? remaining)
-               value
-               (recur (first value) (dec remaining))))))))
+        nested (reduce (fn [v _] {:member [v]}) "leaf" (range depth))]
+    (is (= "leaf" (loop [v (util/opaque-json->wire nested) remaining depth]
+                    (if (zero? remaining)
+                      v
+                      (recur (get-in v ["member" 0]) (dec remaining))))))))

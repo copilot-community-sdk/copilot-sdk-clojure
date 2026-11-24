@@ -1,0 +1,222 @@
+(ns ^:no-doc github.copilot-sdk.turn
+  "Request-correlated native turn completion and session event subscriptions."
+  (:require [clojure.core.async :as a]
+            [clojure.core.async.impl.protocols :as p]
+            [clojure.string :as str]
+            [github.copilot-sdk.generated.coerce :as coerce]
+            [github.copilot-sdk.logging :as log]
+            [github.copilot-sdk.teardown :as teardown]
+            [github.copilot-sdk.util :as util])
+  (:import [clojure.lang ExceptionInfo]
+           [java.util.concurrent.locks Lock]))
+
+(def ^:private capacity 64)
+(def ^:private method-name "session.sendAndWait")
+
+(defn new-state []
+  (atom {:waiters {} :subscriptions #{}}))
+
+(defn normalize-event
+  "Convert a protocol-decoded event to the SDK event shape. Use for live events
+   and the response embedded in session.sendAndWait. If a field cannot be
+   converted, retain the original data and normalize only the event type."
+  [event]
+  (let [converted (try (coerce/event-wire->idiom event)
+                       (catch ExceptionInfo e
+                         (log/warn "Could not coerce session event; retaining wire values"
+                                   (select-keys (ex-data e) [:event-type :field]))
+                         event))]
+    (update converted :type util/event-type->keyword)))
+
+(defn- failure [cause]
+  {:error (if (instance? ExceptionInfo cause)
+            cause
+            (ex-info (or (ex-message cause) "Session closed") {} cause))})
+
+(defn- finish! [ch outcome]
+  ;; A terminal put can wait behind a full buffer. No further puts follow it.
+  (a/put! ch outcome)
+  (a/close! ch))
+
+(defn- consumer-handler [^Lock handler]
+  ;; A parked take! can request inline execution. Preserve the handler's alts
+  ;; lock and commit, but leave scheduling to core.async, not the publisher.
+  (reify
+    Lock
+    (lock [_] (.lock handler))
+    (unlock [_] (.unlock handler))
+    p/Handler
+    (lock-id [_] (p/lock-id handler))
+    (active? [_] (p/active? handler))
+    (blockable? [_] (p/blockable? handler))
+    (commit [_]
+      (let [callback (p/commit handler)]
+        (if (:on-caller? (meta callback)) #(callback %) callback)))))
+
+(defn- read-channel [source close!]
+  (reify
+    p/ReadPort
+    (take! [_ handler] (p/take! source (consumer-handler handler)))
+    p/Channel
+    (closed? [_] (p/closed? source))
+    (close! [_] (close!))))
+
+(defn subscribe
+  "Return a read channel of normalized events; close it to unsubscribe.
+   A slow subscriber can buffer 64 events.
+   Overflow or session close ends the stream with {:error ExceptionInfo}.
+   On overflow, ex-data contains :type :subscription-overflow and the first
+   undelivered :event, even if that event was a runtime error. As with any
+   core.async channel, take! callbacks must not block. For blocking work, use
+   <!! from a consumer thread you own instead."
+  [state]
+  (let [source (a/chan capacity)]
+    (locking state
+      (if-let [closed (:closed @state)]
+        (finish! source closed)
+        (swap! state update :subscriptions conj source)))
+    (read-channel source #(locking state
+                            (swap! state update :subscriptions disj source)
+                            (a/close! source)))))
+
+(defn- root-event? [{:keys [agent-id]}]
+  (or (nil? agent-id) (= "" agent-id)))
+
+(defn- observe! [state signal {:keys [id seen]} published receipt]
+  (cond
+    (= id published) (do (swap! state assoc-in [:waiters signal] {})
+                         (a/offer! signal {:receipt receipt}))
+    (nil? seen) nil
+    (contains? seen published) nil
+    (< (count seen) capacity) (swap! state assoc-in [:waiters signal :seen published] receipt)
+    :else
+    (do
+      (swap! state update :waiters dissoc signal)
+      (finish! signal {:error (ex-info "Too many completion events before the RPC response"
+                                       {:type :completion-overflow :capacity capacity})}))))
+
+(defn publish!
+  "Publish one normalized event. Only root completion IDs are tracked, and
+   only while a request can still name them in its native response. An ordinary
+   observer supplies a promise channel with {:ok nil} or {:error ExceptionInfo}
+   after delivery. Without an observer, omit the receipt or pass nil."
+  ([state event] (publish! state event nil))
+  ([state event receipt]
+   (locking state
+     (doseq [ch (:subscriptions @state)]
+       (when-not (a/offer! ch event)
+         (swap! state update :subscriptions disj ch)
+         (finish! ch {:error (ex-info "Session event subscription overflow"
+                                      {:type :subscription-overflow :event event})})))
+     (when (and (:id event) (root-event? event)
+                (#{:copilot/session.idle :copilot/session.error
+                   :copilot/session.autopilot_stopped} (:type event)))
+       (doseq [[signal waiter] (:waiters @state)]
+         (observe! state signal waiter (:id event) receipt))))))
+
+(defn close!
+  "Stop admitting operations and wake active waiters and subscriptions."
+  [state cause]
+  (locking state
+    (when-not (:closed @state)
+      (let [{:keys [waiters subscriptions]} @state
+            outcome (failure cause)]
+        (reset! state {:closed outcome :waiters {} :subscriptions #{}})
+        (doseq [ch (concat (keys waiters) subscriptions)] (finish! ch outcome))))))
+
+(defn- response-outcome [{:keys [result error]} structured?]
+  (if error
+    {:error (ex-info (or (:message error) "RPC error") {:method method-name :error error})}
+    (let [{:keys [response aborted]} result
+          {:keys [content tool-requests]} (:data response)]
+      (cond
+        (not (and (map? result) (string? (:message-id result)) (boolean? aborted)))
+        {:error (ex-info "Invalid native completion result" {:type :invalid-completion})}
+        (and (contains? result :response)
+             (not (and (= "assistant.message" (:type response)) (root-event? response))))
+        {:error (ex-info "Runtime returned a non-root assistant response" {:event response})}
+        aborted {:error (ex-info "The requested run was aborted" {:type :turn-aborted})}
+        (and structured? (or (not (string? content)) (str/blank? content) (seq tool-requests)))
+        {:error (ex-info "Run completed without a structured assistant response"
+                         {:type :missing-structured-response})}
+        :else {:ok (some-> response normalize-event)}))))
+
+(defn- match-completion! [state signal id]
+  (locking state
+    (if-let [{:keys [seen]} (get-in @state [:waiters signal])]
+      (let [pending? (and (string? id) (seq id) (not (contains? seen id)))]
+        (swap! state assoc-in [:waiters signal] (if pending? {:id id} {}))
+        (when-not pending? {:receipt (get seen id)}))
+      (or (:closed @state) (a/poll! signal)))))
+
+(defn- await-response [state signal {:keys [reply cancel!]} deadline timeout-ms structured?]
+  (a/go
+    (try
+      (teardown/with-cleanup cancel!
+        (let [deadline-error #(ex-info "Timeout waiting for native turn completion"
+                                       {:type :turn-timeout :timeout-ms timeout-ms})
+              [response port] (a/alts! [signal deadline reply] :priority true)]
+          (when (= port signal) (throw (:error response)))
+          (when (= port deadline) (throw (deadline-error)))
+          (when (instance? Throwable response) (throw response))
+          (let [id (if (:error response)
+                     ;; Protocol error data retains its original JSON member names.
+                     (get-in response [:error :data :completionEventId])
+                     (get-in response [:result :completion-event-id]))
+                publication (or (match-completion! state signal id)
+                                (let [[v port] (a/alts! [signal deadline] :priority true)]
+                                  (when (= port deadline) (throw (deadline-error)))
+                                  v))]
+            (when-let [e (:error publication)] (throw e))
+            ;; The observer's return or exception ends delivery, not the runtime turn.
+            (when-let [receipt (:receipt publication)]
+              (let [[v port] (a/alts! [signal deadline receipt] :priority true)]
+                (cond
+                  (= port signal) (throw (:error v))
+                  (= port deadline) (throw (deadline-error))
+                  (nil? v) (throw (ex-info "Observer closed without a receipt"
+                                           {:type :missing-observer-receipt})))))
+            (response-outcome response structured?))))
+      (catch Exception e (failure e))
+      (finally
+        (locking state (swap! state update :waiters dissoc signal))))))
+
+(defn- completed [outcome]
+  (doto (a/chan 1) (finish! outcome)))
+
+(defn send-and-wait!
+  "Return a channel with exactly one {:ok root-assistant-event-or-nil} or
+   {:error ExceptionInfo}. send-fn must enqueue one native session.sendAndWait
+   RPC without blocking and return {:reply channel :cancel! fn}. The channel
+   delivers a wire reply, or a local exception if admission fails before enqueue.
+   It runs on the caller before this function returns. On every exit, cancel!
+   releases the raw pending request without aborting runtime work.
+   Its argument excludes :timeout-ms (1..2147483647, default 60000). The
+   deadline covers the RPC, publication, and its ordinary observer receipt.
+   Timing out does not abort runtime work or affect other requests. A session
+   admits up to 64 concurrent waits. Each tracks up to 64 distinct early root
+   completion IDs. Exceeding either limit returns an error, never a best guess."
+  [state send-fn options]
+  (let [timeout-ms (get options :timeout-ms 60000)
+        signal (a/chan 1)
+        rejected (locking state
+                   (cond
+                     (:closed @state) (:closed @state)
+                     (not (and (pos-int? timeout-ms) (<= timeout-ms Integer/MAX_VALUE)))
+                     {:error (ex-info "Expected :timeout-ms between 1 and 2147483647"
+                                      {:type :invalid-timeout :timeout-ms timeout-ms})}
+                     (>= (count (:waiters @state)) capacity)
+                     {:error (ex-info "Too many pending turns" {:type :turn-capacity})}
+                     :else (do (swap! state assoc-in [:waiters signal] {:seen {}}) nil)))]
+    (if rejected
+      (completed rejected)
+      (try
+        ;; Enqueue takes the client lifecycle lock. Detach closes this turn
+        ;; state under that lock, so do not hold the turn lock here.
+        (let [deadline (a/timeout timeout-ms)
+              rpc (send-fn (dissoc options :timeout-ms))
+              result (await-response state signal rpc deadline timeout-ms (contains? options :response-schema))]
+          (read-channel result #(a/close! result)))
+        (catch Exception e
+          (locking state (swap! state update :waiters dissoc signal))
+          (completed (failure e)))))))

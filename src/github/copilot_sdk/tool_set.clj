@@ -1,6 +1,6 @@
 (ns github.copilot-sdk.tool-set
   "Helpers for building source-qualified tool filter patterns used by
-   `:available-tools` and `:excluded-tools` in session configs.
+   `:available-tools` and `:excluded-tools` under `:tools` in session options.
 
    The runtime matches each tool reference against patterns of the form
    `\"<source>:<name>\"` where source is one of `builtin`, `mcp`, or
@@ -85,9 +85,6 @@
    "skill"])
 
 (def isolated
-  "Source-qualified `\"builtin:<name>\"` patterns for every tool in
-   [[isolated-builtins]]. Drop directly into `:available-tools`:
-
-     (copilot/create-session client
-       {:available-tools tool-set/isolated})"
+  "Source-qualified patterns for [[isolated-builtins]]. Use as
+   `{:tools {:available-tools tool-set/isolated}}` in a session."
   (builtins isolated-builtins))

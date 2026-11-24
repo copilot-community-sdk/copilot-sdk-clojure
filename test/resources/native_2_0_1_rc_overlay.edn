@@ -1,0 +1,225 @@
+{:format 1
+ :claim :coverage-in-progress-not-parity
+ :catalog "native_2_0_1_contracts.edn"
+ :catalog-git-blob "bb60246eb13a2fd87e529c1f4a3fb151ac70a203"
+ :upstream "3ce61458503b6b27ebd1f674a980f4d9596d9b22"
+ :reading "This is a working RC overlay on the immutable M1 inventory, not a change to it. Each catalog value, class member, field under the named owner, and callback belongs to one row. Unqualified owner names expand to the owner's catalog fields; explicit owner/member entries override only the named field. A grouped container has no independent behavior: follow its child owner (client.plugins is not session.plugins). M1 experimental/internal fields stay excluded except its explicitly mapped/partial BYOK fields. Mapped means source-traced, not verified. An evidence symbol proves only the behavior its assertions exercise."
+ :symbol-prefixes {sdk github.copilot-sdk, client github.copilot-sdk.native-client, host github.copilot-sdk.native-host
+                   opts github.copilot-sdk.session-options, cb github.copilot-sdk.native-callbacks
+                   result github.copilot-sdk.callback-results, rev github.copilot-sdk.reverse
+                   interaction github.copilot-sdk.native-interaction, fs github.copilot-sdk.native-fs
+                   creds github.copilot-sdk.credentials, discovery github.copilot-sdk.discovery
+                   turn github.copilot-sdk.turn, filter github.copilot-sdk.tool-set, util github.copilot-sdk.util, specs github.copilot-sdk.specs
+                   client-test github.copilot-sdk.native-client-test, public-test github.copilot-sdk-test, cloud-test github.copilot-sdk.native-cloud-test
+                   host-test github.copilot-sdk.native-host-test, opts-test github.copilot-sdk.session-options-test
+                   cb-test github.copilot-sdk.native-callbacks-test, rev-test github.copilot-sdk.native-reverse-test
+                   fs-test github.copilot-sdk.native-fs-test, creds-test github.copilot-sdk.credentials-test
+                   discovery-test github.copilot-sdk.discovery-test, turn-test github.copilot-sdk.turn-test
+                   filter-test github.copilot-sdk.tool-set-test, rc-test github.copilot-sdk.native-rc-coverage-test}
+ :rows
+ {:host {:status :mapped :local [sdk/open-client!! host/host-config host/open! client/open-client!]
+         :tests [host-test/host-options-are-encoded-per-owner client-test/an-incompatible-native-host-is-closed-before-any-session-is-opened]
+         :scope "One owned, pinned in-process connection. Client token/useLoggedInUser, log level, base directory, idle timeout, mode and isolation. No Node-style lazy runtime selector."}
+  :client-info {:status :mapped :local [sdk/open-client!! client/client-settings] :tests [rc-test/public-lifecycle-and-model-switch]
+                :scope "Nonempty identity fields on connect. The handshake does not advertise Node's supportedTaskKinds; those are wire negotiation, not a client option."}
+  :exporter {:status :mapped :local [host/host-config host/telemetry-env]
+             :tests [host-test/telemetry-is-a-typed-per-host-environment-override]
+             :scope "All six exporter fields map to the owned runtime environment; presence of {} enables export. Omission inherits ambient values; explicit capture-content? false is preserved. No exporter delivery proof. Experimental GitHub telemetry forwarding is distinct."}
+  :builtin-plugins {:status :mapped :local [client/open-client! client/client-settings]
+                    :tests [client-test/trusted-plugin-directories-are-registered-during-startup]
+                    :scope "Validate absolute paths. Skip omitted/empty vector; register exact ordered paths once after connect, before SessionFs; successful reply is null. Rejected registration fails startup. Does not expose marketplace or installation."}
+  :ui-scheduler {:status :mapped :local [client/open-client! rev/run-ui! host/host-transport host/image]
+                 :tests [rev-test/native-ui-actions-run-on-the-chosen-thread-once
+                         host-test/ui-operations-are-scoped-to-an-enabled-live-connection host-test/close-fences-in-flight-ui-without-blocking-the-transport]
+                 :scope "Host receives a one-shot zero-argument action through :run-on-ui-thread, not raw action IDs. JNA binds copilot_runtime_connection_set_ui_thread_handler and copilot_runtime_connection_run_ui_action in addition to the five core symbols. Framed scheduler and controlled ABI witnesses are not an interactive desktop or all-classifier test."}
+  :resource {:status :mapped :local [sdk/close!! sdk/with-session sdk/with-client client/close-session! client/close-client!]
+             :tests [public-test/failed-open-and-detach-preserve-the-primary-error-and-session-ownership
+                     client-test/close-retries-only-the-native-quiescence-barrier]}
+  :force-close {:status :mapped :local [sdk/force-close!! client/close-client!] :tests [client-test/force-close-wakes-an-unacknowledged-create]
+                :scope "Explicit forced retirement, not ordinary graceful shutdown. No release-quality timing claim."}
+  :open {:status :mapped :local [sdk/open-session!! sdk/resume-session!! opts/create-params opts/resume-params opts/after-open-requests]
+         :tests [opts-test/create-and-resume-have-distinct-contracts opts-test/empty-mode-is-two-distinct-requests
+                 opts-test/after-open-checks-capabilities-before-registering-interests-and-patching
+                 public-test/failed-open-and-detach-preserve-the-primary-error-and-session-ownership]
+         :scope "Local opens pre-register ownership. Open and post-open updates differ; a patch failure must not expose the session. See cloud and canonical-ID exceptions."}
+  :cloud {:status :mapped :local [sdk/open-session!! opts/create-params client/open-session! client/open-session*
+                                  client/register-opening! client/rollback-opening! rev/prepare! rev/bind!]
+          :tests [opts-test/create-and-resume-have-distinct-contracts cloud-test/server-identity-routes-the-frames-immediately-after-create
+                  cloud-test/collision-preserves-the-live-handle-and-revokes-only-the-new-credential
+                  cloud-test/rollback-deletes-only-the-acknowledged-cloud-id-and-preserves-both-errors
+                  cloud-test/interrupted-opening-fences-callbacks-before-compensating-the-bounded-reply
+                  cloud-test/shutdown-does-not-silently-orphan-a-late-cloud-acknowledgement
+                  cloud-test/a-timed-out-cleanup-reserves-the-id-even-after-a-late-acknowledgement]
+          :scope "Framed peers exercise late ID binding, early callbacks, interrupted acquisition, rollback and ID collisions. The SDK does not guess an unacknowledged ID or offer an ID with unconfirmed cleanup for reuse. No hosted backend, account, or entitlement tested."}
+  :canonical-id {:status :mapped :local [sdk/resume-session!! client/resume-session! client/open-session* sdk/session-id]
+                 :tests [client-test/detaching-a-stale-session-handle-does-not-detach-its-replacement
+                         client-test/resume-resolves-a-uuid-prefix-to-the-persisted-session]
+                 :scope "Reported native 1.0.114 witness: the same unique eight-character persisted UUID prefix expands to the full ID with and without explicit configDirectory, after a local fixture turn. Not a promise of seven-character discovery. Clojure pre-resolves inventory prefixes before callback registration, requires an exact SessionFs ID, and rejects a second live handle for the same ID rather than replacing it. Node can rekey on acknowledgment and replace an existing registration. This ownership difference is deliberate; see doc/reference/API.md, Resource lifetimes."}
+  :open-info {:status :mapped :local [sdk/session-info client/open-session* client/route!]
+              :tests [rc-test/public-lifecycle-and-model-switch]
+              :scope "Workspace path, transcript recovery, permission-mode result, capability snapshot. Reading permissionModeResult is not the ability to request permissions.mode."}
+  :client-events {:status :mapped :local [sdk/lifecycle-events client/route!] :tests [rc-test/public-lifecycle-and-model-switch]
+                  :scope "Separate client-wide stream; creation notification, metadata Instants and close are exercised. Not every lifecycle event variant is witnessed."}
+  :status {:status :mapped :local [sdk/status client/status] :tests [client-test/metadata-and-history-preserve-their-distinct-contracts]
+           :scope "Version, protocol version and optional host diagnostics."}
+  :status-diagnostic {:status :mapped :local [sdk/status client/status]
+                      :tests [client-test/status-retains-runtime-supplied-host-diagnostics client-test/metadata-and-history-preserve-their-distinct-contracts]
+                      :scope "Passive hostDiagnostics present/omitted across a framed peer. This is not a public API to configure experimental diagnostics."}
+  :introspection {:status :mapped :local [sdk/auth-status sdk/ping sdk/last-session-id sdk/list-sessions sdk/session-metadata sdk/delete-session!!]
+                  :tests [client-test/metadata-and-history-preserve-their-distinct-contracts]}
+  :model-list {:status :mapped :local [sdk/list-models discovery/models]
+               :tests [discovery-test/rpc-models-cache discovery-test/callback-models-and-trace discovery-test/disconnect-cancels-user-work]
+               :scope "Runtime models.list and host callback paths, empty capability defaults, source-defined metadata, concurrent cache, failure and retirement. The owning Clojure client is opened eagerly."}
+  :trace {:status :mapped :local [discovery/trace-context discovery/trace-context!! client/open-session* client/submit-turn client/reserve-admission!]
+          :tests [discovery-test/callback-models-and-trace rc-test/public-lifecycle-and-model-switch
+                  discovery-test/traced-requests-admit-before-return-without-waiting-for-a-reply
+                  discovery-test/traced-session-admission-rejects-pressure-before-starting-more-requests
+                  discovery-test/cancelled-reservations-reclaim-capacity-without-releasing-the-head]
+          :scope "Framed peers verify caller trace bindings and ordered enqueue without waiting for another RPC's reply. Timed-out reservations release capacity immediately; later active requests cannot overtake the live head."}
+  :options {:status :mapped :local [opts/create-params opts/resume-params opts/open-options-patch]
+            :tests [opts-test/grouped-native-options-cross-the-json-boundary opts-test/absent-null-false-and-empty-are-not-interchangeable
+                    opts-test/stable-agent-mcp-policy-and-provider-routing]
+            :scope "Stable fields of these owners are present in their applicable builders. Tests sample omission/null/empty/false, nested MCP cwd, opaque keys, custom agents, static policy, extensions, startup autoTier, retained state and retrieval switches. Not per-field behavioral certification."}
+  :model-tuning {:status :mapped :local [sdk/set-model! opts/model-switch-params opts/create-params opts/resume-params]
+                 :tests [opts-test/model-switch-shares-tuning-but-not-the-open-options-contract rc-test/public-lifecycle-and-model-switch]
+                 :scope "inference.capabilities at open, modelCapabilities on session.model.switchTo; selective override schema rather than Model read data. Distinct from per-provider capabilities, experimental auto/fusion switch or raw options.update."}
+  :provider-catalog {:status :mapped :local [opts/provider opts/provider-model opts/create-params opts/resume-params]
+                     :tests [opts-test/grouped-native-options-cross-the-json-boundary opts-test/absent-null-false-and-empty-are-not-interchangeable]
+                     :scope "Only the fixed-credential subset of the experimental named BYOK catalog is retained. Rotating NamedProviderConfig.bearerTokenProvider and ProviderModelConfig.capabilities are explicitly deferred. The stable session GitHub token callback and session-open/live model overrides are separate paths."}
+  :provider-deferred {:status :excluded :basis :experimental-backing :local [opts/provider opts/provider-model] :tests []
+                      :scope "NamedProviderConfig.bearerTokenProvider and ProviderModelConfig.capabilities are outside the retained named-provider subset. Do not infer support from the model-switch encoder."}
+  :diagnostics {:status :excluded :basis :experimental-backing :local [opts/create-params opts/resume-params] :tests []
+                :authority ["types.ts#SessionOptionsBase.diagnostics" "generated/rpc.ts#DiagnosticsConfiguration"]
+                :scope "Node forwards this documented option; its referenced type is explicitly experimental. Deferred for this stable-only scope. This is not internal lifecycleDiagnostics or passive status.hostDiagnostics."}
+  :startup-permissions {:status :excluded :basis :experimental-backing :local [opts/create-params opts/resume-params] :tests []
+                        :authority ["types.ts#SessionPermissionOptions" "generated/session-events.ts#PermissionMode" "generated/rpc.ts#SandboxConfig"]
+                        :scope "Node forwards both documented high-level fields before tools/MCP start; their referenced types are explicitly experimental. Deliberately not accepted here. Managed settings and callbacks do not implement these inputs, and native hosting is not a sandbox."}
+  :tool-filters {:status :mapped :local [filter/builtin filter/mcp filter/custom filter/isolated-builtins filter/isolated]
+                 :tests [filter-test/isolated-tests filter-test/builtins-tests]}
+  :tool-and-permission {:status :mapped :local [cb/register! cb/publish! result/permission-response sdk/approve-all]
+                        :tests [cb-test/broadcasts-invoke-handlers-and-use-session-scoped-replies cb-test/unsafe-or-missing-permission-decisions-never-approve]
+                        :scope "Immutable definition/answer maps. Callback invocations, managed approvals and abstention are distinct; do not infer every decision variant was exercised."}
+  :manual {:status :mapped :local [sdk/respond!! cb/respond!]
+           :tests [cb-test/manual-responses-preserve-scope-and-reject-stale-claims]
+           :scope "A known requestId from a broadcast or retained by the host can be settled, including after resume without replay. The ability to enumerate unknown IDs is separately excluded; it is not part of this high-level contract."}
+  :attribution {:status :mapped :local [result/decision-context->wire result/permission-response result/elicitation-response interaction/handle]
+                :tests [cb-test/interaction-broadcasts-use-their-own-result-contracts rev-test/framed-interactions]
+                :scope "Explicit attributed Clojure maps, not named JS object factories."}
+  :mcp-conversion {:status :mapped :local [sdk/mcp-tool-result result/mcp-tool-result]
+                   :tests [public-test/mcp-tool-result-conversion public-test/mcp-tool-result-validation]
+                   :scope "MCP text/image/resource blocks and isError convert to SDK text/binary results. The Clojure boundary requires canonical Base64; Node's converter guards strings but not canonical encoding."}
+  :sections-metadata {:status :mapped :local [specs/system-message-sections util/section-key->wire opts/system-sections]
+                      :tests [rc-test/public-system-message-sections-encode-on-create-and-resume]
+                      :scope "Public Clojure metadata includes a description for each section. The wire encoder uses its keys; there is no duplicate list."}
+  :credentials {:status :mapped :local [creds/prepare creds/handle rev/open-params rev/register!]
+                :tests [creds-test/registrations-rotate-and-fail-closed-through-framed-rpc
+                        creds-test/detach-interrupts-a-running-refresh-and-fences-its-result]
+                :scope "Session-scoped initial/refresh/cancel, stale registration, no credential fallback. The cloud row separately covers server-assigned ID binding using synthetic credentials."}
+  :interactions {:status :mapped :local [interaction/handle rev/register! cb/register! cb/publish! opts/after-open-requests]
+                 :tests [rev-test/all-hook-types rev-test/framed-hooks rev-test/framed-interactions rev-test/exact-shell-cancellation
+                         cb-test/interaction-broadcasts-use-their-own-result-contracts opts-test/only-registered-callbacks-are-advertised
+                         opts-test/after-open-checks-capabilities-before-registering-interests-and-patching]
+                 :scope "Twelve hook names, transforms, input, plan/Auto, shell auth reverse; MCP OAuth, commands and elicitation broadcasts. Separate builder and dispatcher evidence does not prove every native runtime callback path."}
+  :ui {:status :mapped :local [sdk/elicit! client/elicit!] :tests [client-test/elicitation-preserves-submitted-fields]
+       :scope "Capability-gated form/result API. Node confirm/select/input convenience methods can be constructed with elicit!, but their specific schema/default/result projections have no dedicated wrappers."}
+  :ui-convenience {:status :mapped :local [sdk/elicit!] :tests [client-test/elicitation-preserves-submitted-fields]
+                   :scope "Compose the Node confirm/select/input form schemas using elicit! and project the result in Clojure. Only the generic form route/opaque content is exercised. No dedicated sugar is needed; no claim that all Node convenience projections were replayed."}
+  :session-fs {:status :mapped :local [fs/provider-params fs/validate-provider rev/register! fs/handle]
+               :tests [fs-test/framed-text-bytes-and-byte-ranges fs-test/sqlite-and-write-failures-have-distinct-envelopes
+                       fs-test/old-requests-never-reach-a-replacement]
+               :scope "Provider maps/factories with structured ex-data instead of Node adapter/error classes. Text/binary/range/sqlite wire tests; not a remote persistence proof."}
+  :turn {:status :mapped :local [sdk/send! sdk/send-and-wait! sdk/abort! sdk/subscribe sdk/history turn/response-outcome]
+         :tests [opts-test/send-parameters-match-high-level-message-options turn-test/structured-completion-requires-content-without-tool-requests
+                 turn-test/overlapping-rpcs-keep-their-own-response-and-publication-boundary
+                 client-test/metadata-and-history-preserve-their-distinct-contracts]
+         :scope "Completion correlation, raw JSON Schema/event, normalized/raw history and stream teardown. TypeScript generic Zod parse overload is language-only."}
+  :log {:status :mapped :local [sdk/log! client/log!] :tests [rc-test/public-lifecycle-and-model-switch]}
+  :excluded {:status :excluded :local [] :tests []
+             :scope "Inherit exact upstream authority and reason from M1: explicitly experimental subsystems/fields or internal/transport-only paths. In particular network.{resolveProxy,authenticateNegotiate,authenticateBasic}, github.onTelemetry, Entra, requestHandler, live setTools/setAutoTier/setFusionTier, raw RPC, AHP and parent join. No inferred stable API from generated RPC."}}
+
+ :methods
+ {CopilotClient {:host [constructor start] :resource [stop Symbol.asyncDispose] :force-close [forceStop]
+                 :cloud [createSession] :canonical-id [resumeSession]
+                 :introspection [ping getAuthStatus getLastSessionId deleteSession listSessions getSessionMetadata]
+                 :status [getStatus] :model-list [listModels] :client-events [onLifecycle]
+                 :excluded [resumeSessionForExtension rpc decisions startAhpHost getForegroundSessionId setForegroundSessionId]}
+  CopilotSession {:canonical-id [sessionId] :open-info [workspacePath transcriptRecovery permissionModeResult capabilities]
+                  :ui [ui] :turn [send sendAndWait on getEvents getRawEvents abort] :resource [disconnect Symbol.asyncDispose]
+                  :model-tuning [setModel] :log [log]
+                  :excluded [constructor rpc workflow openCanvases setSessionCreationHandler setAutoTier setFusionTier setTools]}}
+ :root-values
+ {:host [CopilotClient RuntimeConnection] :open [CopilotSession] :tool-filters [ToolSet BuiltInTools]
+  :tool-and-permission [defineTool approveAll] :options [DisableBypassPermissionsModes]
+  :attribution [createAttributedPermissionResult createAttributedResult] :mcp-conversion [convertMcpCallToolResult]
+  :session-fs [createSessionFsAdapter SessionFsSqliteTransactionFailure SessionFsWriteFailure]
+  :sections-metadata [SYSTEM_MESSAGE_SECTIONS]
+  :excluded [CopilotDecisions decisionErrorData decisionErrorKind AhpHost defineWorkflow WorkflowResumeError
+             isWorkflowRunTerminal WORKFLOW_AGENT_OPTION_KEYS Canvas CanvasError createCanvas CopilotRequestHandler
+             CopilotWebSocketHandler CopilotWebSocketCloseStatus CopilotWebSocketForwarder parseTrajectoryJson toSavedProviderConfiguration]}
+ :field-owners
+ {:host [CopilotClientOptions InProcessRuntimeConnection OwnedRuntimeOptions ClientGitHubOptions ClientObservabilityOptions]
+  :client-info [CopilotClientInfo] :exporter [TelemetryConfig] :builtin-plugins [ClientPluginOptions]
+  :model-list [ClientModelOptions] :open [CreateSessionOptions ResumeSessionOptions]
+  :options [SessionOptionsBase SessionPolicyOptions SessionExperimentOptions SessionAgentOptions SessionSkillOptions
+            SessionGitHubOptions SessionFilesystemOptions CreateSessionFilesystemOptions SessionInstructionOptions
+            CreateSessionInstructionOptions SessionGitOptions SessionMcpOptions SessionPluginOptions SessionStateOptions
+            CapiSessionOptions MemoryConfiguration InfiniteSessionConfig GitHubMcpToolConfig CustomAgentConfig DefaultAgentConfig
+            ManagedSettings ManagedSettingsPermissions MCPServerConfigBase MCPStdioServerConfig MCPHTTPServerConfig ExtensionInfo
+            SessionExtensionOptions ToolSearchConfig LargeToolOutputConfig]
+  :tool-and-permission [SessionToolOptions Tool SessionPermissionOptions]
+  :model-tuning [SessionInferenceOptions]
+  :provider-catalog [NamedProviderConfig ProviderModelConfig]
+  :turn [MessageOptions SessionEventOptions]
+  :session-fs [SessionFsConfig] :cloud [CloudSessionOptions CloudSessionRepository]
+  :interactions [SessionInteractionOptions SessionHookOptions SessionHooks SectionOverride] :ui [SessionUiApi]
+  :introspection [SessionListFilter SessionMetadata GetAuthStatusResponse] :status [GetStatusResponse]
+  :excluded [ClientExtensionOptions ClientInstallationOptions SessionCanvasOptions ResumeSessionCanvasOptions SessionExecutionOptions]}
+ :field-overrides
+ {:client-info [CopilotClientOptions/clientInfo] :session-fs [CopilotClientOptions/sessionFs SessionStateOptions/createSessionFsProvider]
+  :ui-scheduler [InProcessRuntimeConnection/runOnUiThread] :exporter [ClientObservabilityOptions/telemetry]
+  :trace [ClientObservabilityOptions/onGetTraceContext] :cloud [CreateSessionOptions/cloud]
+  :manual [ResumeSessionOptions/continuePendingWork] :interactions [SessionOptionsBase/systemMessage SessionMcpOptions/onAuthRequest]
+  :diagnostics [SessionOptionsBase/diagnostics] :startup-permissions [SessionPermissionOptions/sandbox SessionPermissionOptions/mode]
+  :credentials [SessionGitHubOptions/tokenProvider] :provider-catalog [SessionInferenceOptions/providers SessionInferenceOptions/models]
+  :provider-deferred [NamedProviderConfig/bearerTokenProvider ProviderModelConfig/capabilities]
+  :status-diagnostic [GetStatusResponse/hostDiagnostics] :ui-convenience [SessionUiApi/confirm SessionUiApi/select SessionUiApi/input]}
+ :callbacks
+ {:model-list [ClientModelOptions/onListModels] :trace [ClientObservabilityOptions/onGetTraceContext]
+  :ui-scheduler [InProcessRuntimeConnection/runOnUiThread] :tool-and-permission [Tool/handler SessionPermissionOptions/onRequest]
+  :interactions [SessionMcpOptions/onAuthRequest SessionInteractionOptions/commands SessionInteractionOptions/onElicitationRequest
+                 SessionInteractionOptions/onUserInputRequest SessionInteractionOptions/onShellAuthenticationRequest
+                 SessionInteractionOptions/onExitPlanModeRequest SessionInteractionOptions/onAutoModeSwitchRequest
+                 SessionHookOptions/handlers SectionOverride/action]
+  :credentials [SessionGitHubOptions/tokenProvider] :session-fs [SessionStateOptions/createSessionFsProvider]
+  :turn [SessionEventOptions/onEvent] :client-events [CopilotClient/onLifecycle]
+  :excluded [CopilotSession/setSessionCreationHandler]}
+ :pending-enumeration
+ {:status :excluded :basis :experimental-rpc
+  :authority ["types.ts#ToolInvocation.requestId" "generated/rpc.ts#createSessionRpc"]
+  :wire ["session.tools.listPendingRequests" "session.permissions.pendingRequests"]
+  :scope "No Node high-level inventory method. ToolInvocation.requestId's cross-reference is explicitly experimental. Do not expose raw RPC to support manual decisions for known IDs."}
+ :builder-probes
+ [{:field SessionOptionsBase/diagnostics :options {:diagnostics {:sources {}}}}
+  {:field SessionPermissionOptions/mode :options {:permissions {:mode :manual}}}
+  {:field SessionPermissionOptions/sandbox :options {:permissions {:sandbox {:enabled? false}}}}
+  {:field SessionInferenceOptions/capabilities :options {:inference {:capabilities {:supports {:tool-calls? false}}}}
+   :wire-path ["inference" "capabilities"] :value {"supports" {"toolCalls" false}}}]
+ :evidence-run {:runner cognitect.test-runner :exclude-metadata :native
+                :namespaces [github.copilot-sdk-test github.copilot-sdk.native-rc-coverage-test
+                             github.copilot-sdk.native-host-test github.copilot-sdk.native-client-test
+                             github.copilot-sdk.session-options-test github.copilot-sdk.native-callbacks-test
+                             github.copilot-sdk.native-fs-test github.copilot-sdk.native-specs-test
+                             github.copilot-sdk.native-reverse-test github.copilot-sdk.credentials-test
+                             github.copilot-sdk.discovery-test github.copilot-sdk.turn-test
+                             github.copilot-sdk.protocol-test github.copilot-sdk.tool-set-test]
+                :observed {:tests 128 :assertions 1213 :failures 2 :errors 0 :model-calls 0
+                           :failed-tests [discovery-test/traced-requests-admit-before-return-without-waiting-for-a-reply]}
+                :cloud-integration-owner-report {:tests 35 :assertions 256 :failures 0 :errors 0 :scope :framed-no-hosted-cloud}
+                :subsequent-focused-run {:namespaces [github.copilot-sdk-test github.copilot-sdk.native-host-test
+                                                       github.copilot-sdk.native-client-test github.copilot-sdk.native-reverse-test
+                                                       github.copilot-sdk.native-rc-coverage-test]
+                                         :tests 36 :assertions 536 :failures 0 :errors 0}
+                :note "Scoped to the pre-freeze working tree inspected. Counts are not coverage metrics or a gate to pin across later RC edits. The native prefix test was verified separately by its owner; it is not part of this run."}
+ :limits ["A capability can be source-mapped without native execution. Cited tests use pure builders or controlled framed peers unless marked native. No external service, entitlement, model or platform matrix is asserted."
+          "The 437 explicit type-only exports and wildcard generated event types retain their M1 loci. They are not 437 new executable contracts. Default transport exclusions and all v1 evidence remain pinned."
+          "No claim about every optional field, every possible callback result or untested service-side enforcement. Update this overlay, not M1, when a cutover behavior or proof changes."]}

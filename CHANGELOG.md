@@ -3,6 +3,69 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (2.x)
+- **BREAKING**: The default source tree and JAR now contain only the native
+  Clojure SDK. Removed CLI spawning, stdio/TCP attachment, parent extension
+  join and protocol 3. Use the previous 1.x release for those transports.
+  The Clojure host calls the pinned Rust C interface through JNA.
+- **BREAKING**: `send-and-wait!` uses the runtime's request-correlated
+  completion and returns a core.async result channel. Use `await!!` at a
+  blocking boundary. Configuration is grouped by capability; supply a client
+  mode explicitly.
+- Documented the [native-only 2.x architecture](doc/adr/2026-11-24-native-only-runtime.md).
+  Upstream validation now recognizes the canonical `microsoft/copilot-sdk`
+  repository and its pre-transfer URL without changing historical pins.
+- The framed JSON-RPC connection now reports saturated queues and writer
+  failures instead of silently dropping session notifications or leaving
+  requests pending. Buffered notifications accepted before failure drain in order.
+- Waiting for human input no longer blocks filesystem or hook callbacks.
+  Each client can wait up to five minutes for each of four concurrent prompts.
+
+### Added (v2.0.1 sync)
+- Added runtime discovery and session operations to the native facade:
+  `list-models`, `session-info`, `lifecycle-events`, `set-model!`, timeline
+  `log!`, capability-gated `elicit!`, and blocking `respond!!` for manual
+  tool and permission requests. See the [Clojure API](doc/reference/API.md)
+  and the [upstream SDK pin](https://github.com/microsoft/copilot-sdk/tree/3ce61458503b6b27ebd1f674a980f4d9596d9b22/nodejs).
+- Added scoped native-host OpenTelemetry configuration, trusted built-in
+  plugin directory registration, and `mcp-tool-result` for text and binary
+  call results. Plugin registration is not installation; review host settings
+  before configuring an exporter or content capture.
+- Exposed `github.copilot-sdk.specs/system-message-sections` for prompt
+  customization. The public Codox reference now includes only the facade,
+  specs, instrumentation, and tool-set namespaces.
+- Added offline chat, streaming, resume/delete, custom-tool, and application
+  filesystem examples. The API reference lists hook inputs and results,
+  filesystem operations, and subscription overflow behavior.
+  The [migration guide](doc/guides/native-2x.md) maps all 23 former examples.
+  The JAR and POM can be tested in a fresh consumer with a separate runtime
+  classifier. No authenticated account or CLI is needed for offline checks.
+
+### Fixed (2.x)
+- If the runtime explicitly rejects an automatic permission decision as
+  invalid, the SDK sends `user-not-available` without running the handler
+  again. If that decision is itself invalid, the live request can be answered
+  with `respond!!`. A timeout, disconnect, or negative acknowledgment does not
+  trigger another decision.
+- Resuming without a permission handler now delivers new requests for manual
+  response instead of denying the tool without notifying the application.
+  Create is unchanged. With `:continue-pending-work? true`, answer an
+  outstanding request by its saved ID; resume does not emit it again.
+- A manual tool or permission answer rejected as invalid parameters can be
+  corrected on the same live request. A completed or aborted request stays
+  closed. MCP OAuth cancels invalid token lifetimes and does not resend
+  a token rejected by the runtime. Elicitation also cancels a definitively
+  rejected form response without resending its contents.
+- `delete-session!!` refuses UUID-like short IDs before the runtime can
+  expand them to another session. Delete application-owned state through
+  the filesystem provider. Graceful client close now waits for a pending
+  deletion even when that session has no open handle.
+
+## [1.x source history] - Changes after 1.0.16.0 (not released)
+
+The following entries describe the [1.x source before cutover](https://github.com/copilot-community-sdk/copilot-sdk-clojure/tree/01246672fc5fb8e8f2b50437eea6a55145e54934).
+They do not describe the contents, supported transports, or certification of the native 2.x JAR.
+
 ### Added (post-v1.0.22 sync)
 - Added capability-gated MCP OAuth runtime refresh handoff, persisted recovery
   outcomes, live-only MCP tool-readiness events, and request-compression fallback
@@ -3090,6 +3153,7 @@ This release bumps the upstream marker from `1.0.0-beta.3` to `1.0.0-beta.4`.
 - cheshire/cheshire 5.13.0
 
 [Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.16.0...HEAD
+[1.x source history]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.16.0...01246672fc5fb8e8f2b50437eea6a55145e54934
 [1.0.16.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.11.0...v1.0.16.0
 [1.0.11.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.9.0...v1.0.11.0
 [1.0.9.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.1...v1.0.9.0

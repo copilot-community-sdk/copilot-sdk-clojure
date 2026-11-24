@@ -13,15 +13,11 @@
    - `disconnect` terminates blocked workers
    - notification-queue overflow is counted and warned (ASY-003 evidence)"
   (:require [clojure.core.async :as async :refer [chan put! close! >!!]]
-            [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [github.copilot-sdk.framed-peer :refer [open-connection read-framed write-framed!]]
             [github.copilot-sdk.protocol :as protocol])
-  (:import [java.io InputStream OutputStream PipedInputStream PipedOutputStream]
-           [java.nio.charset StandardCharsets]
-           [java.util.concurrent CountDownLatch TimeUnit]))
-
-(def ^:private pipe-buffer (* 256 1024))
+  (:import [java.util.concurrent CountDownLatch TimeUnit]))
 
 ;; The worker-pool diagnostics are protocol-internal. Bind the private Vars once
 ;; here rather than widening the production API for tests.
@@ -35,43 +31,6 @@
 ;; -----------------------------------------------------------------------------
 ;; Framed JSON-RPC helpers (mirror the Content-Length framing the SDK speaks)
 ;; -----------------------------------------------------------------------------
-
-(defn- write-framed!
-  [^OutputStream out msg]
-  (let [body (.getBytes ^String (json/write-str msg) StandardCharsets/UTF_8)]
-    (.write out (.getBytes (str "Content-Length: " (alength body) "\r\n\r\n")
-                           StandardCharsets/UTF_8))
-    (.write out body)
-    (.flush out)))
-
-(defn- read-header-line
-  [^InputStream in]
-  (let [sb (StringBuilder.)]
-    (loop []
-      (let [b (.read in)]
-        (cond
-          (neg? b) (when (pos? (.length sb)) (str sb))
-          (= b 10) (str sb)
-          (= b 13) (recur)
-          :else (do (.append sb (char b)) (recur)))))))
-
-(defn- read-framed
-  "Read one Content-Length framed JSON message, or nil on EOF."
-  [^InputStream in]
-  (loop [headers {}]
-    (if-let [line (read-header-line in)]
-      (if (str/blank? line)
-        (let [n (parse-long (get headers "content-length"))
-              buf (byte-array n)]
-          (loop [off 0]
-            (when (< off n)
-              (let [r (.read in buf off (- n off))]
-                (when (neg? r) (throw (ex-info "EOF mid-message" {:expected n})))
-                (recur (+ off r)))))
-          (json/read-str (String. buf StandardCharsets/UTF_8) :key-fn keyword))
-        (let [[k v] (str/split line #": " 2)]
-          (recur (assoc headers (str/lower-case (str/trim k)) (str/trim (or v ""))))))
-      nil)))
 
 (defn- collect-by-id!
   "Read `n` framed messages, returning `{id -> message}`. Returns `::timeout`
@@ -91,23 +50,6 @@
         (pred) true
         (< (System/currentTimeMillis) deadline) (do (Thread/sleep 5) (recur))
         :else false))))
-
-(defn- open-connection
-  "Wire a real protocol connection to piped streams.
-
-   Returns `:conn`, the `:->client` stream the fake server writes requests to,
-   and the `:<-client` stream the fake server reads responses from."
-  [options]
-  (let [->client (PipedOutputStream.)
-        client-in (PipedInputStream. ->client pipe-buffer)
-        client-out (PipedOutputStream.)
-        <-client (PipedInputStream. client-out pipe-buffer)
-        state-atom (atom {:connection (protocol/initial-connection-state)
-                          :options options})]
-    {:conn (protocol/connect client-in client-out state-atom)
-     :state-atom state-atom
-     :->client ->client
-     :<-client <-client}))
 
 (defn- request
   [id method params]

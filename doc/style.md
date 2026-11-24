@@ -32,25 +32,24 @@ Short paragraphs (1–3 sentences). Use code blocks liberally.
 
 ### Requirements
 
-- All code blocks must be valid Clojure (parseable by `read-string`)
+- All Clojure blocks must be valid, readable Clojure
 - Show `require` forms so readers know which namespace to import
 - Use `;; =>` comments for return values
 - Use `;; prints:` comments for output
 
 ```clojure
-(require '[github.copilot-sdk.helpers :as h])
+(require '[github.copilot-sdk :as copilot])
 
-(h/query "What is 2+2?")
-;; => "4"
+(defn runtime-version [client]
+  (:version (copilot/await!! (copilot/status client))))
 ```
 
 ### Conventions
 
-- Use `copilot` as the alias for `github.copilot-sdk.client`
-- Use `h` as the alias for `github.copilot-sdk.helpers`
-- Use `session` as the alias for `github.copilot-sdk.session`
+- Use `copilot` as the alias for `github.copilot-sdk`
 - Prefer `def` over `let` in top-level examples for clarity
-- Include cleanup (`stop!`, `disconnect!`) in lifecycle examples
+- Use `with-client` and `with-session` for resources the example creates;
+  close subscriptions with `clojure.core.async/close!`
 
 ### What to Avoid
 
@@ -79,9 +78,9 @@ Use Clojure terms consistently:
 - From repo root README: `[API Reference](./doc/reference/API.md)`
 - `AGENTS.md` is a symlink to `.github/copilot-instructions.md`; links in that
   shared file must use full canonical GitHub URLs so both rendered paths work
-- From examples/: `[BYOK](../doc/auth/byok.md)`
+- From examples/: `[Getting started](../doc/getting-started.md)`
 - Never use absolute filesystem paths
-- Link to specific sections with anchors: `[Events](reference/API.md#event-types)`
+- Link to specific sections with anchors: `[Events](reference/API.md#events-and-history)`
 
 ## Options and Configuration
 
@@ -90,8 +89,8 @@ Use tables for options, flags, and configuration keys:
 ```markdown
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `:model` | string | `nil` | Model to use for the session |
-| `:system-prompt` | string | `nil` | System prompt prepended to conversation |
+| `:model` | string | Omitted | Model to use for the session |
+| `:working-directory` | string | Omitted | Working directory for the session |
 ```
 
 - Sort keys alphabetically or by importance

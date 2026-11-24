@@ -3,9 +3,11 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.data.json :as json]
             [clojure.test :refer [deftest is testing]]
+            [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.protocol :as protocol])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream
-            InputStream PipedInputStream PipedOutputStream]
+            InputStream IOException PipedInputStream PipedOutputStream]
+           [java.nio ByteBuffer]
            [java.nio.channels Channels Pipe]
            [java.nio.charset StandardCharsets]))
 
@@ -54,13 +56,18 @@
         live (#'protocol/normalize-incoming
               {:method "session.event" :params {:event event}})
         historical (#'protocol/normalize-incoming
-                    {:id "response-1" :result {:events [event]}})]
+                    {:id "response-1" :result {:events [event]}})
+        completed (#'protocol/normalize-response
+                   "session.sendAndWait"
+                   {:id "response-2" :result {:response event :completionEventId "fence"}})]
     (is (= arguments
            (get-in live
                    [:params :event :data :tool-requests 0 :arguments])))
     (is (= arguments
            (get-in historical
-                   [:result :events 0 :data :tool-requests 0 :arguments])))))
+                   [:result :events 0 :data :tool-requests 0 :arguments])))
+    (is (= (:result completed)
+           {:response (get-in live [:params :event]) :completion-event-id "fence"}))))
 
 (deftest test-read-loop-stops-on-eof
   (testing "EOF stops read loop and fails pending requests"
@@ -129,6 +136,122 @@
         (is (async-protocols/closed? (protocol/notifications conn)))
         (finally
           (protocol/disconnect conn))))))
+
+(deftest notification-overflow-fails-at-the-first-missing-frame
+  (let [frames (ByteArrayOutputStream.)
+        pending (async/chan 1)
+        state (atom {:connection (assoc (protocol/initial-connection-state)
+                                        :pending-requests {"pending" {:ch pending}})
+                     :options {:notification-queue-size 1}})]
+    (dotimes [index 1100]
+      (write-framed-json! frames {:method "session.event" :params {:index index}}))
+    (write-framed-json! frames {:id "pending" :result "after loss"})
+    (let [conn (protocol/connect (ByteArrayInputStream. (.toByteArray frames))
+                                 (ByteArrayOutputStream.) state)]
+      (try
+        (.join ^Thread (:read-thread conn) 5000)
+        (let [[response] (async/alts!! [pending (async/timeout 1000)])
+              [events] (async/alts!! [(async/into [] (protocol/notifications conn))
+                                      (async/timeout 5000)])]
+          (is (= (get-in response [:error :data :code]) "notification_queue_full"))
+          (is (= (get-in @state [:connection :terminal-error]) (:error response)))
+          (is (< 0 (count events) 1100))
+          (is (every? true? (map-indexed #(= (get-in %2 [:params :index]) %1) events))))
+        (finally
+          (protocol/disconnect conn))))))
+
+(deftest host-failure-rejects-pending-rpc-with-its-original-error
+  (let [pipe (Pipe/open)
+        state (atom {:connection (protocol/initial-connection-state)})
+        conn (protocol/connect (Channels/newInputStream (.source pipe)) (ByteArrayOutputStream.) state)
+        pending (protocol/send-request conn "ping" {})
+        error {:code -32000 :message "Callback queue full" :data {:code "callback_queue_full"}}]
+    (try
+      (protocol/end-input! conn error)
+      (protocol/end-input! conn)
+      (is (= (first (async/alts!! [pending (async/timeout 1000)])) {:error error}))
+      (is (= (get-in @state [:connection :terminal-error]) error))
+      (finally
+        (protocol/disconnect conn)
+        (.close (.sink pipe))))))
+
+(deftest notification-admission-precedes-later-frames-and-fails-closed
+  (let [registration (atom :original)
+        admit (fn [{:keys [params] :as msg}]
+                (if (= "s" (:session-id params))
+                  (assoc msg ::registration @registration)
+                  (throw (ex-info "private detail" {}))))
+        {:keys [conn ->client <-client]} (peer/open-connection {:prepare-notification admit})]
+    (try
+      (let [first-rpc (protocol/send-request conn "replace" {}
+                                             {:on-response-inline (fn [_] (reset! registration :replacement))})
+            pending (protocol/send-request conn "pending" {})
+            {:keys [id]} (peer/read-framed <-client)]
+        (peer/write-framed! ->client {:method "message" :params {:sessionId "s"}})
+        (peer/write-framed! ->client {:id id :result {}})
+        (peer/write-framed! ->client {:method "message" :params {:sessionId "s"}})
+        (peer/write-framed! ->client {:method "message" :params {}})
+        (is (= (first (async/alts!! [first-rpc (async/timeout 1000)])) {:result {}}))
+        (is (= (first (async/alts!! [pending (async/timeout 1000)]))
+               {:error {:code -32000 :message "Notification admission failed"
+                        :data {:code "notification_admission_failed"}}}))
+        (let [[messages] (async/alts!! [(async/into [] (protocol/notifications conn)) (async/timeout 2000)])]
+          (is (= (mapv ::registration messages) [:original :replacement]))))
+      (finally
+        (protocol/disconnect conn)
+        (.close ->client)
+        (.close <-client)))))
+
+(deftest failed-write-rejects-pending-and-subsequent-requests
+  (let [pipe (Pipe/open)
+        writing (promise)
+        release (promise)
+        out (proxy [ByteArrayOutputStream] []
+              (flush []
+                (deliver writing true)
+                @release
+                (throw (IOException. "native write refused"))))
+        state (atom {:connection (protocol/initial-connection-state)})
+        conn (protocol/connect (Channels/newInputStream (.source pipe)) out state)]
+    (try
+      (let [first-rpc (protocol/send-request conn "first" {})
+            _ (is (= (deref writing 1000 false) true))
+            next-rpc (protocol/send-request conn "next" {})]
+        (deliver release true)
+        (let [[response] (async/alts!! [first-rpc (async/timeout 1000)])
+              [queued] (async/alts!! [next-rpc (async/timeout 1000)])]
+          (is (= (get-in response [:error :data :code]) "write_failed"))
+          (is (re-find #"native write refused" (get-in response [:error :message] "")))
+          (is (= queued response))
+          (is (= (second (async/alts!! [(protocol/notifications conn) (async/timeout 1000)]))
+                 (protocol/notifications conn)))
+          (protocol/disconnect conn)
+          (is (= (<!! (protocol/send-request conn "late" {})) response))))
+      (finally
+        (deliver release true)
+        (protocol/disconnect conn)
+        (.close (.sink pipe))))))
+
+(deftest blocked-writer-cannot-stage-unbounded-output
+  (let [pipe (Pipe/open)
+        writing (promise)
+        release (promise)
+        out (proxy [ByteArrayOutputStream] []
+              (flush [] (deliver writing true) @release))
+        state (atom {:connection (protocol/initial-connection-state)})
+        conn (protocol/connect (Channels/newInputStream (.source pipe)) out state)]
+    (try
+      (let [rpc (protocol/send-request conn "first" {})]
+        (is (= (deref writing 1000 false) true))
+        (dotimes [_ 1024]
+          (protocol/send-notification conn "queued" {}))
+        (is (false? (protocol/send-notification conn "overload" {})))
+        (let [[response] (async/alts!! [rpc (async/timeout 1000)])]
+          (is (= (get-in response [:error :data :code]) "outgoing_queue_full"))))
+      (finally
+        (deliver release true)
+        (protocol/disconnect conn)
+        (.close (.sink pipe))))))
 
 (deftest closed-nio-input-completes-pending-requests-and-notification-drain
   (let [pipe (Pipe/open)
@@ -237,6 +360,73 @@
         (finally
           (.close server-out)
           (protocol/disconnect conn))))))
+
+(deftest raw-json-is-local-to-one-history-request
+  (with-open [to-client (PipedOutputStream.)
+              client-in (PipedInputStream. to-client)
+              client-out (PipedOutputStream.)
+              server-in (PipedInputStream. client-out)]
+    (let [state (atom {:connection (protocol/initial-connection-state)})
+          conn (protocol/connect client-in client-out state)
+          reader (Channels/newChannel server-in)
+          read-request #(#'protocol/read-message reader (ByteBuffer/allocate 1))
+          params {:session-id "s1"}
+          method "session.getMessages"
+          raw-opts {:raw-json? true}
+          raw (protocol/send-request-with-timeout conn method params 5000 raw-opts)
+          ordinary (protocol/send-request conn method params)
+          rejected (protocol/send-request conn method params raw-opts)
+          event {"timestamp" "2026-01-01T00:00:00.000Z"
+                 "futureField" 18446744073709551617N "future_field" nil
+                 "data" [{"vendor/key" true "" false}]}
+          reply (fn [ch] (first (async/alts!! [ch (async/timeout 2000)])))]
+      (try
+        (let [[a b c] (repeatedly 3 read-request)]
+          (is (= (dissoc a :id) (dissoc b :id) (dissoc c :id)
+                 {:jsonrpc "2.0" :method method :params {"sessionId" "s1"}}))
+          (write-framed-json! to-client {:id (:id b) :result {:events [{"ordinaryKey" 1}]}})
+          (write-framed-json! to-client {:id (:id c) :error {:code -32031 :data {"sourceKey" nil}}})
+          (write-framed-json! to-client {:id (:id a) :result {:events [event]}})
+          (is (= (reply raw) {:result {"events" [event]}}))
+          (is (= (reply ordinary) {:result {:events [{:ordinary-key 1}]}}))
+          (is (= (reply rejected) {:error {:code -32031 :data {:sourceKey nil}}})))
+        (is (thrown? IllegalArgumentException (protocol/send-request conn "ping" {} raw-opts)))
+        (finally
+          (protocol/disconnect conn))))))
+
+(deftest model-list-preserves-only-provider-metadata
+  (let [state (atom {:connection (protocol/initial-connection-state)})
+        metadata {"sourceKey" {"vendor/key" nil} "source_key" [18446744073709551617N]}]
+    (with-open [to-client (PipedOutputStream.)
+                client-in (PipedInputStream. to-client)]
+      (let [conn (protocol/connect client-in (ByteArrayOutputStream.) state)]
+        (try
+          (let [response (protocol/send-request conn "models.list" {})
+                id (ffirst (get-in @state [:connection :pending-requests]))]
+            (write-framed-json! to-client
+                                {:id id :result {:models [{:defaultReasoningEffort "low" :metadata metadata}
+                                                          {:id "omitted"} {:id "null" :metadata nil}]
+                                                 :decisionModels []}})
+            (is (= (first (async/alts!! [response (async/timeout 1000)]))
+                   {:result {:models [{:default-reasoning-effort "low" :metadata metadata}
+                                      {:id "omitted"} {:id "null" :metadata nil}]
+                             :decision-models []}})))
+          (finally
+            (protocol/disconnect conn)))))))
+
+(deftest tool-search-metadata-preserves-the-json-schema
+  (let [{:keys [conn ->client <-client]} (peer/open-connection {})
+        schema {"properties" {"ticketCode" {"a/b" 1} "ticket_code" {"$ref" "#/$defs/a~1b"}}}]
+    (try
+      (let [reply (protocol/send-request conn "session.tools.getCurrentMetadata" {:session-id "s"})
+            {:keys [id]} (peer/read-framed <-client)]
+        (peer/write-framed! ->client {:id id :result {:tools [{:displayName "query" :input_schema schema}]}})
+        (is (= (first (async/alts!! [reply (async/timeout 2000)]))
+               {:result {:tools [{:display-name "query" :input-schema schema}]}})))
+      (finally
+        (protocol/disconnect conn)
+        (.close ->client)
+        (.close <-client)))))
 
 (deftest test-async-send-request-timeout-clears-pending
   (testing "Async timeout resolves with an error and removes the pending request"
@@ -371,7 +561,7 @@
               (future
                 (try
                   (protocol/send-request!
-                   conn "session.resume" {} 10)
+                   conn "models.list" {} 10)
                   (catch Throwable failure
                     failure)))]
           (is (true? (wait-for #(seq (get-in @state-atom
@@ -385,7 +575,7 @@
             (write-framed-json! server-out
                                 {:jsonrpc "2.0"
                                  :id request-id
-                                 :result "malformed"}))
+                                 :result {:models ["malformed"]}}))
           (is (true? (wait-for #(empty? (get-in @state-atom
                                                 [:connection :pending-requests]))
                                500)))
@@ -410,7 +600,7 @@
       (with-redefs [async/timeout (fn [^long _timeout-ms] timeout-signal)]
         (let [result-ch
               (protocol/send-request-with-timeout
-               conn "session.resume" {} 10)
+               conn "models.list" {} 10)
               result
               (future (<!! result-ch))]
           (is (true? (wait-for #(seq (get-in @state-atom
@@ -424,7 +614,7 @@
             (write-framed-json! server-out
                                 {:jsonrpc "2.0"
                                  :id request-id
-                                 :result "malformed"}))
+                                 :result {:models ["malformed"]}}))
           (is (true? (wait-for #(empty? (get-in @state-atom
                                                 [:connection :pending-requests]))
                                500)))

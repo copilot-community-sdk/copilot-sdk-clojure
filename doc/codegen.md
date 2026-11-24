@@ -2,8 +2,8 @@
 
 The Clojure SDK generates portions of its `clojure.spec` registry from the
 JSON Schemas distributed with the Copilot CLI instead of maintaining them by
-hand. This guarantees the SDK's view of the wire protocol cannot drift from
-what the Copilot CLI actually emits.
+hand. This detects changes to the native runtime's event schema. It does not
+prove that every possible event is emitted or that its API is stable.
 
 ## What is generated
 
@@ -14,9 +14,11 @@ generator in `script/codegen/`. Currently:
   variant in `session-events.schema.json`. One spec per event variant's `data`
   payload (e.g. `::session.start-data`), one per envelope (e.g.
   `::session.start`), an aggregate `::event` spec, and an `event-types` set.
+- `event_metadata.clj` — source-defined JSON paths whose keys must survive
+  field-name conversion, shared by live events, history and completed turns.
 - `coerce.clj` — field-level wire↔idiom coercion (e.g. ISO strings ↔
   `java.time.Instant`). Generated from `script/codegen/coercions.edn`. Used
-  at runtime by the notification dispatcher and `session/get-messages` to
+  at runtime by the notification dispatcher, turn completion and `history` to
   bridge the wire and idiom layers (see "Wire vs idiom" below).
 
 These files start with an `AUTO-GENERATED` banner. **Do not edit them by
@@ -44,8 +46,8 @@ src/github/copilot_sdk/generated/event_specs.clj
 ```
 
 1. `.copilot-schema-version` records the Copilot CLI release used as the schema
-   provenance and compatibility pin (for example, `1.0.86-0`). It does not
-   select the executable runtime used by SDK clients.
+   provenance pin (`1.0.114` for SDK 2.0.1). Native library selection uses
+   the pinned platform classifier and its digest, not a CLI executable.
 2. `bb schemas:fetch` downloads and validates the release checksum manifest
    before transferring the archive, restricts network transfers and redirects
    to HTTPS, verifies the published SHA-256 digest and
@@ -242,9 +244,8 @@ governs the API.
 ## What is NOT generated (yet)
 
 - RPC method names and `*Params`/`*Result` specs. The fetched and pinned
-  `api.schema.json` is available as an input, but the generator does not yet
-  consume it. Phase 5 of the codegen plan will generate the RPC registry and
-  `s/fdef`s for all wrappers.
+  `api.schema.json` is available as wire evidence. Do not generate a public
+  wrapper for every runtime method; the stable in-process SDK sets the scope.
 - The wire-key registry in `util.clj`. The current camel↔kebab conversion via
   `camel-snake-kebab` is deterministic for every key in the events schema, so
   generating a static registry is unnecessary until non-roundtripping keys
