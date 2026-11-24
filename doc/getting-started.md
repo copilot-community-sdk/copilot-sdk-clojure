@@ -1,6 +1,6 @@
 # Getting started
 
-Run a local model fixture first, then configure your own application.
+Try a conversation with your signed-in model or an offline fixture, then configure your own application.
 
 ## Run the examples
 
@@ -11,10 +11,15 @@ and musl classifiers. They are not covered by this repository's acceptance
 matrix. A published classifier is not a tested platform claim.
 
 ```bash
-./run-all-examples.sh basic-chat
-# basic-chat => "Native turn complete."
+./run-all-examples.sh --live basic-chat 'Name a garden herb.' 'Suggest a dish that uses it.'
 ```
 
+The two questions share a session. The model's actual answers appear in the
+terminal. `--live` opts in to your signed-in Copilot account and may consume
+usage. Supply non-sensitive prompts. See `examples/README.md` in the checkout
+for the meeting-note, hook and custom-tool demos.
+
+For a credential-free smoke test, omit `--live`: `./run-all-examples.sh basic-chat`.
 The fixture supplies a model that returns a fixed answer. The application
 runs in a separate test JVM with a fresh home and no inherited account
 credentials. Inside that JVM the SDK loads the Rust runtime and exchanges

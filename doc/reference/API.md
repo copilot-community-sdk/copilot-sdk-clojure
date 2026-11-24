@@ -449,7 +449,7 @@ Run the [session filesystem example](../../examples/session_filesystem.clj):
 
 ```bash
 ./run-all-examples.sh session-filesystem
-# session-filesystem => {:restored? true, :cleaned? true}
+# PASS: session-filesystem
 ```
 
 The example gives a named session its own in-memory store, writes a timeline

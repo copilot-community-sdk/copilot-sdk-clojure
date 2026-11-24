@@ -210,7 +210,7 @@
 <h3><a href="#session-filesystem" id="session-filesystem"></a>Session filesystem</h3>
 <p>Run the <a href="../../examples/session_filesystem.clj">session filesystem example</a>:</p>
 <pre><code class="language-bash">./run-all-examples.sh session-filesystem
-# session-filesystem =&gt; {:restored? true, :cleaned? true}
+# PASS: session-filesystem
 </code></pre>
 <p>The example gives a named session its own in-memory store, writes a timeline entry, then closes the session and client. A fresh client reads that entry from history. After both clients close, the example removes its store. No model call is needed. The <a href="../../test/github/copilot_sdk/memory_fs_fixture.clj">text-only provider</a> is an offline fixture, not a production filesystem.</p>
 <p>On the client, <code>:session-fs</code> requires string <code>:initial-cwd</code>, <code>:session-state-path</code>, and <code>:conventions</code> (<code>"posix"</code> or <code>"windows"</code>). These are provider paths, not a grant of host filesystem access. With <code>:empty</code> and no <code>:base-directory</code>, the SDK creates a private temporary runtime home. On <strong>each</strong> create or resume, supply a provider map or a factory under <code>[:state :create-session-fs-provider]</code>. A factory receives the session handle during setup, before it can send messages. Do not synchronously open, close, resume or delete a session on that client from the factory. The application owns storage, tenant isolation and access checks.</p>

@@ -34,8 +34,11 @@ All notable changes to this project will be documented in this file. This change
 - Exposed `github.copilot-sdk.specs/system-message-sections` for prompt
   customization. The public Codox reference now includes only the facade,
   specs, instrumentation, and tool-set namespaces.
-- Added offline chat, streaming, resume/delete, custom-tool, and application
-  filesystem examples. The API reference lists hook inputs and results,
+- Added opt-in real-model demos for multi-turn chat, streaming, structured
+  output, prompt hooks, scoped tools, and resume. They print prompts, model
+  output, and relevant callbacks. The offline runner exercises the same
+  applications plus an application-owned filesystem without using an account.
+  The API reference lists hook inputs and results,
   filesystem operations, and subscription overflow behavior.
   The [migration guide](doc/guides/native-2x.md) maps all 23 former examples.
   The JAR and POM can be tested in a fresh consumer with a separate runtime

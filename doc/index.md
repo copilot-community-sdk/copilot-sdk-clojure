@@ -7,7 +7,7 @@ Use the native Clojure SDK to run Copilot inside your JVM.
 | Configure a platform dependency and send a model request | [Getting started](getting-started.md) |
 | Update a CLI-based application | [Migration from 1.x](guides/native-2x.md) |
 | Choose an operation, handle errors, and release resources | [Public API](reference/API.md) |
-| Try chat, streaming, resume, session storage, and a custom tool without an account | Run `./run-all-examples.sh` from the checkout; see `examples/README.md`. |
+| Try real-model chat, structured output, hooks and tools, or run offline smoke tests | From the checkout use `./run-all-examples.sh --live basic-chat` for a signed-in model, or `./run-all-examples.sh` without an account. See `examples/README.md`. |
 | Understand deployment and ownership | [Native runtime decision](adr/2026-11-24-native-only-runtime.md) |
 | Maintain event schemas or documentation | [Code generation](codegen.md), [documentation style](style.md) |
 

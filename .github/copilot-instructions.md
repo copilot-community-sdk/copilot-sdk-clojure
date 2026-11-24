@@ -161,7 +161,10 @@ Examples are part of the test suite but run separately:
 ./run-all-examples.sh
 ```
 
-This runs all Clojure examples.
+This runs the Clojure demos against offline fixtures. Use `--live` with one
+model-backed demo for an explicitly requested manual run. Examples should
+teach the public API and show the application's output; live model calls do
+not belong in CI or replace the protected release smoke.
 
 In addition, all snippets and API descriptions in documentation *.md files
 should be checked for validity.
@@ -319,7 +322,7 @@ All these must be updated as appropriate when making changes:
 - `doc/getting-started.md` - Step-by-step tutorial for new users
 - `doc/style.md` - Documentation authoring style guide
 - `doc/guides/native-2x.md` - Migration from the 1.x transports and example inventory
-- `examples/README.md` - Runnable offline examples and their assertions
+- `examples/README.md` - Real-model demos, their output, and credential-free smoke tests
 - `benchmarks/README.md` - Benchmark usage, evidence, and interpretation
 - `benchmarks/METHODOLOGY.md` - Confirmatory study protocol
 - `CHANGELOG.md` - Version history and changes (see below)

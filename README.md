@@ -4,18 +4,20 @@ Run Copilot in your JVM and work with Clojure maps and core.async channels. The
 SDK uses JNA to call the Rust C interface directly. It does not use the Java
 SDK, start a Copilot CLI, or connect to an existing runtime.
 
-## Try a turn without an account
+## Try a model conversation
 
-From this **2.x checkout**, on macOS arm64 or glibc Linux x64, run:
+From this **2.x checkout**, on macOS arm64 or glibc Linux x64:
 
 ```bash
-./run-all-examples.sh basic-chat
-# basic-chat => "Native turn complete."
+./run-all-examples.sh --live basic-chat 'What makes a rainbow?' 'Explain the colors in one sentence.'
 ```
 
-This runs a real native session against a local HTTP model fixture. It needs
-the Clojure CLI, a JDK, and access to fetch dependencies on first use. It does
-not need a model key, Copilot login, or a running service.
+The demo uses your signed-in Copilot account and prints both turns. Live runs
+send prompts to the model and can consume account usage. To try the same app
+without an account, run `./run-all-examples.sh basic-chat`: it uses the real
+runtime with a local model fixture. Both need the Clojure CLI, a JDK and
+access to fetch dependencies on first use. See the [other demos](examples/README.md)
+for live streaming, structured output, hooks, tools and session persistence.
 
 The application code is short:
 
@@ -49,7 +51,7 @@ the community SDK locally without bundling the platform binary or publishing.
 | Install the runtime or configure my own model | [Getting started](./doc/getting-started.md) |
 | Port a 1.x application or check a deployment constraint | [Migration from 1.x](./doc/guides/native-2x.md) |
 | Look up operations, option maps, or event behavior | [API reference](./doc/reference/API.md) |
-| Run offline examples for chat, streaming, resume, session storage, and tools | [Executable examples](./examples/README.md) |
+| Run a live model demo or a credential-free smoke test | [Executable examples](./examples/README.md) |
 | Understand the in-process boundary | [Native runtime decision](./doc/adr/2026-11-24-native-only-runtime.md) |
 | Verify the JAR from another JVM before release | [Candidate and release checks](./PUBLISHING.md) |
 

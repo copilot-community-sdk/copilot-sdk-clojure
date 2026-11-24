@@ -56,14 +56,14 @@ what to run or change; an archived recipe is not a passing 2.x example.
 
 | 1.x examples | 2.x outcome |
 |---|---|
-| `basic_chat`, `helpers_query` | Run `./run-all-examples.sh basic-chat`. Use owned scopes and operation channels in place of the convenience helper namespace. |
+| `basic_chat`, `helpers_query` | Run `./run-all-examples.sh --live basic-chat 'First question' 'Follow-up question'`. The demo logs each answer from the same session. Use owned scopes and operation channels in place of the convenience helper namespace. |
 | `session_events` | Run `./run-all-examples.sh session-events`. Session subscriptions are closable read channels, not lazy sequences. |
 | `session_resume`, `metadata_api` | Run `./run-all-examples.sh session-resume` for history, session metadata, and deletion. Use `session-info` for the open result and `list-models` for model discovery. These are not quota APIs. |
 | `byok_provider`, `empty_mode` | The native examples select an isolated `:empty` client and a named model catalog. See [the local provider recipe](../getting-started.md). This does not port live provider keys or prove remote endpoint behavior. |
 | `tool_integration`, `permission_bash` | Run `./run-all-examples.sh tool-integration` for a read-only custom tool and a scoped `:approve-once`. Do not run the old shell example under an unrestricted policy. |
-| `file_attachments`, `reasoning_effort`, `structured_output` | Use message `:attachments`, session `[:inference :reasoning-effort]`, and message `:response-schema` respectively. Read the assistant content and parse the structured response in the application. |
+| `file_attachments`, `reasoning_effort`, `structured_output` | Use message `:attachments`, session `[:inference :reasoning-effort]`, and message `:response-schema` respectively. `./run-all-examples.sh --live structured-output` extracts a summary and action items from a meeting note and checks the returned data. |
 | `config_skill_output`, `infinite_sessions`, `multi_agent` | Revisit the storage, discovery, model, and agent policies. See [custom agent definitions](../reference/API.md#mcp-servers-and-custom-agents); the old flat configuration and helper orchestration are not runnable native recipes. |
-| `commands`, `user_input`, `ask_user_failure`, `elicitation_provider`, `lifecycle_hooks` | Re-register [interactive callbacks](../reference/API.md#credentials-and-interactive-callbacks) and [session hooks](../reference/API.md#session-hooks) on each open or resume. An absent handler does not grant approval. The old interactive scripts are not run. |
+| `commands`, `user_input`, `ask_user_failure`, `elicitation_provider`, `lifecycle_hooks` | `./run-all-examples.sh --live lifecycle-hooks` shows a prompt hook adding instructions before the model answers. Re-register [interactive callbacks](../reference/API.md#credentials-and-interactive-callbacks) and [session hooks](../reference/API.md#session-hooks) on each open or resume. An absent handler does not grant approval. |
 | `manual_tool_resume`, `mcp_local_server` | Use `respond!!` with the original request ID to resolve a pending tool or permission request. [MCP servers](../reference/API.md#mcp-servers-and-custom-agents) belong in `[:mcp :servers]`; launching one grants process or network access. Neither recipe runs by default. |
 | `dynamic_workflows` | The parent-extension transport is not part of 2.x. Keep this experimental recipe on 1.x. |
 
