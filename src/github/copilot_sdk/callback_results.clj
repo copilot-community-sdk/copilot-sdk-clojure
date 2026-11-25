@@ -1,7 +1,8 @@
 (ns ^:no-doc github.copilot-sdk.callback-results
   "Pure encoders for native callback responses. Reject unknown decision fields:
   dropping a misspelled qualifier could silently broaden an approval."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.set :as set]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util]))
@@ -43,16 +44,46 @@
              :result-type (if is-error? :failure :success)}
       (seq binary) (assoc :binary-results-for-llm binary))))
 
-(defn structured-tool-result [value]
+(def ^:private tool-result-fields
+  {:text-result-for-llm :textResultForLlm, :result-type :resultType, :binary-results-for-llm :binaryResultsForLlm,
+   :session-log :sessionLog, :tool-telemetry :toolTelemetry, :tool-references :toolReferences})
+
+(defn- rename-members [m names]
+  ;; Only SDK field names change. Extra fields may contain arbitrary JSON objects.
+  (if-not (map? m)
+    m
+    (reduce-kv (fn [out k v]
+                 (let [member (get names k k)]
+                   (check (not (contains? out member)))
+                   (assoc out member v)))
+               {} m)))
+
+(defn- decoded-fields [names]
+  ;; A literal extra named like a Clojure field can coexist on the wire.
+  (into names (map (fn [field] [field (name field)])) (vals names)))
+
+(def ^:private decoded-tool-result-fields (decoded-fields (set/map-invert tool-result-fields)))
+(def ^:private decoded-binary-fields (decoded-fields {:mimeType :mime-type}))
+
+(defn wire->structured-tool-result [value]
+  ;; Input keys have been keywordized, but not normalized to SDK spellings.
+  (let [result (rename-members value decoded-tool-result-fields)]
+    (cond-> result
+      (vector? (:binary-results-for-llm result))
+      (update :binary-results-for-llm #(mapv (fn [p] (rename-members p decoded-binary-fields)) %)))))
+
+(defn structured-tool-result
+  "Return a wire-ready tool result. Check every value before it reaches the shared writer."
+  [value]
   (let [result (cond-> value
                  (contains? value :tool-telemetry) (update :tool-telemetry util/opaque-json->wire))]
     (check (s/valid? ::specs/tool-result-object result))
-    (cond-> (update result :result-type name)
-      (contains? result :binary-results-for-llm)
-      (update :binary-results-for-llm
-              (fn [parts]
-                (mapv #(cond-> % (contains? % :metadata) (update :metadata util/opaque-json->wire))
-                      parts))))))
+    (-> (cond-> (update result :result-type name)
+          (contains? result :binary-results-for-llm)
+          (update :binary-results-for-llm
+                  #(mapv (fn [p] (rename-members p {:mime-type :mimeType})) %)))
+        (rename-members tool-result-fields)
+        util/opaque-json->wire)))
 
 (defn decision-context->wire [context]
   (let [enums {:outcome #{:auto-approved :autopilot-denied :prompted-user}

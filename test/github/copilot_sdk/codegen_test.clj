@@ -965,27 +965,25 @@
       (is (= (coerce/event-idiom->wire idiom) event)))))
 
 (deftest attachment-type-coercion-round-trips
-  (let [wire-types ["file"
-                    "directory"
-                    "selection"
-                    "github_reference"
-                    "blob"
-                    "extension_context"]
-        idiom-types [:file
-                     :directory
-                     :selection
-                     :github-reference
-                     :blob
-                     :extension-context]
-        wire-event
-        {:type "user.message"
-         :data {:attachments (mapv (fn [attachment-type]
-                                     {:type attachment-type})
-                                   wire-types)}}
-        idiom-event (coerce/event-wire->idiom wire-event)]
-    (is (= idiom-types
-           (mapv :type (get-in idiom-event [:data :attachments]))))
-    (is (= wire-event (coerce/event-idiom->wire idiom-event)))))
+  (doseq [[wire idiom] [["file" :file]
+                        ["directory" :directory]
+                        ["selection" :selection]
+                        ["blob" :blob]
+                        ["extension_context" :extension-context]
+                        ["github_reference" :github-reference]
+                        ["github_commit" :github-commit]
+                        ["github_release" :github-release]
+                        ["github_actions_job" :github-actions-job]
+                        ["github_repository" :github-repository]
+                        ["github_file_diff" :github-file-diff]
+                        ["github_tree_comparison" :github-tree-comparison]
+                        ["github_url" :github-url]
+                        ["github_file" :github-file]
+                        ["github_snippet" :github-snippet]]]
+    (let [event {:type "user.message" :data {:attachments [{:type wire}]}}
+          converted (coerce/event-wire->idiom event)]
+      (is (= (get-in converted [:data :attachments 0 :type]) idiom) wire)
+      (is (= (coerce/event-idiom->wire converted) event) wire))))
 
 (deftest auto-tier-coercion-rejects-non-identifiers
   (doseq [[direction value]

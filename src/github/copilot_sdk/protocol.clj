@@ -17,6 +17,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.string :as str]
             [clojure.walk :as walk]
+            [github.copilot-sdk.callback-results :as callback-results]
             [github.copilot-sdk.generated.event-metadata :as event-metadata]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.teardown :as td]
@@ -29,7 +30,8 @@
            [java.util.concurrent ArrayBlockingQueue CompletableFuture LinkedBlockingQueue
             RejectedExecutionException ThreadFactory ThreadPoolExecutor
             ThreadPoolExecutor$AbortPolicy TimeUnit]
-           [java.util.concurrent.atomic AtomicLong]))
+           [java.util.concurrent.atomic AtomicLong]
+           [java.util.concurrent.locks ReentrantReadWriteLock]))
 
 (def ^:private content-length-header "Content-Length: ")
 
@@ -143,6 +145,7 @@
             ^OutputStream output-stream   ; Keep reference for flushing
             state-atom                    ; atom owned by client, contains :connection key
             connection-id
+            reply-barrier                 ; callback admissions vs. lifetime revocation
             incoming-ch                   ; channel for incoming messages (responses + notifications)
             outgoing-ch                   ; channel for outgoing messages
             notification-queue            ; queue for notifications to avoid blocking reader
@@ -157,8 +160,8 @@
   (let [counter (AtomicLong.)]
     (reify ThreadFactory
       (newThread [_ runnable]
-        (doto (Thread. ^Runnable runnable
-                       (str request-worker-thread-name-prefix (.incrementAndGet counter)))
+        (doto (Thread. nil ^Runnable runnable
+                       (str request-worker-thread-name-prefix (.incrementAndGet counter)) 0 false)
           (.setDaemon true))))))
 
 (defn- make-request-executor
@@ -217,23 +220,26 @@
                       (fn [{:keys [connection] :as state}]
                         (if (and (:running? connection)
                                  (identical? connection-id (:connection-id connection)))
-                          (update state :connection assoc :running? false :pending-requests {}
+                          (update state :connection assoc :running? false :pending-requests {} :late-responses {}
                                   :terminal-error error)
                           state))))]
     (when-not (identical? old new)
       (close! outgoing-ch)
+      ;; The writer stops on disconnect. Closing its buffer alone retains unsent payloads.
+      (while (some? (async/poll! outgoing-ch)))
       (doseq [[_ {:keys [ch]}] (get-in old [:connection :pending-requests])]
         (put! ch {:error error})
         (close! ch)))))
+
+(defn- outgoing-full! [conn]
+  (close-input! conn {:code -32000 :message "Outgoing queue full" :data {:code "outgoing_queue_full"}})
+  false)
 
 (defn- enqueue! [conn msg]
   (cond
     (not (connection-running? conn)) false
     (async/offer! (:outgoing-ch conn) msg) true
-    :else (do
-            (close-input! conn {:code -32000 :message "Outgoing queue full"
-                                :data {:code "outgoing_queue_full"}})
-            false)))
+    :else (outgoing-full! conn)))
 
 (defn ^:no-doc end-input!
   "End input on runtime exit or with a sanitized JSON-RPC error from the host.
@@ -290,7 +296,7 @@
     (log/debug "Received response for id=" id)
     ;; Atomically claim the pending entry so a concurrent close-input!
     ;; (disconnect / EOF) can never also deliver to this response channel.
-    (when-let [{:keys [ch on-response-inline method raw-json?]} (pop-pending! state-atom id)]
+    (if-let [{:keys [ch on-response-inline on-error-inline method raw-json?]} (pop-pending! state-atom id)]
       (try
         (let [msg (cond
                     (and raw-json? (not (:error raw-msg))) raw-msg
@@ -299,7 +305,6 @@
                     (and (= method "session.tools.getCurrentMetadata") (vector? (get-in raw-msg [:result "tools"])))
                     (decode-record-list raw-msg "tools" "input_schema" :input-schema)
                     (and (= method "session.ui.elicitation")
-                         (= "accept" (get-in raw-msg [:result "action"]))
                          (contains? (:result raw-msg) "content"))
                     (-> (update raw-msg :result dissoc "content")
                         walk/keywordize-keys
@@ -309,6 +314,7 @@
           (if-let [error (:error msg)]
             (do
               (log/debug "Response error: " error)
+              (when on-error-inline (on-error-inline error))
               (put! ch {:error error})
               (close! ch))
             (let [result (:result msg)]
@@ -331,7 +337,13 @@
                   :data {:id id :method method}}})
           (close! ch)
           (when-not (instance? Exception failure)
-            (throw failure)))))))
+            (throw failure))))
+      ;; A lifecycle wait can expire before the reply. The late hook can end
+      ;; authority for that generation; it can never establish a new handle.
+      (when (get-in @state-atom [:connection :late-responses id])
+        (let [[old _] (swap-vals! state-atom update-in [:connection :late-responses] dissoc id)]
+          (when-let [late! (get-in old [:connection :late-responses id])]
+            (late! (:result raw-msg) (:error raw-msg))))))))
 
 (defn- preserve-outgoing-opaque-fields
   "Per-method outgoing escape hatch: after recursive kebab→camelCase
@@ -366,6 +378,12 @@
 
     :else wire-result))
 
+(defn- send-reply! [conn id offer! reply]
+  (when (connection-running? conn)
+    (let [enqueue-reply! #(async/offer! (:outgoing-ch conn) (assoc % :jsonrpc "2.0" :id id))]
+      (when-not (if offer! (offer! reply enqueue-reply!) (enqueue-reply! reply))
+        (outgoing-full! conn)))))
+
 (defn- run-request-handler!
   "Execute one reverse request and answer the peer.
 
@@ -377,54 +395,41 @@
    handler occupies exactly one worker; the pool bound and the overload error
    in [[handle-request!]] are what make that visible, rather than a fallback
    that hides it."
-  [request-handler conn method id params]
-  (try
-    (let [result (if request-handler
-                   (let [result-ch (request-handler method params)]
-                     (when-not (satisfies? async-protocols/ReadPort result-ch)
-                       (throw (ex-info "Request handler must return a core.async channel"
-                                       {:method method
-                                        :returned-type (some-> result-ch class str)})))
-                     (<!! result-ch))
-                   {:error {:code -32601 :message "Method not found"}})]
-      (if-let [error (:error result)]
-        (do
-          (log/debug "Request error response: " error)
-          (enqueue! conn {:jsonrpc "2.0" :id id :error (util/clj->wire error)}))
-        (do
-          (log/debug "Request success response for id=" id)
-          (enqueue! conn {:jsonrpc "2.0" :id id
-                          :result (preserve-outgoing-opaque-fields
-                                   method
-                                   (:result result)
-                                   (util/clj->wire (:result result)))}))))
-    (catch InterruptedException _
-      ;; Expected: `disconnect` interrupts workers still inside a handler.
-      (.interrupt (Thread/currentThread))
-      (log/debug "Reverse request worker interrupted for id=" id))
-    (catch Exception t
-      (log/error "Request handler exception for method=" method " id=" id ": " (ex-message t))
-      (enqueue! conn {:jsonrpc "2.0"
-                      :id id
-                      :error {:code -32603
-                              :message (str "Internal error: " (ex-message t))}}))))
+  [request-handler conn method id {:keys [params offer-reply!]}]
+  (let [reply
+        (try
+          (if request-handler
+            (let [result-ch (request-handler method params)]
+              (when-not (satisfies? async-protocols/ReadPort result-ch)
+                (throw (ex-info "Request handler must return a core.async channel"
+                                {:method method :returned-type (some-> result-ch class str)})))
+              (let [{:keys [result error]} (<!! result-ch)]
+                (if error
+                  {:error (util/clj->wire error)}
+                  {:result (preserve-outgoing-opaque-fields method result (util/clj->wire result))})))
+            {:error {:code -32601 :message "Method not found"}})
+          (catch InterruptedException _
+            ;; Disconnect interrupts workers still inside a handler.
+            (.interrupt (Thread/currentThread))
+            (log/debug "Reverse request worker interrupted for id=" id)
+            nil)
+          (catch Exception t
+            (log/error "Request handler exception for method=" method " id=" id ": " (ex-message t))
+            {:error {:code -32603 :message (str "Internal error: " (ex-message t))}}))]
+    (when reply
+      (send-reply! conn id offer-reply! reply))))
 
-(defn- reject-request!
-  "Answer a reverse request that the worker pool refused.
+(defn- rejection-error
+  "Build the error for a reverse request that the worker pool refused.
 
    Saturation and shutdown are reported as explicit JSON-RPC errors. The
    reader thread never blocks waiting for capacity."
-  [^ThreadPoolExecutor executor ^AtomicLong rejected-requests conn method id]
+  [^ThreadPoolExecutor executor ^AtomicLong rejected-requests method id]
   (if (.isShutdown executor)
     (do
       (log/debug "Rejecting request during shutdown: method=" method " id=" id)
-      (enqueue! conn
-                {:jsonrpc "2.0"
-                 :id id
-                 :error {:code -32000
-                         :message "Connection closed"
-                         :data (util/clj->wire {:code "connection_closed"
-                                                :method method})}}))
+      {:code -32000 :message "Connection closed"
+       :data (util/clj->wire {:code "connection_closed" :method method})})
     (let [queue (.getQueue executor)
           max-concurrency (.getMaximumPoolSize executor)
           queue-size (+ (.size queue) (.remainingCapacity queue))
@@ -432,23 +437,20 @@
       (log/warn "Reverse request handler pool saturated, rejecting request: method=" method
                 " id=" id " max-concurrency=" max-concurrency
                 " queue-size=" queue-size " rejected-total=" total)
-      (enqueue! conn
-                {:jsonrpc "2.0"
-                 :id id
-                 :error {:code -32000
-                         :message "Reverse request handler pool saturated"
-                         :data (util/clj->wire {:code "request_handler_saturated"
-                                                :method method
-                                                :max-concurrency max-concurrency
-                                                :queue-size queue-size})}}))))
+      {:code -32000 :message "Reverse request handler pool saturated"
+       :data (util/clj->wire {:code "request_handler_saturated" :method method
+                              :max-concurrency max-concurrency :queue-size queue-size})})))
 
 (defn- handle-request!
   "Submit an incoming request message (e.g. hooks.invoke) to the connection's
    bounded reverse-request worker pool.
 
    Called on the reader thread. An optional request preparer may perform
-   non-blocking, order-sensitive SDK bookkeeping before submission. Handler
-   execution remains on the bounded worker pool."
+   non-blocking, order-sensitive SDK bookkeeping before submission. Its optional
+   :offer-reply! serializes registration checks and the nonblocking offer of
+   a result or error with revocation, after wire conversion.
+   :release! releases any outstanding reservation. These callbacks perform
+   SDK bookkeeping only."
   [conn msg]
   (let [{:keys [state-atom]} conn
         ^ThreadPoolExecutor executor (:request-executor conn)
@@ -457,34 +459,28 @@
         method (:method msg)
         params (:params msg)]
     (log/debug "Received request: method=" method " id=" id)
-    (try
-      (let [preparation
-            (if request-preparer
-              (request-preparer method params)
-              {:params params})
-            on-reject (:on-reject preparation)
-            prepared-params (:params preparation)]
-        (try
-          (.execute executor
-                    ^Runnable (fn []
-                                (run-request-handler!
-                                 request-handler conn
-                                 method id prepared-params)))
-          (catch RejectedExecutionException failure
-            (when on-reject
-              (on-reject))
-            (throw failure))))
-      (catch RejectedExecutionException _
-        (reject-request! executor (:rejected-requests conn) conn method id))
-      (catch Exception failure
-        (log/error failure
-                   "Reverse request preparation failed"
-                   {:method method :id id})
-        (enqueue! conn
-                  {:jsonrpc "2.0"
-                   :id id
-                   :error {:code -32603
-                           :message "Internal error preparing reverse request"}})))))
+    (let [reject! (fn [preparation]
+                    (send-reply! conn id (:offer-reply! preparation)
+                                 {:error (rejection-error executor (:rejected-requests conn) method id)}))
+          preparation (try
+                        (if request-preparer (or (request-preparer method params) {}) {:params params})
+                        (catch RejectedExecutionException _ (reject! nil) nil)
+                        (catch Exception failure
+                          (log/error failure "Reverse request preparation failed" {:method method :id id})
+                          (send-reply! conn id nil {:error {:code -32603 :message "Internal error preparing reverse request"}})
+                          nil))]
+      (when preparation
+        (let [release! (:release! preparation)
+              run #(run-request-handler! request-handler conn method id preparation)
+              task (if release!
+                     (reify Runnable
+                       (run [_] (try (run) (finally (release!))))
+                       java.lang.AutoCloseable
+                       (close [_] (release!)))
+                     run)]
+          (try (.execute executor ^Runnable task)
+               (catch RejectedExecutionException _
+                 (try (reject! preparation) (finally (when release! (release!)))))))))))
 
 (defn- restore-opaque-path
   [raw converted wire-path idiom-path]
@@ -578,13 +574,11 @@
         params (:params msg)
         hook-input (when (and (= "hooks.invoke" method) (map? (:input params))) (:input params))
         hook-keys {:toolArgs :tool-args :arguments :arguments :_meta :_meta :error :error}
-        binary-parts (get-in hook-input [:toolResult :binaryResultsForLlm])
+        tool-result (:toolResult hook-input)
         typed-msg (if hook-input
                     (assoc-in msg [:params :input]
                               (cond-> (apply dissoc hook-input (keys hook-keys))
-                                (map? (:toolResult hook-input))
-                                (update :toolResult dissoc :toolTelemetry)
-                                (vector? binary-parts) (update :toolResult dissoc :binaryResultsForLlm)))
+                                (map? tool-result) (dissoc :toolResult)))
                     msg)
         converted
         (cond-> (util/wire->clj typed-msg)
@@ -617,11 +611,8 @@
                              (assoc-in message [:params :input idiom] (get hook-input k))
                              message))
                          converted hook-keys)
-        (and (map? (:toolResult hook-input)) (contains? (:toolResult hook-input) :toolTelemetry))
-        (assoc-in [:params :input :tool-result :tool-telemetry] (get-in hook-input [:toolResult :toolTelemetry]))
-        (vector? binary-parts)
-        (assoc-in [:params :input :tool-result :binary-results-for-llm]
-                  (mapv #(decode-record % :metadata :metadata) binary-parts)))
+        (map? tool-result)
+        (assoc-in [:params :input :tool-result] (callback-results/wire->structured-tool-result tool-result)))
 
       (and (= "systemMessage.transform" method) (map? (:sections params)))
       (assoc-in converted [:params :sections] (update-vals (:sections params) util/wire->clj))
@@ -697,6 +688,7 @@
   (let [{:keys [read-channel]} conn
         single-byte-buf (ByteBuffer/allocate 1)]
     (Thread.
+     nil
      (fn []
        (log/debug "Read loop started")
        (try
@@ -738,13 +730,15 @@
                                  :message (str "Connection error: " (ex-message e))})))
          (finally
            (close-input! conn {:code -32000 :message "Connection input closed"})
-           (log/debug "Read loop ending")))))))
+           (log/debug "Read loop ending"))))
+     "jsonrpc-nio-reader" 0 false)))
 
 (defn- start-write-loop!
   "Write and flush frames on one connection-owned thread."
   [conn]
   (let [{:keys [write-channel output-stream outgoing-ch state-atom]} conn
         writer-thread (Thread.
+                       nil
                        (fn []
                          (try
                            (loop []
@@ -759,9 +753,9 @@
                                             :message (str "Connection write failed: " (ex-message failure))
                                             :data {:code "write_failed"}})
                              (when-not (instance? Exception failure)
-                               (throw failure))))))]
+                               (throw failure)))))
+                       "jsonrpc-nio-writer" 0 false)]
     (.setDaemon writer-thread true)
-    (.setName writer-thread "jsonrpc-nio-writer")
     (.start writer-thread)
     ;; Store thread reference for cleanup
     (update-conn! state-atom assoc :writer-thread writer-thread)))
@@ -805,6 +799,7 @@
                :output-stream out  ; Keep for flushing
                :state-atom state-atom
                :connection-id (:connection-id (conn-state state-atom))
+               :reply-barrier (ReentrantReadWriteLock.)
                :incoming-ch incoming-ch
                :outgoing-ch outgoing-ch
                :notification-queue notification-queue
@@ -823,6 +818,7 @@
 
     ;; Start notification dispatcher thread
     (let [thread (Thread.
+                  nil
                   (fn []
                     (log/debug "Notification dispatcher started")
                     (try
@@ -839,16 +835,15 @@
                         (log/error "Notification dispatcher exception: " (ex-message e)))
                       (finally
                         (close! incoming-ch)
-                        (log/debug "Notification dispatcher ending")))))]
+                        (log/debug "Notification dispatcher ending"))))
+                  "jsonrpc-notification-dispatcher" 0 false)]
       (.setDaemon thread true)
-      (.setName thread "jsonrpc-notification-dispatcher")
       (.start thread)
       (update-conn! state-atom assoc :notification-thread thread))
 
     ;; Start reader thread
     (let [thread (start-read-loop! conn)]
       (.setDaemon thread true)
-      (.setName thread "jsonrpc-nio-reader")
       (.start thread)
       (log/debug "JSON-RPC connection established")
       (assoc conn :read-thread thread))))
@@ -867,7 +862,9 @@
    legitimately consume the flag."
   [^ThreadPoolExecutor executor]
   (when executor
-    (.shutdownNow executor)
+    ;; Queued reverse workers returned by shutdownNow never run their finally.
+    (doseq [task (.shutdownNow executor) :when (instance? java.lang.AutoCloseable task)]
+      (.close ^java.lang.AutoCloseable task))
     (let [terminated? (try
                         (.awaitTermination executor 1000 TimeUnit/MILLISECONDS)
                         (catch InterruptedException _
@@ -908,6 +905,9 @@
             (td/attempt {:operation :join :resource :read-thread}
                         (.interrupt thread)
                         (.join thread 1000)))])]
+    ;; Explicit disconnect abandons input. Passive EOF leaves these queues to the router.
+    (.clear ^LinkedBlockingQueue (:notification-queue conn))
+    (while (some? (async/poll! (:incoming-ch conn))))
     (log/debug "JSON-RPC connection closed")
     failures))
 
@@ -927,44 +927,81 @@
                                              snapshot))))
 
 (defn- pop-pending-by-chan!
-  "Atomically remove and return a pending request entry by channel identity."
+  "Atomically retire the wait by channel identity, preserving only its late cleanup hook."
   [state-atom target-ch]
-  (let [[old _]
-        (swap-vals!
-         state-atom
-         (fn [state]
-           (if (:connection state)
-             (update-in
-              state
-              [:connection :pending-requests]
-              (fn [pending]
-                (reduce-kv (fn [m id {:keys [ch] :as entry}]
-                             (if (identical? ch target-ch)
-                               m
-                               (assoc m id entry)))
-                           {}
-                           pending)))
-             state)))]
-    (some (fn [[_ {:keys [ch] :as entry}]]
-            (when (identical? ch target-ch)
-              entry))
-          (get-in old [:connection :pending-requests]))))
+  (loop []
+    (let [state @state-atom
+          pending (get-in state [:connection :pending-requests])]
+      (when-let [request (some (fn [[_ {:keys [ch]} :as entry]]
+                                 (when (identical? ch target-ch) entry))
+                               pending)]
+        (let [[id {:keys [on-late-response]}] request]
+          (if (compare-and-set! state-atom state
+                                (cond-> (update-in state [:connection :pending-requests] dissoc id)
+                                  on-late-response (assoc-in [:connection :late-responses id] on-late-response)))
+            request
+            (recur)))))))
 
 (defn ^:no-doc cancel-request!
   "Cancel a pending request by response-channel identity.
 
    Returns true only when this call atomically removed the pending request.
-   A response already claimed by the reader remains deliverable."
+   A response already claimed by the reader remains deliverable. Cancelling a
+   sent session.sendAndWait retires only that request, not the underlying turn."
   [conn response-ch]
-  (when (pop-pending-by-chan! (:state-atom conn) response-ch)
+  (when-let [[id {:keys [method]}] (pop-pending-by-chan! (:state-atom conn) response-ch)]
+    (when (= method "session.sendAndWait")
+      (enqueue! conn {:jsonrpc "2.0" :method "$/cancelRequest" :params {:id id}}))
     (close! response-ch)
     true))
+
+(defn ^:no-doc withdraw-requests!
+  "Claim one owner's pending requests for local settlement. The caller must
+   settle the returned reply channels. A reader or EOF claim is never undone."
+  [{:keys [state-atom]} owner]
+  (loop []
+    (let [state @state-atom
+          owned (filterv #(identical? owner (:request-owner (val %))) (get-in state [:connection :pending-requests]))]
+      (when (seq owned)
+        (if (compare-and-set! state-atom state
+                              (update-in state [:connection :pending-requests] #(reduce dissoc % (map key owned))))
+          (mapv (comp :ch val) owned)
+          (recur))))))
+
+(defn- register-and-offer! [{:keys [state-atom connection-id outgoing-ch]} msg entry check!]
+  ;; Disconnect either owns this pending entry or refuses registration. Never
+  ;; register in a terminal connection, even if the ID is reused.
+  (let [[old new] (swap-vals! state-atom
+                              (fn [{:keys [connection] :as s}]
+                                (if (and (:running? connection) (identical? connection-id (:connection-id connection)))
+                                  (do (when check! (check!))
+                                      (assoc-in s [:connection :pending-requests (:id msg)] entry))
+                                  s)))]
+    (if (identical? old new)
+      (if (identical? connection-id (get-in old [:connection :connection-id]))
+        (get-in old [:connection :terminal-error] connection-closed)
+        connection-closed)
+      (when-not (async/offer! outgoing-ch msg) ::full))))
 
 (defn send-request
   "Send a JSON-RPC request and return a channel for the response.
    The channel delivers a single {:result ...} or {:error ...} map, then closes.
 
    Optional `opts` map:
+   - `:check-admission!` — nonblocking, side-effect-free deadline or ownership check.
+     Throws if the request is no longer admissible. Runs after wire preparation,
+     on each pending registration attempt.
+   - `:callback-registry` — for requests tied to a session registration, acquire its registry
+     monitor, then the shared reply barrier, only for the final ownership check,
+     registration and nonblocking offer. No conversion or teardown under either.
+   - `:request-owner` — identity for local withdrawal. Such a request can also
+     deliver the owner's terminal exception instead of a protocol response.
+   - `:on-error-inline` — revoke local authority on an explicit runtime error
+     before delivering the response or reading another frame. Not a timeout or EOF hook.
+   - `:on-late-response` — session lifetime fencing only. After the wait is withdrawn,
+     receive the raw result (string keys) and error once on the reader. EOF
+     discards the hook. No user code or follow-up requests. An uncertain ID
+     cannot be reused, so there is at most one such hook per session ID.
    - `:raw-json?` — for `session.getMessages` only. Return the result as
      source JSON data with string keys and exact integers, under `:result`.
      This is a local decoder option and is not sent to the runtime.
@@ -975,11 +1012,10 @@
      any later inbound message can be dispatched. See upstream PR #1479."
   ([conn method params]
    (send-request conn method params {}))
-  ([conn method params {:keys [on-response-inline raw-json?]}]
+  ([conn method params {:keys [on-response-inline on-error-inline on-late-response raw-json? check-admission! callback-registry request-owner]}]
    (when (and raw-json? (not= "session.getMessages" method))
      (throw (IllegalArgumentException. ":raw-json? requires session.getMessages")))
-   (let [state-atom (:state-atom conn)
-         id (str (java.util.UUID/randomUUID))
+   (let [id (str (java.util.UUID/randomUUID))
          ch (chan 1)
          wire-params (when params (util/clj->wire params))
          msg {:jsonrpc "2.0"
@@ -987,29 +1023,25 @@
               :method method
               :params wire-params}
          entry (cond-> {:ch ch :method method}
+                 request-owner (assoc :request-owner request-owner)
                  raw-json? (assoc :raw-json? true)
+                 on-error-inline (assoc :on-error-inline on-error-inline)
+                 on-late-response (assoc :on-late-response on-late-response)
                  on-response-inline (assoc :on-response-inline on-response-inline))]
      (log/debug "Sending request: method=" method " id=" id)
-     ;; Register the pending entry only if the connection is still running, in a
-     ;; single atomic step so a concurrent disconnect either sees the entry (and
-     ;; drains it) or refuses registration. Without this, a request registered
-     ;; after disconnect would never be resolved and the caller would hang.
-     (let [[old new] (swap-vals! state-atom
-                                 (fn [s]
-                                   (if (and (get-in s [:connection :running?])
-                                            (identical? (:connection-id conn)
-                                                        (get-in s [:connection :connection-id])))
-                                     (assoc-in s [:connection :pending-requests id] entry)
-                                     s)))
-           registered? (not (identical? old new))]
-       (if registered?
-         (enqueue! conn msg)
-         (do
-           (put! ch {:error (if (identical? (:connection-id conn) (get-in old [:connection :connection-id]))
-                              (get-in old [:connection :terminal-error] connection-closed)
-                              connection-closed)})
-           (close! ch)))
-       ch))))
+     (let [failure (if callback-registry
+                     (locking callback-registry
+                       (let [lock (.readLock ^ReentrantReadWriteLock (:reply-barrier conn))]
+                         (.lock lock)
+                         (try (register-and-offer! conn msg entry check-admission!)
+                              (finally (.unlock lock)))))
+                     (register-and-offer! conn msg entry check-admission!))]
+       ;; Overflow can stop the connection and wake arbitrary waiters. Release
+       ;; the reply barrier before that, or before notifying a refused caller.
+       (cond
+         (= ::full failure) (outgoing-full! conn)
+         failure (do (put! ch {:error failure}) (close! ch))))
+     ch)))
 
 (defn send-request-with-timeout
   "Send a JSON-RPC request and return a channel for its bounded response.
@@ -1076,7 +1108,8 @@
 
 (defn send-request!
   "Send a JSON-RPC request and block for the response.
-   Returns result or throws on error.
+   Returns result or throws on error. Interruption withdraws this caller's
+   pending reply; it does not undo an operation already sent to the runtime.
 
    The 5-arity form accepts an `opts` map forwarded to `send-request`
    (see its docstring for supported keys, e.g. `:on-response-inline`).
@@ -1087,20 +1120,20 @@
    (send-request! conn method params timeout-ms {}))
   ([conn method params timeout-ms opts]
    (let [response-ch (send-request conn method params opts)
-         timeout-ch (when timeout-ms (async/timeout timeout-ms))
-         [initial-result port]
-         (async/alts!! (cond-> [response-ch]
-                         timeout-ch (conj timeout-ch))
-                       :priority true)
-         result
-         (if (and timeout-ch (= port timeout-ch))
-           (if (cancel-request! conn response-ch)
-             (throw
-              (ex-info "Request timeout"
-                       {:method method :timeout-ms timeout-ms}))
-             (<!! response-ch))
-           initial-result)]
-     (response-result! method result))))
+         timeout-ch (when timeout-ms (async/timeout timeout-ms))]
+     (try
+       (let [[result port] (async/alts!! (cond-> [response-ch] timeout-ch (conj timeout-ch)) :priority true)]
+         (response-result!
+          method
+          (if (and timeout-ch (= port timeout-ch))
+            (if (cancel-request! conn response-ch)
+              (throw (ex-info "Request timeout" {:method method :timeout-ms timeout-ms}))
+              (<!! response-ch))
+            result)))
+       (catch InterruptedException e
+         (cancel-request! conn response-ch)
+         (.interrupt (Thread/currentThread))
+         (throw e))))))
 
 (defn send-notification
   "Send a JSON-RPC notification (no response expected)."

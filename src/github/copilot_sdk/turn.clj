@@ -3,12 +3,13 @@
   (:require [clojure.core.async :as a]
             [clojure.core.async.impl.protocols :as p]
             [clojure.string :as str]
+            [github.copilot-sdk.channels :as channels]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.teardown :as teardown]
             [github.copilot-sdk.util :as util])
   (:import [clojure.lang ExceptionInfo]
-           [java.util.concurrent.locks Lock]))
+           [java.util.concurrent ScheduledThreadPoolExecutor ThreadFactory TimeUnit]))
 
 (def ^:private capacity 64)
 (def ^:private method-name "session.sendAndWait")
@@ -38,29 +39,6 @@
   (a/put! ch outcome)
   (a/close! ch))
 
-(defn- consumer-handler [^Lock handler]
-  ;; A parked take! can request inline execution. Preserve the handler's alts
-  ;; lock and commit, but leave scheduling to core.async, not the publisher.
-  (reify
-    Lock
-    (lock [_] (.lock handler))
-    (unlock [_] (.unlock handler))
-    p/Handler
-    (lock-id [_] (p/lock-id handler))
-    (active? [_] (p/active? handler))
-    (blockable? [_] (p/blockable? handler))
-    (commit [_]
-      (let [callback (p/commit handler)]
-        (if (:on-caller? (meta callback)) #(callback %) callback)))))
-
-(defn- read-channel [source close!]
-  (reify
-    p/ReadPort
-    (take! [_ handler] (p/take! source (consumer-handler handler)))
-    p/Channel
-    (closed? [_] (p/closed? source))
-    (close! [_] (close!))))
-
 (defn subscribe
   "Return a read channel of normalized events; close it to unsubscribe.
    A slow subscriber can buffer 64 events.
@@ -75,9 +53,9 @@
       (if-let [closed (:closed @state)]
         (finish! source closed)
         (swap! state update :subscriptions conj source)))
-    (read-channel source #(locking state
-                            (swap! state update :subscriptions disj source)
-                            (a/close! source)))))
+    (channels/read-channel source #(locking state
+                                     (swap! state update :subscriptions disj source)
+                                     (a/close! source)))))
 
 (defn- root-event? [{:keys [agent-id]}]
   (or (nil? agent-id) (= "" agent-id)))
@@ -115,14 +93,18 @@
          (observe! state signal waiter (:id event) receipt))))))
 
 (defn close!
-  "Stop admitting operations and wake active waiters and subscriptions."
-  [state cause]
-  (locking state
-    (when-not (:closed @state)
-      (let [{:keys [waiters subscriptions]} @state
-            outcome (failure cause)]
-        (reset! state {:closed outcome :waiters {} :subscriptions #{}})
-        (doseq [ch (concat (keys waiters) subscriptions)] (finish! ch outcome))))))
+  "Stop admitting operations and close subscriptions. At EOF the protocol
+   settles every RPC; retain early completions until each waiter reads its
+   own reply. Only a known ID still missing its event needs a wakeup."
+  ([state cause] (close! state cause false))
+  ([state cause eof?]
+   (locking state
+     (when-not (:closed @state)
+       (let [{:keys [waiters subscriptions]} @state
+             outcome (failure cause)]
+         (reset! state {:closed outcome :waiters (if eof? waiters {}) :subscriptions #{}})
+         (doseq [ch subscriptions] (finish! ch outcome))
+         (doseq [[ch {:keys [id]}] waiters :when (or (not eof?) id)] (finish! ch outcome)))))))
 
 (defn- response-outcome [{:keys [result error]} structured?]
   (if error
@@ -144,20 +126,34 @@
 (defn- match-completion! [state signal id]
   (locking state
     (if-let [{:keys [seen]} (get-in @state [:waiters signal])]
-      (let [pending? (and (string? id) (seq id) (not (contains? seen id)))]
-        (swap! state assoc-in [:waiters signal] (if pending? {:id id} {}))
-        (when-not pending? {:receipt (get seen id)}))
+      (if (and (string? id) (seq id) (not (contains? seen id)))
+        (or (:closed @state) (do (swap! state assoc-in [:waiters signal] {:id id}) nil))
+        (do (swap! state assoc-in [:waiters signal] {})
+            {:receipt (get seen id)}))
       (or (:closed @state) (a/poll! signal)))))
 
-(defn- await-response [state signal {:keys [reply cancel!]} deadline timeout-ms structured?]
+(defn- timeout-error [timeout-ms]
+  (ex-info "Timeout waiting for native turn completion" {:type :turn-timeout :timeout-ms timeout-ms}))
+
+(defonce ^:private ^ScheduledThreadPoolExecutor deadline-worker
+  (doto (ScheduledThreadPoolExecutor.
+         1 (reify ThreadFactory
+             (newThread [_ r] (doto (Thread. nil r "copilot-turn-deadline" 0 false) (.setDaemon true)))))
+    (.setRemoveOnCancelPolicy true)))
+
+(defn- start-deadline [timeout-ms]
+  ;; core.async/timeout may share a timer between callers; it cannot be retired per turn.
+  (let [ch (a/chan)
+        timer (.schedule deadline-worker ^Runnable #(a/close! ch) (long timeout-ms) TimeUnit/MILLISECONDS)]
+    [ch #(.cancel timer false)]))
+
+(defn- await-response [state signal {:keys [reply cancel! observer-delivery]} deadline timeout-ms structured?]
   (a/go
     (try
       (teardown/with-cleanup cancel!
-        (let [deadline-error #(ex-info "Timeout waiting for native turn completion"
-                                       {:type :turn-timeout :timeout-ms timeout-ms})
-              [response port] (a/alts! [signal deadline reply] :priority true)]
+        (let [[response port] (a/alts! [signal deadline reply] :priority true)]
           (when (= port signal) (throw (:error response)))
-          (when (= port deadline) (throw (deadline-error)))
+          (when (= port deadline) (throw (timeout-error timeout-ms)))
           (when (instance? Throwable response) (throw response))
           (let [id (if (:error response)
                      ;; Protocol error data retains its original JSON member names.
@@ -165,17 +161,19 @@
                      (get-in response [:result :completion-event-id]))
                 publication (or (match-completion! state signal id)
                                 (let [[v port] (a/alts! [signal deadline] :priority true)]
-                                  (when (= port deadline) (throw (deadline-error)))
+                                  (when (= port deadline) (throw (timeout-error timeout-ms)))
                                   v))]
             (when-let [e (:error publication)] (throw e))
-            ;; The observer's return or exception ends delivery, not the runtime turn.
-            (when-let [receipt (:receipt publication)]
-              (let [[v port] (a/alts! [signal deadline receipt] :priority true)]
-                (cond
-                  (= port signal) (throw (:error v))
-                  (= port deadline) (throw (deadline-error))
-                  (nil? v) (throw (ex-info "Observer closed without a receipt"
-                                           {:type :missing-observer-receipt})))))
+            ;; An active observer cannot finish the event queued behind its own
+            ;; callback. If it already returned, the normal delivery fence applies.
+            (when-not (and observer-delivery (not (p/closed? observer-delivery)))
+              (when-let [receipt (:receipt publication)]
+                (let [[v port] (a/alts! [signal deadline receipt] :priority true)]
+                  (cond
+                    (= port signal) (throw (:error v))
+                    (= port deadline) (throw (timeout-error timeout-ms))
+                    (nil? v) (throw (ex-info "Observer closed without a receipt"
+                                             {:type :missing-observer-receipt}))))))
             (response-outcome response structured?))))
       (catch Exception e (failure e))
       (finally
@@ -186,14 +184,16 @@
 
 (defn send-and-wait!
   "Return a channel with exactly one {:ok root-assistant-event-or-nil} or
-   {:error ExceptionInfo}. send-fn must enqueue one native session.sendAndWait
-   RPC without blocking and return {:reply channel :cancel! fn}. The channel
-   delivers a wire reply, or a local exception if admission fails before enqueue.
-   It runs on the caller before this function returns. On every exit, cancel!
-   releases the raw pending request without aborting runtime work.
-   Its argument excludes :timeout-ms (1..2147483647, default 60000). The
-   deadline covers the RPC, publication, and its ordinary observer receipt.
-   Timing out does not abort runtime work or affect other requests. A session
+   {:error ExceptionInfo}. (send-fn message check-deadline!) submits or reserves
+   one native RPC on the caller and returns {:reply channel :cancel! fn}.
+   It must check the deadline under the client lock when registering the
+   prepared RPC as pending, including after a queued trace lookup. cancel!
+   releases only this reservation or pending RPC. The message excludes :timeout-ms.
+   The budget (1..2147483647 ms, default 60000) starts after registration and
+   covers preparation, admission, the RPC, publication and its observer receipt.
+   It does not interrupt a caller waiting for a lock or bound channel return time.
+   Closing the result abandons the local wait and withdraws any unsent
+   reservation. Neither timeout nor close aborts runtime work. A session
    admits up to 64 concurrent waits. Each tracks up to 64 distinct early root
    completion IDs. Exceeding either limit returns an error, never a best guess."
   [state send-fn options]
@@ -213,10 +213,27 @@
       (try
         ;; Enqueue takes the client lifecycle lock. Detach closes this turn
         ;; state under that lock, so do not hold the turn lock here.
-        (let [deadline (a/timeout timeout-ms)
-              rpc (send-fn (dissoc options :timeout-ms))
-              result (await-response state signal rpc deadline timeout-ms (contains? options :response-schema))]
-          (read-channel result #(a/close! result)))
-        (catch Exception e
+        (let [start (System/nanoTime)
+              budget-ns (* 1000000 (long timeout-ms))
+              [deadline stop-timer!] (start-deadline timeout-ms)
+              check-deadline! #(when (or (p/closed? deadline)
+                                         (>= (unchecked-subtract (System/nanoTime) start) budget-ns))
+                                 (throw (timeout-error timeout-ms)))
+              rpc (try (send-fn (dissoc options :timeout-ms) check-deadline!)
+                       (catch Throwable t (stop-timer!) (throw t)))
+              cleanup (delay (stop-timer!) ((:cancel! rpc)))
+              result (await-response state signal (assoc rpc :cancel! #(force cleanup))
+                                     deadline timeout-ms (contains? options :response-schema))]
+          (channels/read-channel
+           result
+           (fn []
+             ;; Do not hold the turn lock while withdrawing admission on the client.
+             (a/close! result)
+             (locking state
+               (when (contains? (:waiters @state) signal)
+                 (swap! state update :waiters dissoc signal)
+                 (finish! signal {:error (ex-info "Turn wait abandoned" {:type :turn-abandoned})})))
+             (force cleanup))))
+        (catch Throwable e
           (locking state (swap! state update :waiters dissoc signal))
-          (completed (failure e)))))))
+          (if (instance? Exception e) (completed (failure e)) (throw e)))))))

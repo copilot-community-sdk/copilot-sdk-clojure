@@ -134,6 +134,8 @@
         (is (= (protocol/disconnect conn) []))
         (is (not (.isAlive dispatcher)))
         (is (async-protocols/closed? (protocol/notifications conn)))
+        (is (.isEmpty ^java.util.concurrent.LinkedBlockingQueue (:notification-queue conn)))
+        (is (nil? (async/poll! (protocol/notifications conn))))
         (finally
           (protocol/disconnect conn))))))
 
@@ -223,6 +225,7 @@
           (is (= (get-in response [:error :data :code]) "write_failed"))
           (is (re-find #"native write refused" (get-in response [:error :message] "")))
           (is (= queued response))
+          (is (nil? (async/poll! (:outgoing-ch conn))) "A failed writer must not retain the unsent request")
           (is (= (second (async/alts!! [(protocol/notifications conn) (async/timeout 1000)]))
                  (protocol/notifications conn)))
           (protocol/disconnect conn)
@@ -239,16 +242,28 @@
         out (proxy [ByteArrayOutputStream] []
               (flush [] (deliver writing true) @release))
         state (atom {:connection (protocol/initial-connection-state)})
-        conn (protocol/connect (Channels/newInputStream (.source pipe)) out state)]
+        conn (protocol/connect (Channels/newInputStream (.source pipe)) out state)
+        registry (Object.)
+        ^java.util.concurrent.locks.ReentrantReadWriteLock barrier (:reply-barrier conn)
+        stopped (promise)]
     (try
+      (add-watch state stopped (fn [_ _ old new]
+                                 (when (and (get-in old [:connection :running?])
+                                            (not (get-in new [:connection :running?])))
+                                   (deliver stopped [(Thread/holdsLock registry) (.getReadHoldCount barrier)]))))
       (let [rpc (protocol/send-request conn "first" {})]
         (is (= (deref writing 1000 false) true))
         (dotimes [_ 1024]
           (protocol/send-notification conn "queued" {}))
-        (is (false? (protocol/send-notification conn "overload" {})))
-        (let [[response] (async/alts!! [rpc (async/timeout 1000)])]
-          (is (= (get-in response [:error :data :code]) "outgoing_queue_full"))))
+        (let [callback (protocol/send-request conn "overload" {} {:callback-registry registry})
+              [response] (async/alts!! [rpc (async/timeout 1000)])]
+          (is (= (get-in response [:error :data :code]) "outgoing_queue_full"))
+          (is (= (first (async/alts!! [callback (async/timeout 1000)])) response))
+          (is (= (deref stopped 1000 nil) [false 0]))
+          (is (empty? (get-in @state [:connection :pending-requests])))
+          (is (nil? (async/poll! (:outgoing-ch conn))) "The stopped connection must discard unwritten frames")))
       (finally
+        (remove-watch state stopped)
         (deliver release true)
         (protocol/disconnect conn)
         (.close (.sink pipe))))))
@@ -445,6 +460,25 @@
         (finally
           (protocol/disconnect conn))))))
 
+(deftest interrupted-blocking-lookup-releases-only-its-own-pending-entry
+  (let [{:keys [conn state-atom ->client <-client]} (peer/open-connection {})
+        caller (promise)
+        lookup (future (deliver caller (Thread/currentThread))
+                       (try (protocol/send-request! conn "sessions.findByPrefix" {:prefix "12345678"} 10000)
+                            (catch InterruptedException _ (.isInterrupted (Thread/currentThread)))))]
+    (try
+      (let [request (deref (future (peer/read-framed <-client)) 3000 nil)
+            healthy (protocol/send-request conn "ping" {})
+            ping (deref (future (peer/read-framed <-client)) 3000 nil)]
+        (is (= (:method request) "sessions.findByPrefix"))
+        (is (= (:method ping) "ping"))
+        (.interrupt ^Thread (deref caller 3000 nil))
+        (is (= (deref lookup 3000 ::timeout) true))
+        (is (= (set (keys (get-in @state-atom [:connection :pending-requests]))) #{(:id ping)}))
+        (peer/write-framed! ->client {:jsonrpc "2.0" :id (:id ping) :result {:message "healthy"}})
+        (is (= (deref (future (<!! healthy)) 3000 ::timeout) {:result {:message "healthy"}})))
+      (finally (protocol/disconnect conn) (.close ->client) (.close <-client)))))
+
 (deftest test-send-request-timeout-awaits-reader-owned-response
   (testing "A blocking timeout cannot discard a response already claimed by the reader"
     (let [state-atom (atom {:connection (protocol/initial-connection-state)})
@@ -628,22 +662,21 @@
 
 (deftest test-cancel-request-clears-exact-pending-response
   (testing "cancellation atomically removes and closes only the matching request"
-    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
-          in (PipedInputStream.)
-          _ (PipedOutputStream. in)
-          out (ByteArrayOutputStream.)
-          conn (protocol/connect in out state-atom)
+    (let [{:keys [conn state-atom ->client <-client]} (peer/open-connection {})
           response-ch (protocol/send-request conn "ping" {})]
       (try
-        (is (true? (wait-for #(seq (get-in @state-atom
-                                           [:connection :pending-requests]))
-                             500)))
         (is (true? (protocol/cancel-request! conn response-ch)))
         (is (async-protocols/closed? response-ch))
         (is (empty? (get-in @state-atom [:connection :pending-requests])))
         (is (nil? (protocol/cancel-request! conn response-ch)))
+        (protocol/send-notification conn "barrier" {})
+        (let [methods (future (mapv :method (repeatedly 2 #(peer/read-framed <-client))))]
+          (try (is (= (deref methods 3000 ::timeout) ["ping" "barrier"]))
+               (finally (future-cancel methods))))
         (finally
-          (protocol/disconnect conn))))))
+          (protocol/disconnect conn)
+          (.close ->client)
+          (.close <-client))))))
 
 (deftest test-disconnect-resolves-pending-requests
   (testing "disconnect fails in-flight requests instead of hanging (A3)"

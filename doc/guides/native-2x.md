@@ -12,6 +12,7 @@ wire compatibility with a separately installed CLI.
 | Connect over TCP, join a parent extension, or isolate native failures in a separate runtime process | No transport equivalent. Keep the 1.x application or redesign the process boundary. |
 | Reuse local credentials or coding tools by default | Select `:mode` explicitly. Use `:empty` with isolated storage and a tool allowlist for an application; use `:coding-agent` only when the application intends the runtime to act as a coding agent. |
 | Reuse a saved 1.x session | Do not assume on-disk compatibility. Keep a backup and a separate 2.x storage directory. Resume/delete operate on the native runtime's store. |
+| Keep many sessions with an event callback | In 2.x, `:on-event` reserves one of 16 workers per client, even for an idle session. When all are occupied, another observed open or resume fails with `:observer-capacity`. For more streams on the same client, omit the callback and [subscribe before sending](../reference/API.md#events-and-history). |
 | Run Clojure code against the Copilot Java SDK | The Clojure library binds the Rust C interface through JNA. Only the platform **runtime** artifact is required in addition to the Clojure SDK and its dependencies. |
 
 In-process is not a sandbox. Tool handlers, approved actions, model requests,
@@ -35,9 +36,13 @@ recipe, see [Getting started](../getting-started.md).
 5. Keep the session and client open until their operations finish. Detach to
    preserve history. To resume, supply the full session ID and current options;
    reattach callbacks, model catalogs, credentials, and storage providers as
-   needed. `delete-session!!` is for runtime-stored sessions with exact,
-   unambiguous IDs. For application-owned storage, detach first and remove
-   the saved data through the filesystem provider.
+   needed. `delete-session!!` targets an exactly listed ID in the client's
+   default runtime store. An unused, unnamed session can leave files without
+   being listed; for no-turn cleanup, name the session at creation and detach
+   before deleting. For a different storage directory, detach and
+   point a client at that directory. For application-owned storage, remove
+   the saved data through the filesystem provider after detach. See
+   [Resource lifetimes](../reference/API.md#resource-lifetimes).
 
 A saved model ID is not a provider registry. A fresh runtime cannot resolve a
 named model such as `"local/chat"` without its provider and model definitions.

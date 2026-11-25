@@ -51,4 +51,7 @@
      :rename (fn [src dest]
                (swap! tree (fn [nodes]
                              (node nodes src)
-                             (update-keys nodes #(if (below? src %) (str dest (subs % (count src))) %)))))}))
+                             (let [from (filter #(below? src %) (keys nodes))]
+                               (into (apply dissoc nodes from)
+                                     (map (fn [path] [(str dest (subs path (count src))) (get nodes path)]))
+                                     from)))))}))

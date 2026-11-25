@@ -96,8 +96,9 @@
         {:keys [type method error] :as data} (ex-data cause)]
     (when-not (= port waiter)
       (throw (ex-info "Detached waiter did not settle" {:session-id session-id})))
-    ;; The native wait can reject before session.detach acknowledges and retires the local handle.
+    ;; Rust may report an aborted turn or a closed session before local handle retirement.
     (when-not (or (and (= type :session-closed) (= (:session-id data) session-id))
+                  (= type :turn-aborted)
                   (and (= method "session.sendAndWait") (= (:code error) -32603)
                        (= (:message error) "The session was closed or replaced while waiting for the response")))
       (throw (ex-info "Expected a detach failure from the original wait" {:outcome outcome} cause)))

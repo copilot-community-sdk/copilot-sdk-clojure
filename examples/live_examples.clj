@@ -30,7 +30,7 @@
       (copilot/with-client [client {:mode :empty :base-directory state-dir
                                     :github {:use-logged-in-user? true}}]
         (when-not (:authenticated? (copilot/await!! (copilot/auth-status client)))
-          (throw (ex-info "No signed-in GitHub account available to the native runtime" {})))
+          (throw (ex-info "No account available in isolated demo mode. Sign in with GitHub CLI (gh auth login) using a Copilot-enabled account, or omit --live." {})))
         (let [options (cond-> {:tools {:available-tools []} :working-directory state-dir
                                :enable-config-discovery? false :github {:telemetry-enabled? false}}
                         model (assoc :model model))]

@@ -7,7 +7,7 @@
              (let [reply (copilot/await!! (copilot/send-and-wait! session {:prompt prompt :timeout-ms 60000}))]
                (println "Assistant:" (get-in reply [:data :content])))
              (copilot/session-id session))
-        content (with-open [session (copilot/resume-session!! client id options)]
+        content (copilot/with-resumed-session [session client id options]
                   (println "Resumed session:" id)
                   (->> (copilot/await!! (copilot/history session))
                        (filter #(= (:type %) :copilot/assistant.message))

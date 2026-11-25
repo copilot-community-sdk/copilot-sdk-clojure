@@ -73,8 +73,14 @@
          #(or (not (contains? % :description)) (string? (:description %)))))
 (s/def ::binary-results-for-llm (s/coll-of ::binary-result :kind vector?))
 (s/def ::tool-result-object
-  (s/keys :req-un [::text-result-for-llm ::result-type]
-          :opt-un [::binary-results-for-llm ::session-log ::error ::tool-telemetry ::tool-references]))
+  (s/and map?
+         #(every? (fn [k] (contains? % k)) [:text-result-for-llm :result-type])
+         ;; s/keys would also consult global application specs for qualified JSON extensions.
+         (fn [m]
+           (every? (fn [[k spec]] (or (not (contains? m k)) (s/valid? spec (get m k))))
+                   {:text-result-for-llm ::text-result-for-llm :result-type ::result-type
+                    :binary-results-for-llm ::binary-results-for-llm :session-log ::session-log
+                    :error ::error :tool-telemetry ::tool-telemetry :tool-references ::tool-references}))))
 
 (s/def ::initial-cwd ::non-blank-string)
 (s/def ::session-state-path ::non-blank-string)

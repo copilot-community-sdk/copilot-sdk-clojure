@@ -6,7 +6,7 @@
             [github.copilot-sdk.native-offline-fixture :as fixture]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.teardown :as teardown])
-  (:import [com.sun.jna CallbackProxy Memory]
+  (:import [com.sun.jna CallbackProxy Memory Pointer]
            [java.io File IOException InputStream OutputStream]
            [java.net URL URLClassLoader]
            [java.nio.charset StandardCharsets]
@@ -129,7 +129,9 @@
               ((:close! first))
               (is (not (.exists a)))
               (is (.exists outside))
-              (is (.isDirectory b))))))
+              (is (.isDirectory b))
+              (Files/delete (.toPath b))
+              (is (nil? ((:close! second))))))))
       (is (every? #(not (.exists ^File %)) @homes))
       (finally (io/delete-file outside)))))
 
@@ -146,8 +148,100 @@
       (.close in)
       (is (nil? (.callback callback (object-array [nil nil (long 1)])))))))
 
+(deftest terminal-input-drops-partial-queued-and-in-flight-chunks
+  (doseq [[end chunk-limit byte-slack] [[:close 2 1] [:byte-overflow 2 1] [:chunk-overflow 1 2]]]
+    (testing (name end)
+      (let [size (* 2 1024 1024)
+            {:keys [^InputStream in ^CallbackProxy callback state]} (#'host/inbound chunk-limit (+ size byte-slack))
+            copying (promise)
+            resume (promise)
+            ptr (proxy [Pointer] [0]
+                  (getByteArray [_ n]
+                    (deliver copying true)
+                    (when-not (deref resume 5000 false) (throw (IOException. "Copy timed out")))
+                    (byte-array n)))
+            send! (fn [p n] (.callback callback (object-array [nil p (long n)])))]
+        (with-open [mem (Memory. size)]
+          (.setByte mem 0 (byte 42))
+          (send! mem size)
+          (is (= 42 (.read in)))
+          (send! mem 1)
+          (let [{:keys [^InputStream current ^java.util.ArrayDeque queue]} @state
+                pending (future (send! ptr 1))]
+            (try
+              (is (= (dec size) (.available current)))
+              (is (= true (deref copying 2000 false)))
+              (if (= end :close) (.close in) (send! mem 1))
+              (.close in)
+              (is (= [:terminal] (keys @state)))
+              (if (= end :close)
+                (is (= -1 (.read in)))
+                (is (thrown-with-msg? IOException #"input failed" (.read in))))
+              ;; The old queue is detached. It must not accept the late copy.
+              (let [before (.size queue)]
+                (deliver resume true)
+                (is (nil? (deref pending 2000 ::blocked)))
+                (is (= before (.size queue))))
+              (finally (deliver resume true) (.close in)))))))))
+
 (defn- callback-rooted? [callback]
   (contains? @(var-get #'host/owners) callback))
+
+(deftest private-home-deletion-can-retry-after-native-retirement
+  (doseq [deferred? [false true]]
+    (testing (if deferred? "deferred close" "caller close")
+      (let [cb (atom nil)
+            calls (atom [])
+            attempted (promise)
+            failure (IOException. "Cannot delete private home")
+            abi {:start (fn [_ _] 1)
+                 :open (fn [_ callback] (reset! cb callback) 2)
+                 :close (fn [_] (let [calls (swap! calls conj :close)]
+                                  (or (not deferred?) (> (count calls) 1))))
+                 :shutdown (fn [_] (swap! calls conj [:shutdown (callback-rooted? @cb)]) true)
+                 :release-home! (fn []
+                                  (swap! calls conj [:delete (callback-rooted? @cb)])
+                                  (when-not (realized? attempted)
+                                    (deliver attempted true)
+                                    (throw failure)))}
+            {:keys [close!]} (#'host/host-transport abi nil nil)]
+        (try
+          (let [error (with-redefs-fn {#'host/close-window-ms 0}
+                        #(try (close!) (catch Exception e e)))]
+            (if deferred?
+              (is (:retryable? (ex-data error)))
+              (is (identical? failure error))))
+          (is (= true (deref attempted 2000 ::not-attempted)))
+          (is (not (callback-rooted? @cb)))
+          (is (nil? (close!)))
+          (is (nil? (close!)))
+          (is (= (into (if deferred? [:close :close] [:close])
+                       [[:shutdown true] [:delete false] [:delete false]])
+                 @calls))
+          (finally (swap! (var-get #'host/owners) dissoc @cb)))))))
+
+(deftest failed-startup-retries-only-the-retired-private-home
+  (let [home (promise) cleaned (promise) attempts (atom 0) shutdowns (atom 0)
+        remove-home! @#'host/delete-home!
+        failure (IOException. "Fixture transient directory failure")
+        abi {:start (fn [_ bytes]
+                      (let [path (.toPath (io/file (get (json/read-str (String. ^bytes bytes StandardCharsets/UTF_8)) "COPILOT_HOME")))]
+                        (deliver home path)
+                        1))
+             :open (constantly 0) :shutdown (fn [_] (swap! shutdowns inc) true)}]
+    (try
+      (with-redefs [host/delete-home! (fn [path]
+                                        (if (= 1 (swap! attempts inc)) (throw failure)
+                                            (do (remove-home! path) (deliver cleaned true))))]
+        (let [problem (try (#'host/open-config! abi {:argv [] :env {}} true) (catch Exception e e))]
+          (is (= (ex-message problem) "Copilot runtime connection open failed"))
+          (let [[cleanup] (.getSuppressed ^Throwable problem)]
+            (is (= (ex-data cleanup) {:type :private-home-cleanup :path (str @home)}))
+            (is (identical? (.getCause ^Throwable cleanup) failure)))
+          (is (true? (deref cleaned 3000 false)))
+          (is (not (.exists (.toFile ^java.nio.file.Path @home))))
+          (is (= [@attempts @shutdowns] [2 1]))))
+      (finally (when (realized? home) (remove-home! @home))))))
 
 (deftest failed-startup-retains-an-owner-after-the-caller-is-gone
   (let [cb (atom nil)
@@ -233,15 +327,18 @@
             (close!)
             (is (= expected @events))))))
     (testing "a zero connection handle tears down its host and preserves both errors"
-      (let [failed (assoc abi :open (fn [_ callback] (reset! cb callback) 0)
-                          :shutdown (constantly false))]
-        (try
-          (let [err (try (#'host/host-transport failed nil nil) nil
-                         (catch clojure.lang.ExceptionInfo e e))]
-            (is (= "Copilot runtime connection open failed" (ex-message err)))
-            (is (= ["Copilot runtime host shutdown failed"]
-                   (mapv ex-message (.getSuppressed err)))))
-          (finally (swap! (var-get #'host/owners) dissoc @cb)))))
+      (doseq [retired? [false true]]
+        (let [failed (assoc abi :open (fn [_ callback] (reset! cb callback) 0)
+                            :shutdown (constantly retired?)
+                            :release-home! #(throw (IOException. "Cannot delete private home")))]
+          (try
+            (let [err (try (#'host/host-transport failed nil nil) nil
+                           (catch clojure.lang.ExceptionInfo e e))]
+              (is (= "Copilot runtime connection open failed" (ex-message err)))
+              (is (= [(if retired? "Cannot delete private home" "Copilot runtime host shutdown failed")]
+                     (mapv ex-message (.getSuppressed err))))
+              (is (= (not retired?) (callback-rooted? @cb))))
+            (finally (swap! (var-get #'host/owners) dissoc @cb))))))
     (testing "a deferred unknown native result quarantines without retry or shutdown"
       (let [owners (var-get #'host/owners)
             calls (atom 0)
@@ -302,6 +399,31 @@
       (is (= [[:configure 23 true] [:configure 23 false] [:configure 23 true]
               [:run 23 0] [:run 23 1] [:run 23 4294967295]]
              @calls)))))
+
+(deftest ui-action-can-return-during-native-close
+  (let [entered (promise)
+        cancel (promise)
+        returned (promise)
+        calls (atom [])
+        abi {:start (fn [_ _] 5) :open (fn [_ _] 6)
+             :configure-ui (constantly true)
+             :run-ui-action (fn [_ _]
+                              (deliver entered true)
+                              (= true (deref cancel 5000 ::timeout)))
+             :close (fn [_]
+                      (swap! calls conj :close)
+                      (deliver cancel true)
+                      (is (nil? (deref returned 2000 ::still-running)))
+                      true)
+             :shutdown (fn [_] (swap! calls conj :shutdown) true)}
+        {:keys [configure-ui! run-ui-action! close!]} (#'host/host-transport abi nil nil)]
+    (teardown/with-cleanup close!
+      (configure-ui! true)
+      (future (deliver returned (run-ui-action! 42)))
+      (is (= true (deref entered 2000 ::not-entered)))
+      (is (nil? (try (close!) (catch clojure.lang.ExceptionInfo e (ex-data e)))))
+      (is (nil? (deref returned 2000 ::still-running)))
+      (is (= [:close :shutdown] @calls)))))
 
 (deftest close-fences-in-flight-ui-without-blocking-the-transport
   (let [entered (promise)

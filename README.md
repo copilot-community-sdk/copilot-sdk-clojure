@@ -12,7 +12,8 @@ From this **2.x checkout**, on macOS arm64 or glibc Linux x64:
 ./run-all-examples.sh --live basic-chat 'What makes a rainbow?' 'Explain the colors in one sentence.'
 ```
 
-The demo uses your signed-in Copilot account and prints both turns. Live runs
+The demo uses a Copilot-enabled account available to the isolated runtime
+(for example, through `gh auth login`) and prints both turns. Live runs
 send prompts to the model and can consume account usage. To try the same app
 without an account, run `./run-all-examples.sh basic-chat`: it uses the real
 runtime with a local model fixture. Both need the Clojure CLI, a JDK and
@@ -33,8 +34,10 @@ The application code is short:
 ```
 
 Choose the mode, storage, and credentials explicitly. `:empty` requires an
-isolated storage location and an explicit session tool allowlist; `[]` means
-no tools. The result belongs to this request. Closing the session detaches
+isolated **session** storage location and an explicit session tool allowlist;
+`[]` means no tools. The storage root does not confine all native process
+writes; see [deployment limits](./doc/getting-started.md#add-the-sdk-to-another-application).
+The result belongs to this request. Closing the session detaches
 the handle; it does not erase history.
 
 ## Install and migrate

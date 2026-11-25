@@ -18,45 +18,182 @@ subscriptions. All functions below use the alias `copilot`.
 |---|---|
 | `(with-client [client options] body...)` | Block to open a native client; shut it down when the body exits. |
 | `(with-session [session client options] body...)` | Create a session and detach it on exit. Detach does not delete history. |
+| `(with-resumed-session [session client id options] body...)` | Resume a saved session and detach it on exit. If the body and detach both fail, the body error remains primary. |
 | `(open-client!! options)` | Open an owned client; call `close!!` if not using `with-client`. |
 | `(open-session!! client options)` | Open an owned new session; call `close!!` if not using `with-session`. |
-| `(resume-session!! client id options)` | Open an owned handle to a saved session. Use `with-open` or `close!!` to detach it. |
+| `(resume-session!! client id options)` | Open an owned handle to a saved session. Use `close!!` to detach it if not using `with-resumed-session`. |
 | `(session-id session)` | Return the session ID immediately, not on a channel. Save it if the application will resume. |
 | `(session-info session)` | Return `:session-id` and `:capabilities`, plus `:workspace-path`, `:transcript-recovery`, and `:permission-mode-result` when supplied. `:capabilities` is `nil` if the runtime supplied no capabilities at open or in a notification. Test individual flags with `true?`. |
-| `(close!! resource)` | Detach a session or shut down a client. Closing a client also releases its open sessions. |
-| `(force-close!! client)` | Skip the graceful detach and shutdown RPCs. Still release local resources and wait for the native callback safety barrier. |
-| `(delete-session!! client id)` | Permanently remove a runtime-stored session by exact ID and invalidate its open handle. Return `nil` on success. Deletion never expands a UUID prefix. |
+| `(close!! resource)` | Detach a session or shut down a client. Client close cancels session decision and event callbacks before waiting for detach acknowledgments. A refused detach does not reopen a closing client. |
+| `(force-close!! client)` | Stop waiting for detach and shutdown acknowledgments, even if graceful client close is in progress. Wait for local cleanup and the native callback safety barrier. |
+| `(delete-session!! client id)` | Permanently remove an exactly listed session from the client's default runtime store and invalidate its matching open handle. Return `nil` on success. Deletion never expands a UUID prefix. |
 
 Keep scopes open until operations that use them finish. Blocking functions
-and macros do not belong inside `go`. `with-client` and `with-session` retain
-the primary failure when cleanup also fails. Treat a client close failure as
+and macros do not belong inside `go`. The three scope macros retain the
+primary failure when cleanup also fails. Treat a client close failure as
 an error, not proof that the runtime released its resources.
+
+Force close cannot confirm what the runtime did with an unanswered request.
+Graceful close reports an error if force close interrupts a pending lifecycle
+transition or prevents the shutdown acknowledgment, even when local release succeeds.
+A graceful caller that joins an active force close also receives an error:
+the runtime did not acknowledge graceful shutdown. Either close is a no-op
+after successful release. Both callers receive an error if native release fails.
+
+Graceful client close gives its session detaches one shared ten-second wait.
+If a delete's inventory check fails before it sends the delete, close detaches
+that live session without waiting for the other sessions to reply. A delete
+that was already sent does not trigger another request. The shared wait is
+not a deadline for the later runtime shutdown or native cleanup.
+
+Do not shut down a client synchronously from a worker it owns. The SDK
+rejects `close!!` and `force-close!!` before changing client state. The
+error is `:reverse-callback-client-close` for reverse requests such as
+user input or hooks, and `:callback-client-close` for tool, permission,
+form, command, MCP OAuth, and `:on-event` handlers, as well as model-list
+and trace-context providers. A decision handler cannot detach or delete
+its own session from that worker (`:callback-session-close`). This also
+applies when the SDK calls a model or trace provider on behalf of the
+active handler. An ordinary `:on-event` observer can detach or delete
+its session; it has no decision to return.
+
+To hand shutdown off from an ordinary handler, signal the client owner
+or start a separate `future` and return. Shutdown can cancel the handler
+instead of sending its answer. Filesystem operations that supply data for
+teardown must not close their own client or session, even from a
+continuation carrying the provider's bindings. They can normally detach a
+sibling session, but not during client shutdown: that call would wait
+for the very shutdown that needs their response. An independent client
+does not share these restrictions.
+
+During graceful close, the runtime can still call the session's initialized
+filesystem provider to persist data before detach or to clean up a failed
+open. If the runtime refuses to detach an open session, it can still use
+that provider during `runtime.shutdown`. This also applies if the runtime
+accepted the session but a later setup step failed: the original error
+retains the failed detach, and only the initialized filesystem stays
+available. A session-end hook becomes eligible only after all required
+setup requests succeed, not when the initial create or resume is acknowledged.
+A successful detach or shutdown acknowledgment ends this access. The SDK
+requests interruption of pending file operations without running application
+stream cleanup on the response reader. It cannot stop code that ignores
+interruption. Client close gives its reverse-request
+workers a shared 500 ms to stop. If work still runs, `close!!` reports
+`:reverse-worker-timeout` and still attempts native release. The error
+describes local cleanup, not a refusal of the runtime shutdown. Use
+interruptible or independently bounded waits in your providers.
+
+The runtime can also invoke a registered `:on-session-end` hook when
+it detaches a session that finished opening. If the detach wait expires,
+the SDK interrupts the running end hook, stops accepting new end hooks, and
+discards any unsent hook output. This does not interrupt an application
+filesystem write that the runtime still needs. An end hook can close its own
+session handle without joining the detach that is waiting for that hook.
+This applies to the hook body and continuations that convey Clojure's
+dynamic bindings (for example, `future`). If you submit a continuation to
+a Java executor, construct its task with `bound-fn` **inside the hook**.
+Do not synchronously close the session on an unbound executor and return
+its result to the hook: the SDK cannot distinguish it from an independent
+caller that must wait for detach. Do not start another lifecycle operation
+on that client from the hook. Other hooks, event observers, permission
+handlers, and token providers do not stay active. If an ordinary handler
+has finished but its reply is still being prepared when close starts,
+the SDK discards the result. This does not recall replies already submitted.
+
+When you detach a session or delete it directly, a successful acknowledgment
+stops new decisions and events for that handle before the next runtime frame.
+Events accepted before the acknowledgment still go to that handle's subscriptions
+and ordinary `:on-event` observer, not to a later handle with the same ID.
+Close waits for publication to the channels, not for user code. The observer
+can finish after close returns, subject to its queue capacity and 500 ms drain
+limit. Repeating an ordinary close on the same handle does not discard those
+events. If the observer itself initiated the detach, a later explicit close
+from another thread can cancel that observer without affecting a replacement
+session. A decision callback already running cannot submit a new decision.
+A refusal leaves the handle active. Closing the whole client cancels observers
+instead of requesting a session drain.
 
 The native image stays loaded until JVM exit. A client admits at most one
 handle for a given session ID. Closing an old handle cannot detach a new
 one. Store and resume with the **full ID** returned by `session-id`. Short
-UUID prefixes depend on the runtime's session inventory. An eight-character
-prefix can resolve a persisted session after a completed turn; opening and
-detaching an unused session does not guarantee discovery. When using a
-session filesystem, supply its exact ID. If the runtime refuses a session
-detach, do not treat the session as closed. Interrupting a caller after it
+UUID prefixes depend on the runtime's session inventory. Interrupting a
+prefix lookup releases the pending lookup without sending a resume request.
+An eight-character prefix can resolve a persisted session after a completed
+turn; opening and detaching an unused session does not guarantee discovery.
+When using a session filesystem, supply its exact ID. If the runtime refuses a session
+detach, the SDK reports the refusal instead of repeating the detach. Do not
+treat the session as closed. If a detach or delete result includes a refusal
+reason, it is available under `:reason` in the exception data. Interrupting a caller after it
 sends a detach or delete does not undo the request. The SDK waits for its
 bounded result and applies an acknowledged change to the handle before
 reporting interruption. If a sent create, resume, detach, or delete times out
 with a known ID but no acknowledgment, that client cannot reuse the ID:
-the runtime may still apply the request. An explicit refusal of create or
+the runtime may still apply the request. If a delete of an open session
+times out, closing the client also closes that handle's subscriptions
+before returning; this does not establish whether the data was deleted.
+For application-owned storage,
+the already initialized filesystem stays available for that ID, not for
+other sessions. A late positive detach, a late refusal or ID mismatch on
+the open, a shutdown acknowledgment, or closing the connection ends this
+access. A late reply does not undo the reported timeout, make the ID
+reusable, or trigger another request. An explicit refusal of create or
 resume is different: the caller can retry that ID. If necessary, reconcile
 saved state from a new client. A close that cannot confirm callback
 safety reports an error and can defer cleanup. A native call with an unknown outcome can leave a host
 quarantined. Quarantined and active hosts count against the same bounded
 registry. Do not open replacement clients in a retry loop.
 
+If native shutdown succeeded but removal of the SDK-created temporary home
+failed, the host slot is already free. The SDK reports `:private-home-cleanup`
+with the generated directory in `:path`. It submits one directory-only retry
+to a bounded worker, including when startup failed before it returned a client.
+If the retry also fails, it logs the generated directory name and exception
+class. If the queue is full, the cleanup error carries the scheduling failure
+as a suppressed exception. A caller with a client can close it again to retry
+without repeating native shutdown. If the private home is already absent,
+cleanup is complete. The SDK does not remove an application-supplied
+`:base-directory`.
+
 For deletion, use a full UUID or an ordinary name such as `build-review`.
 The public runtime API can expand a short ID to a different session, so
 the SDK rejects IDs that look like abbreviated UUIDs (`:ambiguous-delete-id`),
-even if the complete custom name is `deadbeef`. With `:session-fs`, deletion
-is the application's responsibility: close the session, then remove its data
-through the provider. Graceful client close waits for deletions already sent.
+even if the complete custom name is `deadbeef`. For runtime-owned storage,
+a client rejects create, resume, or delete with `:session-id-case-conflict`
+if it already reserves another spelling of that ID that differs only in
+letter case. A case-insensitive store can treat the two as the same session;
+the SDK does not redirect a delete to the other spelling.
+
+**Delete targets the client's default store.** The runtime's public delete
+accepts an ID, not a directory. A handle opened with `:config-directory`
+can be deleted by that client only if the override exactly matches its
+explicit `:base-directory`. Otherwise the SDK reports
+`:session-delete-store-mismatch` without sending a delete or closing the
+handle. To delete a saved session in another directory, detach it, then use
+a client whose `:base-directory` is that directory. With `:session-fs`,
+close the session and remove its data through the application provider.
+
+Before sending a public delete, the SDK checks the default store's
+`session.list` response for one exact spelling, even when it has a handle.
+If a case variant is present, it reports `:session-id-case-conflict`.
+If the listing does not confirm one exact ID, it reports
+`:session-delete-unconfirmed` and leaves the files intact. This also
+applies to an open handle. An unnamed local session with no saved turn can
+already have workspace files but no entry in `list-sessions`. Detaching
+it preserves those files. A handle or `session-metadata` is not a spelling
+check: the runtime can echo the ID supplied by the caller.
+
+For a local session you might discard without sending a prompt, set
+`:name` **when creating it**, detach it, then delete its exact listed ID.
+The pinned runtime lists such a named session after detach without needing
+a model turn. For disposable sessions, another option is an
+application-owned filesystem or a dedicated `:base-directory` created
+solely for that workload. Close the client before the application disposes
+of its own storage. Do not remove a shared runtime home. The SDK does
+not bypass an unconfirmed listing by editing the runtime's files directly.
+
+Listing and deletion are separate runtime requests, not a transaction
+with other clients; coordinate external writers that share a store.
+Graceful client close waits for deletions already sent.
 
 ## Operations
 
@@ -65,15 +202,21 @@ or `{:error exception}` and closes. `(copilot/await!! result)` blocks a caller
 thread, returns the value (including `nil`), or throws. Inside `go`, take the
 result with `<!` and inspect it. An event subscription is not an operation.
 
+Interrupting `await!!` does not cancel the operation. If interruption
+withdraws the wait, it throws `InterruptedException`; keep the result
+channel and await it again instead of sending the operation twice. If the
+wait already claimed the result, it delivers that result and preserves the
+thread's interrupt status.
+
 | Call | Successful value |
 |---|---|
 | `(status client)` | Map containing `:version` and `:protocol-version`. The runtime may also supply `:host-diagnostics` (experimental data). Reading status does not enable diagnostic collection. |
 | `(ping client)` or `(ping client message)` | Runtime control response; fields include `:message`, `:timestamp`, and `:protocol-version` when reported. No model invocation. |
 | `(auth-status client)` | Authentication status, including `:authenticated?` when reported. This does not sign in. |
-| `(list-models client)` | Vector of model descriptions. Concurrent callers share a fetch and successful results are cached per client. Failed fetches are not cached. |
+| `(list-models client)` | Vector of model descriptions. Concurrent callers share one fetch, but each gets a separate result channel. Closing one channel does not cancel the fetch for other callers. Successful results are cached per client. New calls fail once shutdown starts. |
 | `(list-sessions client)` or `(list-sessions client filters)` | Vector of session metadata. Optional string filters: `:cwd`, `:git-root`, `:repository`, and `:branch`. |
 | `(last-session-id client)` | ID of the most recently updated session, or `nil`. |
-| `(session-metadata client id)` | Metadata map, or `nil` if absent. `:start-time` and `:modified-time` are `java.time.Instant` values. |
+| `(session-metadata client id)` | Pass a nonblank session ID string, not a session handle. Returns a metadata map, or `nil` if absent. An invalid ID fails only this lookup. `:start-time` and `:modified-time` are `java.time.Instant` values. |
 | `(send! session message)` | Message ID when the runtime accepts the submission. It does **not** indicate completion. |
 | `(send-and-wait! session message)` | Final root assistant event for this request, or `nil` if the runtime completed without an assistant response. |
 | `(abort! session)` | `nil` when the runtime acknowledges the abort. This affects active session work, not just a local wait. |
@@ -93,15 +236,37 @@ unused fields rather than sending `nil`.
 For `elicit!`, pass `{:message text :requested-schema schema}`. Read
 `[:capabilities :ui :elicitation]` from `(copilot/session-info session)`;
 capabilities can change while the session is open. Without that capability
-the operation reports an error. This outbound UI request is distinct from
+an open session reports an unsupported-host error. If the request waits
+behind a trace lookup, the SDK checks again before sending the form.
+Withdrawing the capability does not recall a form already submitted. A closed or replaced
+handle reports `:session-closed` instead. This outbound UI request is distinct from
 registering an application callback for a request **from** the runtime.
 It also does not install a desktop UI scheduler. Native UI-thread scheduling
 depends on the host, platform, and application event loop; the headless
 examples do not test a desktop UI or an identity-provider flow.
 
+There is no fixed SDK timeout for a human answer. Each client admits at most
+64 unanswered outbound forms across its sessions. `:elicitation-capacity`
+means the excess form was not sent. An answer or session retirement frees
+capacity; closing a caller's result channel does not dismiss the form or
+free its slot. These slots are separate from incoming form callbacks.
+The result channel settles
+when the host answers, the session closes or fails, or the connection ends.
+A reply the SDK received first keeps its result even if you read it later.
+A reply received after session failure or an acknowledged detach or delete
+cannot turn a pending form into an acceptance. This also applies when
+the release acknowledgment arrives after the caller's wait timed out,
+with or without an application filesystem. Close the owning session
+to abandon pending forms and cancel their application
+handlers; merely stopping your local wait does not dismiss a form. An
+unanswered form can occupy a form worker while the session is open.
+Use a local deadline or cancellation control in the application handler if
+the form needs one, and return `{:action :cancel}` to settle it.
+
 Use that one operation for confirmation, selection, or text entry instead of
 expecting three convenience functions. For example, check both the action and
-the submitted boolean. Form property names in `:content` are strings:
+the submitted boolean. Form property names in `:content` are strings for all
+three actions. Content accompanying `:decline` or `:cancel` is not consent:
 
 ```clojure
 (require '[github.copilot-sdk :as copilot])
@@ -119,7 +284,7 @@ the submitted boolean. Form property names in `:content` are strings:
 | Key | Type | Default or omission |
 |---|---|---|
 | `:mode` | `:empty` or `:coding-agent` | Required. There is no default to start a subprocess. |
-| `:base-directory` | Nonblank string | Runtime storage root. Required for `:empty` unless you supply `:session-fs`. Use a directory private to the tenant or application. |
+| `:base-directory` | Nonblank string | Copilot session and cache root, not a boundary for all process writes. Required for `:empty` unless you supply `:session-fs`. Use a directory private to the tenant or application; see [deployment limits](../getting-started.md#add-the-sdk-to-another-application). |
 | `:session-fs` | Map | Omitted uses the runtime's own filesystem. Requires the matching provider on each create/resume; see below. |
 | `:github` | Map | Optional `:token` string and `:use-logged-in-user?` boolean. Automatic login is off by default in `:empty`; `:coding-agent` can use the logged-in user when no token is supplied. |
 | `:client-info` | Map | Optional string `:application-name`, `:application-version`, `:integration-name`, and `:integration-version` identify the host at connection time. |
@@ -156,16 +321,59 @@ The SDK looks up trace context for create, resume, and message submission.
 For a send, lookup starts when the session admits the request, with the
 caller's dynamic bindings. Its 10-second budget includes time waiting behind
 earlier requests. Model and trace providers share four workers per client.
+Do not read a Java `ThreadLocal` or `InheritableThreadLocal` in a provider
+to find the caller's active span. Read the headers on the submitting thread
+and store the immutable map in a Clojure dynamic var:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def ^:dynamic *trace-headers* {})
+(def tracing {:observability {:on-get-trace-context (fn [] *trace-headers*)}})
+
+(defn send-traced! [session headers prompt]
+  (binding [*trace-headers* headers]
+    (copilot/send! session prompt)))
+```
+
+Use `tracing` as part of the client options. The provider sees the binding
+for that request, not the Java thread-local state of a previous request.
 If all four are busy, the SDK omits the optional trace headers; it does not
-queue or retry the lookup.
+queue or retry the lookup. Interrupting a create or resume during trace
+lookup cancels that lookup without sending the session request. A provider
+that ignores interruption still occupies its worker until it returns.
+Callers sharing a model lookup receive `:provider-timeout` without waiting
+for an interrupted application stream to finish closing.
+Closing discovery discards the model cache and
+releases the SDK's references to both application providers.
 
 Later sends, aborts, history reads, timeline entries, UI requests, and model
 changes on the same session cannot overtake a send waiting for trace headers.
+If that send's trace provider tries to queue one of these operations on the
+same session, it receives `:trace-provider-reentry` instead of waiting for
+its own headers. This also applies to `future` calls that carry the provider's
+bindings. A history read on a different session can proceed.
 This orders submission, not completion. Each session permits 64 live
-reservations; excess requests report `:admission-capacity`. A turn timeout
-retires that turn's lookup, reservation, or pending reply without aborting
-other work. Detaching a session retires its outstanding lookups, even for
-requests that have not reached the front of the queue.
+reservations; excess requests report `:admission-capacity`. Detaching a
+session retires its outstanding lookups, including queued requests.
+
+The `send-and-wait!` budget starts after the session registers the wait,
+before message preparation. With or without tracing, the SDK checks the
+deadline under the client lock after wire conversion, when registering the
+RPC as pending. This registration admits the request; writing the frame can
+happen later. If the deadline has passed, the SDK sends neither the prompt
+nor a cancellation. After admission, a timeout cancels only that request's
+pending wait, not the agent's work.
+The deadline does not interrupt preparation or lock acquisition; the call
+can return its result channel after the deadline.
+
+Explicitly closing the `send-and-wait!` result channel abandons only that
+caller's wait and frees its slot. If the prompt is still waiting for trace
+context, it will not be sent. If the request was already admitted, the SDK
+cancels its pending reply, not the underlying turn. Use `abort!` to ask the
+runtime to stop work. A finished or abandoned wait also releases its deadline
+timer without waiting for the original timeout. Interrupting `await!!` alone
+does not close the channel.
 
 Register only built-in plugin directories the application controls. They are
 registered during client startup, not installed from a marketplace, and a
@@ -183,7 +391,7 @@ substitute for omission. Common configuration groups are listed below.
 | `:cloud` | Create-only map; optional `:repository` takes `:owner`, `:name`, and optional `:branch` strings. | Omit for a local session. A cloud request requires the relevant service access; it is not a different SDK transport. |
 | `:model`, `:client-name`, `:working-directory`, `:config-directory` | Optional strings. `:enable-config-discovery?` is a boolean. | Omit to leave selection to the runtime. |
 | `:inference` | `:reasoning-effort` string, `:reasoning-summary` keyword, `:context-tier`, and named provider/model vectors. | The named catalog is experimental upstream. `:default-provider` accepts a name or explicit `nil`. See [Getting started](../getting-started.md) for a complete catalog. |
-| `:events` | `:streaming?`, `:include-sub-agent-streaming-events?`, optional `(fn [event] ...)` at `:on-event`. | Streaming is not requested unless configured. Use `subscribe` to own a stream. |
+| `:events` | `:streaming?`, `:include-sub-agent-streaming-events?`, optional `(fn [event] ...)` at `:on-event`. | Streaming is not requested unless configured. Each client has 16 `:on-event` workers; [subscriptions](#events-and-history) do not use them. |
 | `:tools` | Vectors `:available-tools`, `:excluded-tools`, `:definitions`; optional `:search` and `:large-output` maps. | `:empty` requires an explicit `:available-tools` on create **and** resume. `[]` means no tools; a bare `"*"` is not an allowlist. |
 | `:permissions` | `:on-request` takes a request and invocation context. | Omitting a handler does **not** mean approve. |
 | `:github` | Session `:token` or `:token-provider`; `:capi` options include `:enabled?` and `:auto-tier`. | No provider callback unless registered. Do not specify both session token forms. |
@@ -211,9 +419,17 @@ When creating a cloud session with no explicit ID, the SDK binds the new
 handle to the ID returned by the runtime. If that ID already belongs to an
 open handle, the second open fails without deleting the first. If local setup
 fails after the runtime acknowledges a newly allocated cloud ID, the SDK
-attempts to delete that allocation. A cleanup error remains attached to the
-setup error. A graceful client close waits for rollback of an allocated
-cloud session that is still opening, or reports a transition timeout.
+attempts to delete that allocation only if the ID cannot expand to another
+session and the allocation belongs to the client's default runtime store.
+For an abbreviated UUID, an unconfirmed storage root, or an
+application-owned filesystem, it sends no delete, attaches
+`:session-cleanup-unconfirmed` to the setup error, and prevents that client
+from reusing the ID. For an unambiguous ID in another store or an
+application-owned filesystem, it still detaches the live session it acquired.
+Detach does not remove the saved data. Graceful close waits for admitted
+creates, even those that have not received a session ID yet, and reports
+unconfirmed cleanup.
+It never guesses an ID when the allocation is unconfirmed.
 Closing an open session normally still detaches rather than deletes.
 
 Interrupting the caller after a create was sent does not cancel the remote
@@ -223,11 +439,25 @@ the request times out or the connection fails before the server returns an
 ID, the outcome is unknown: the SDK does not guess an ID and cannot
 guarantee deletion.
 
-If the runtime never acknowledges a cleanup detach or delete for a **known
-ID**, that client will not reuse the ID for the rest of its lifetime; other
-IDs on a still-connected client remain usable. An explicit error reply is
-reported as a cleanup failure but does not impose that restriction. These
-are tested protocol behaviors, not a live cloud service or entitlement test.
+Create and resume reserve a known ID before they call the application's
+trace provider. A nested open of that ID gets `:session-already-open`; a
+different ID remains available.
+
+If an explicit create or resume returns a different ID, the SDK reports
+`:session-id-mismatch` with `:session-id` and `:returned-session-id`. It
+detaches the returned ID only if it can reserve it without displacing
+another owner. The mismatch does not delete saved history. A failed
+cleanup remains attached to the original error. If the runtime did not
+even return a valid ID, the SDK does not guess which session to detach.
+
+If create or resume **succeeded** before setup failed, only a successful
+cleanup frees the ID. If the runtime refuses that cleanup or does not
+acknowledge it, this client cannot reuse the ID: a callback could still
+belong to the old session. Other IDs remain usable on a connected client.
+If the runtime refused the **initial create or resume**, there was no
+acquisition to undo. Later frames cannot call that generation's filesystem
+or other callbacks, and the caller can retry the ID after rollback. These are protocol
+guarantees, not a live cloud service or entitlement test.
 
 **Configuration limits.** The named BYOK catalog supports provider/model
 definitions and fixed credentials, not upstream's experimental rotating
@@ -290,13 +520,33 @@ Pass this map, together with explicit model configuration, to `with-session`.
 Tool execution and permission decisions run in the application. Do not
 attribute an automated decision to a person.
 
-Each session runs up to two tool, permission, command, or other broadcast
+Each session runs up to two tool, permission, command, or MCP OAuth
 callbacks at a time. A busy session queues up to 16 more in arrival order.
 The client shares eight workers and up to 128 waiting requests across
-sessions. A free worker takes the oldest request whose session has a slot.
+sessions. Within each worker pool, a free worker takes the oldest request
+whose session has a slot. Work that can start immediately does not need
+space in the waiting queue.
 If the SDK cannot admit more work, it returns a failure or unavailable
 decision; it does not grant permission. Keep callbacks short and honor
 cancellation.
+
+If a session exhausts its callback request history or its outstanding
+busy replies, the handle stops admitting new requests. Pending turns,
+forms, and event subscriptions report the same failure, even if the
+application detects it in `respond!!` and no later event arrives. Close
+the failed handle to detach it. The runtime can still use the session
+filesystem and its end hook for cleanup, but ordinary callbacks stop.
+Other sessions on the client can continue.
+
+Two concurrent tools can each wait for `elicit!` on their own session.
+Form handlers run on separate workers, with at most two active per session
+and four per client. Forms that must wait use the same bounded waiting
+queue; the SDK replies `:cancel` if there is no room to wait.
+A form handler cannot call `elicit!` on **any session of the same client**
+from the handler or a continuation carrying its Clojure bindings
+(`:recursive-elicitation`). Do not wait for such a form on an unbound
+executor either. Return the answer and ask a follow-up from the caller.
+A separate client has its own form workers.
 
 If an automatic permission handler throws or returns an invalid decision,
 the SDK replies `{:kind :user-not-available}`, without attributing it to a user.
@@ -305,7 +555,10 @@ parameters, the SDK sends **one** `:user-not-available` reply for that request.
 It does not run the handler again. If the runtime rejects that terminal reply
 as invalid parameters, the still-live request is available for manual
 response. A timeout, disconnect, or negative acknowledgment does not trigger
-a retry. Hook-resolved requests and replay checkpoints do not invoke the
+a retry. This also applies when a full callback queue caused the SDK to send
+a busy tool error or `:user-not-available` without running a handler. Only a
+definitive invalid-parameters rejection permits manual repair of that
+still-live request. Hook-resolved requests and replay checkpoints do not invoke the
 handler; cancellation suppresses stale replies. No absent handler grants
 permission.
 
@@ -319,7 +572,10 @@ only when present. Conversion does not start an MCP server.
 
 If the application resolves a pending request itself, use
 `(copilot/respond!! session kind answer)`. It **blocks** until it receives
-an affirmative runtime acknowledgment or fails; do not pass it to `await!!`. For `:tool`, supply the original
+an affirmative runtime acknowledgment or fails; do not pass it to `await!!`.
+After submission, interrupting the caller does not abandon the bounded wait
+or resend the answer. The caller receives the result or error and keeps its
+interrupt status. For `:tool`, supply the original
 `:request-id` and exactly one of `:result` or a nonempty `:error` string.
 For `:permission`, supply `:request-id` and a decision in `:result`. Do not
 retry an already settled request or answer a request belonging to another
@@ -335,9 +591,13 @@ without that handler. Observe `:copilot/permission.requested` and pass its
 answers, the tool can remain pending. A local wait timeout does not deny
 permission or abort the turn.
 
-Detach ends the original `send-and-wait!` wait. An ordinary resume interrupts
-unfinished work; a permission request still visible in history need not be
-actionable. To continue pending work, resume with `:continue-pending-work? true`
+Detach ends an outstanding `send-and-wait!` wait with an error, then closes
+its result channel. Do not depend on one error type for detach: the local
+handle may close first, or the runtime may report a session error or an
+aborted turn first. None of these outcomes approves the pending request.
+An ordinary resume interrupts unfinished work; a permission request still
+visible in history need not be actionable. To continue pending work, resume
+with `:continue-pending-work? true`
 and answer the **saved** permission request ID. Do not wait for another
 notification for that ID. `respond!!` does not enumerate pending requests.
 
@@ -370,16 +630,30 @@ one cancellation without repeating the form data. User input
 returns `:answer` and `:was-freeform?`. Shell authentication handles
 `:secret`, `:text`, or `:confirm` input; cancel with `{:action :cancel}`.
 Declare `[:interaction :on-shell-authentication-request]` only if the host can
-securely collect the user's response. Honor its cancellation channel and
-never log secret input.
+securely collect the user's response. The invocation's read-only `:cancel-ch`
+closes when the response is no longer needed. A parked `core.async/take!`
+listener does not run on the RPC reader. Keep the listener nonblocking or
+schedule longer cleanup on an application-owned worker. A matching cancellation
+received before the reply is admitted wins even if the handler has already
+returned an answer. A normal handler return is not a cancellation. It
+cannot be invalidated merely because its worker has not finished returning.
+When a pending prompt is cancelled, the runtime receives the cancellation
+answer without waiting for the application's terminal or stream to close.
+The application worker still occupies its slot until the handler exits.
+Cancellation cannot recall a submitted reply. Never log secret input.
 
 A client can wait for four human responses across all its sessions: user
 input, shell authentication, plan exit, and auto-mode changes share those
 four slots. Each request has five minutes from receipt. If all slots are busy
 or a request times out, the SDK cancels shell authentication, rejects plan
 exit, declines an auto-mode switch, or reports user input unavailable. It does
-not queue another question. Filesystem, hook, token-provider, and native UI
-callbacks use separate workers with a 60-second deadline.
+not queue another question. A completed user-input, plan-exit, or auto-mode
+handler frees its slot before its answer is sent, so the runtime can ask a
+follow-up immediately. Filesystem, hook, token-provider, and native UI
+callbacks use separate workers with a 60-second deadline. A transform
+that changes several system-message sections shares one deadline across
+all sections. If it expires, the SDK reports a timeout instead of sending
+part of the transformed message.
 
 Return `{:approved? false}` to reject a plan exit request. An auto-mode switch
 handler receives `[request invocation]` and can return `:no`, `:yes`, or
@@ -439,8 +713,16 @@ Return a map or `nil`, directly or via a core.async channel. Text fields are
 strings and `:suppress-output?` is boolean. Omitting a handler, returning
 `nil`, or throwing an ordinary exception produces **no hook output**; do not
 rely on throwing to deny an operation. An invalid non-nil result (for example
-an unknown key), an interrupted callback, or a worker timeout reports a
-reverse request error instead. Register only the hooks your application
+an unknown key), an interrupted callback, a JVM `Error`, or a worker timeout reports a
+reverse request error instead. All values inside a post-tool hook's
+`:modified-result` must encode as JSON. Only SDK field names are converted.
+Additional JSON fields and their nested names keep their spelling, including
+case, punctuation and keyword namespaces. An application spec registered
+under an extra field's name does not impose a schema on the tool's JSON.
+If an extra wire name matches a
+Clojure SDK keyword (for example, `"result-type"` alongside `"resultType"`),
+the extra uses a string key. An invalid value fails that hook, not unrelated
+requests on the client. Register only the hooks your application
 handles. A subscription observes events and cannot change a hook decision.
 
 ### Session filesystem
@@ -465,8 +747,13 @@ These are provider paths, not a grant of host filesystem access. With
 runtime home. On **each** create or resume, supply a provider map or a
 factory under `[:state :create-session-fs-provider]`. A factory receives
 the session handle during setup, before it can send messages. Do not
-synchronously open, close, resume or delete a session on that client from
-the factory. The application owns storage, tenant isolation and access checks.
+start a lifecycle operation on that client from the factory or a continuation
+carrying its bindings while the factory is active (`:session-fs-factory-reentry`).
+After the factory returns, a retained continuation no longer owns its work.
+Capture the intended store or tenant explicitly when you construct the
+factory. SDK callback workers do not inherit the opener's Java
+`InheritableThreadLocal` values, and the same worker can serve other sessions.
+The application owns storage, tenant isolation and access checks.
 
 Provider functions take **positional arguments**. Path and content arguments
 below are strings unless marked as bytes. Mode is an integer or `nil`;
@@ -531,15 +818,51 @@ with an error.
 As on an ordinary core.async channel, a `take!` callback must not block.
 For blocking work, take with `<!!` on a thread your application owns.
 
-An `:on-event` callback differs from a subscription: callbacks run in order
-for one session, and their return values are ignored. A type check inside a
-callback also runs after admission to the observer's queue. Keep callbacks short; do not
+An `:on-event` callback reserves one of **16 observer workers per client**,
+even while its session is idle. If all workers are occupied, a create or
+resume with another observer fails with `:observer-capacity`. Closing a
+session lets its worker drain and exit; a blocked callback holds its slot
+until it returns. This is not a limit on sessions without `:on-event`.
+For more event streams on one client, omit `:on-event` and use `subscribe`
+after open or resume, before sending a prompt. A subscription does not
+replay events that arrived before it was attached.
+
+Observer callbacks run in order for one session, and their return values
+are ignored. A type check inside a callback also runs after admission to
+the observer's queue. Keep callbacks short; do not
 return a channel expecting the SDK to await its work. A slow observer can
-overflow its bounded queue. A turn's wait deadline includes delivery of its
-completion event to that observer. Overflow ends the observer with an explicit error,
+overflow its bounded queue. A turn's wait normally includes delivery of its
+completion event to that observer. One exception prevents a circular wait:
+if the observer starts a follow-up on the same session and is still handling
+the original event, the follow-up can return when the runtime reply and
+matching event arrive. The observer still receives both events in order.
+Independent callers keep the normal delivery guarantee. Overflow ends the observer with an explicit error,
 not the other subscribers. A callback exception is logged; it does not turn
-a successful runtime response into a failed turn. Keep blocking decisions out
+a successful runtime response into a failed turn. If application I/O throws
+a nonfatal exception during interruption, the SDK logs its class without
+including the application's exception message. That exception does not turn
+a confirmed detach or shutdown into a failure. Keep blocking decisions out
 of event observers.
+
+If the connection ends unexpectedly, the SDK stops accepting decisions and
+new requests. Events already accepted by the reader still go to subscriptions
+and ordinary observers in order. After the last accepted notification, an
+observer has up to 500 ms to drain; a timeout is logged and any outstanding
+delivery receipts fail. If a detach, delete, or failed open is already in
+progress when the connection ends, its cleanup cancels the session observer.
+Explicitly closing a session after connection loss also cancels its observer
+instead of waiting for that drain. When the observer itself closes its session,
+the SDK stops further delivery without interrupting that callback's remaining
+work. The earlier drain timer no longer applies once self-close has stopped
+delivery. Until that callback returns, closing the session or client from
+another thread can still interrupt it. The handle cannot be used for new work after
+`close!!` returns. No detach is sent on a dead connection. Still close the
+client to stop any remaining observers and release its native host. A graceful
+client close cannot confirm remote shutdown after connection loss.
+If `send-and-wait!` received its runtime reply and matching completion event
+before EOF, it waits for the observer receipt under the original deadline and
+returns that runtime result or error. An unanswered request or a reply still
+missing its named event fails.
 
 `(copilot/lifecycle-events client)` is a separate read channel for
 runtime-reported **client lifecycle** notifications about sessions. Close it

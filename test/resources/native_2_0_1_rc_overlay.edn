@@ -32,13 +32,25 @@
                  :tests [rev-test/native-ui-actions-run-on-the-chosen-thread-once
                          host-test/ui-operations-are-scoped-to-an-enabled-live-connection host-test/close-fences-in-flight-ui-without-blocking-the-transport]
                  :scope "Host receives a one-shot zero-argument action through :run-on-ui-thread, not raw action IDs. JNA binds copilot_runtime_connection_set_ui_thread_handler and copilot_runtime_connection_run_ui_action in addition to the five core symbols. Framed scheduler and controlled ABI witnesses are not an interactive desktop or all-classifier test."}
-  :resource {:status :mapped :local [sdk/close!! sdk/with-session sdk/with-client client/close-session! client/close-client!]
+  :resource {:status :mapped :local [sdk/close!! sdk/with-session sdk/with-resumed-session sdk/with-client client/close-session! client/close-client!]
              :tests [public-test/failed-open-and-detach-preserve-the-primary-error-and-session-ownership
+                     client-test/shutdown-detaches-after-refused-deletes-share-one-interruptible-wait
+                     client-test/uncertain-delete-retires-local-subscriptions-before-client-close-returns
+                     host-test/failed-startup-retries-only-the-retired-private-home
+                     cloud-test/an-uncertain-session-keeps-only-storage-until-a-definite-reply
+                     cloud-test/late-release-fences-the-generation-before-the-closing-caller-continues
+                     cloud-test/an-unanswered-detach-retires-the-end-hook-without-interrupting-storage
+                     cloud-test/confirmed-client-shutdown-wakes-retained-storage
+                     cloud-test/client-close-reports-unfinished-provider-work-but-releases-the-native-host
+                     cloud-test/observer-stream-close-errors-do-not-mask-the-open-error-or-fail-a-shutdown-joiner
+                     cloud-test/releasing-a-provider-cannot-run-application-close-on-the-reader-or-under-the-registry
                      client-test/close-retries-only-the-native-quiescence-barrier]}
   :force-close {:status :mapped :local [sdk/force-close!! client/close-client!] :tests [client-test/force-close-wakes-an-unacknowledged-create]
                 :scope "Explicit forced retirement, not ordinary graceful shutdown. No release-quality timing claim."}
   :open {:status :mapped :local [sdk/open-session!! sdk/resume-session!! opts/create-params opts/resume-params opts/after-open-requests]
          :tests [opts-test/create-and-resume-have-distinct-contracts opts-test/empty-mode-is-two-distinct-requests
+                 cloud-test/a-definitive-open-refusal-fences-the-next-storage-call-before-rollback
+                 cloud-test/an-end-hook-is-not-admitted-before-open-finishes
                  opts-test/after-open-checks-capabilities-before-registering-interests-and-patching
                  public-test/failed-open-and-detach-preserve-the-primary-error-and-session-ownership]
          :scope "Local opens pre-register ownership. Open and post-open updates differ; a patch failure must not expose the session. See cloud and canonical-ID exceptions."}
@@ -47,13 +59,22 @@
           :tests [opts-test/create-and-resume-have-distinct-contracts cloud-test/server-identity-routes-the-frames-immediately-after-create
                   cloud-test/collision-preserves-the-live-handle-and-revokes-only-the-new-credential
                   cloud-test/rollback-deletes-only-the-acknowledged-cloud-id-and-preserves-both-errors
+                  cloud-test/refused-compensation-reserves-the-id-before-replacement-callbacks-can-bind
+                  cloud-test/cloud-rollback-never-sends-a-prefix-expanding-delete
+                  cloud-test/alternate-root-cloud-allocation-never-compensates-from-the-default-store
+                  cloud-test/rollback-keeps-final-storage-only-until-confirmed-release
+                  cloud-test/graceful-close-cancels-filesystem-initialization-and-reports-a-retained-cloud-allocation
                   cloud-test/interrupted-opening-fences-callbacks-before-compensating-the-bounded-reply
-                  cloud-test/shutdown-does-not-silently-orphan-a-late-cloud-acknowledgement
+                  cloud-test/graceful-close-owns-server-assigned-opens-before-the-create-reply
+                  cloud-test/graceful-close-reports-an-unanswered-cloud-create-without-guessing-an-id
                   cloud-test/a-timed-out-cleanup-reserves-the-id-even-after-a-late-acknowledgement]
-          :scope "Framed peers exercise late ID binding, early callbacks, interrupted acquisition, rollback and ID collisions. The SDK does not guess an unacknowledged ID or offer an ID with unconfirmed cleanup for reuse. No hosted backend, account, or entitlement tested."}
+          :scope "Framed peers exercise late ID binding, early callbacks, interrupted acquisition, rollback and ID collisions. Rollback never deletes an unacknowledged ID, an abbreviated UUID, an unconfirmed storage root or application-owned storage. This client cannot reuse an ID with unconfirmed cleanup. No hosted backend, account, or entitlement tested."}
   :canonical-id {:status :mapped :local [sdk/resume-session!! client/resume-session! client/open-session* sdk/session-id]
                  :tests [client-test/detaching-a-stale-session-handle-does-not-detach-its-replacement
-                         client-test/resume-resolves-a-uuid-prefix-to-the-persisted-session]
+                         client-test/resume-resolves-a-uuid-prefix-to-the-persisted-session
+                         cloud-test/explicit-id-mismatch-reserves-and-detaches-only-the-returned-id
+                         cloud-test/mismatched-reply-cannot-release-an-existing-or-in-flight-owner
+                         cloud-test/a-rejected-canonical-session-is-not-left-resident]
                  :scope "Reported native 1.0.114 witness: the same unique eight-character persisted UUID prefix expands to the full ID with and without explicit configDirectory, after a local fixture turn. Not a promise of seven-character discovery. Clojure pre-resolves inventory prefixes before callback registration, requires an exact SessionFs ID, and rejects a second live handle for the same ID rather than replacing it. Node can rekey on acknowledgment and replace an existing registration. This ownership difference is deliberate; see doc/reference/API.md, Resource lifetimes."}
   :open-info {:status :mapped :local [sdk/session-info client/open-session* client/route!]
               :tests [rc-test/public-lifecycle-and-model-switch]
@@ -66,12 +87,21 @@
                       :tests [client-test/status-retains-runtime-supplied-host-diagnostics client-test/metadata-and-history-preserve-their-distinct-contracts]
                       :scope "Passive hostDiagnostics present/omitted across a framed peer. This is not a public API to configure experimental diagnostics."}
   :introspection {:status :mapped :local [sdk/auth-status sdk/ping sdk/last-session-id sdk/list-sessions sdk/session-metadata sdk/delete-session!!]
-                  :tests [client-test/metadata-and-history-preserve-their-distinct-contracts]}
+                  :tests [client-test/metadata-and-history-preserve-their-distinct-contracts
+                          client-test/delete-requires-an-exact-default-store-listing
+                          client-test/id-only-delete-cannot-select-another-handles-storage-root]
+                  :scope "Public delete uses the stable default inventory and requires a unique exact stored spelling. It cannot target a different configDirectory, a prefix or an application-owned store. This is not atomic against other clients that share and replace that store."}
   :model-list {:status :mapped :local [sdk/list-models discovery/models]
-               :tests [discovery-test/rpc-models-cache discovery-test/callback-models-and-trace discovery-test/disconnect-cancels-user-work]
+               :tests [discovery-test/rpc-models-cache discovery-test/callback-models-and-trace
+                       discovery-test/concurrent-model-callers-each-get-the-shared-result discovery-test/disconnect-cancels-user-work]
                :scope "Runtime models.list and host callback paths, empty capability defaults, source-defined metadata, concurrent cache, failure and retirement. The owning Clojure client is opened eagerly."}
   :trace {:status :mapped :local [discovery/trace-context discovery/trace-context!! client/open-session* client/submit-turn client/reserve-admission!]
           :tests [discovery-test/callback-models-and-trace rc-test/public-lifecycle-and-model-switch
+                  discovery-test/opening-reserves-the-id-before-asking-for-trace-context
+                  discovery-test/close-cancels-tracing-before-waiting-for-an-unsubmitted-open
+                  discovery-test/a-trace-provider-cannot-queue-work-behind-its-own-send
+                  discovery-test/discovery-workers-do-not-inherit-a-previous-request-span
+                  cloud-test/a-provider-deadline-does-not-wait-for-application-stream-close
                   discovery-test/traced-requests-admit-before-return-without-waiting-for-a-reply
                   discovery-test/traced-session-admission-rejects-pressure-before-starting-more-requests
                   discovery-test/cancelled-reservations-reclaim-capacity-without-releasing-the-head]
@@ -97,7 +127,8 @@
   :tool-filters {:status :mapped :local [filter/builtin filter/mcp filter/custom filter/isolated-builtins filter/isolated]
                  :tests [filter-test/isolated-tests filter-test/builtins-tests]}
   :tool-and-permission {:status :mapped :local [cb/register! cb/publish! result/permission-response sdk/approve-all]
-                        :tests [cb-test/broadcasts-invoke-handlers-and-use-session-scoped-replies cb-test/unsafe-or-missing-permission-decisions-never-approve]
+                        :tests [cb-test/broadcasts-invoke-handlers-and-use-session-scoped-replies cb-test/unsafe-or-missing-permission-decisions-never-approve
+                                cloud-test/a-completed-decision-cannot-block-another-sessions-observer]
                         :scope "Immutable definition/answer maps. Callback invocations, managed approvals and abstention are distinct; do not infer every decision variant was exercised."}
   :manual {:status :mapped :local [sdk/respond!! cb/respond!]
            :tests [cb-test/manual-responses-preserve-scope-and-reject-stale-claims]
@@ -117,19 +148,31 @@
                 :scope "Session-scoped initial/refresh/cancel, stale registration, no credential fallback. The cloud row separately covers server-assigned ID binding using synthetic credentials."}
   :interactions {:status :mapped :local [interaction/handle rev/register! cb/register! cb/publish! opts/after-open-requests]
                  :tests [rev-test/all-hook-types rev-test/framed-hooks rev-test/framed-interactions rev-test/exact-shell-cancellation
+                         rev-test/a-completed-shell-answer-does-not-depend-on-the-task-returning
+                         cloud-test/a-cancelled-shell-prompt-replies-before-application-io-finishes-closing
                          cb-test/interaction-broadcasts-use-their-own-result-contracts opts-test/only-registered-callbacks-are-advertised
                          opts-test/after-open-checks-capabilities-before-registering-interests-and-patching]
                  :scope "Twelve hook names, transforms, input, plan/Auto, shell auth reverse; MCP OAuth, commands and elicitation broadcasts. Separate builder and dispatcher evidence does not prove every native runtime callback path."}
-  :ui {:status :mapped :local [sdk/elicit! client/elicit!] :tests [client-test/elicitation-preserves-submitted-fields]
+  :ui {:status :mapped :local [sdk/elicit! client/elicit!] :tests [client-test/elicitation-preserves-submitted-fields
+                                                                   client-test/queued-form-uses-the-current-host-capability
+                                                                   cloud-test/outbound-forms-are-bounded-until-the-runtime-answers]
        :scope "Capability-gated form/result API. Node confirm/select/input convenience methods can be constructed with elicit!, but their specific schema/default/result projections have no dedicated wrappers."}
   :ui-convenience {:status :mapped :local [sdk/elicit!] :tests [client-test/elicitation-preserves-submitted-fields]
                    :scope "Compose the Node confirm/select/input form schemas using elicit! and project the result in Clojure. Only the generic form route/opaque content is exercised. No dedicated sugar is needed; no claim that all Node convenience projections were replayed."}
   :session-fs {:status :mapped :local [fs/provider-params fs/validate-provider rev/register! fs/handle]
                :tests [fs-test/framed-text-bytes-and-byte-ranges fs-test/sqlite-and-write-failures-have-distinct-envelopes
+                       cloud-test/session-callback-workers-do-not-inherit-an-openers-context
                        fs-test/old-requests-never-reach-a-replacement]
                :scope "Provider maps/factories with structured ex-data instead of Node adapter/error classes. Text/binary/range/sqlite wire tests; not a remote persistence proof."}
   :turn {:status :mapped :local [sdk/send! sdk/send-and-wait! sdk/abort! sdk/subscribe sdk/history turn/response-outcome]
          :tests [opts-test/send-parameters-match-high-level-message-options turn-test/structured-completion-requires-content-without-tool-requests
+                 discovery-test/closing-a-turn-result-withdraws-only-that-local-wait
+                 turn-test/settled-turns-remove-their-own-long-deadline
+                 cloud-test/a-turn-started-by-its-observer-can-complete-before-its-follow-up-is-observed
+                 cloud-test/an-observer-can-close-itself-after-eof-without-interrupting-its-caller
+                 cloud-test/repeated-close-preserves-ordinary-drain-and-cancels-only-a-self-detached-observer
+                 cloud-test/a-finished-eof-drain-does-not-interrupt-the-self-closed-callback
+                 client-test/subscriptions-do-not-use-the-clients-event-observer-slots
                  turn-test/overlapping-rpcs-keep-their-own-response-and-publication-boundary
                  client-test/metadata-and-history-preserve-their-distinct-contracts]
          :scope "Completion correlation, raw JSON Schema/event, normalized/raw history and stream teardown. TypeScript generic Zod parse overload is language-only."}

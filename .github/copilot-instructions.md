@@ -274,6 +274,8 @@ src/github/copilot_sdk/protocol.clj  # Framed, bidirectional in-memory JSON-RPC
 src/github/copilot_sdk/turn.clj      # Native turn completion and event subscriptions
 src/github/copilot_sdk/session_options.clj # Pure wire builders
 src/github/copilot_sdk/native_callbacks.clj # Bounded broadcast callbacks and manual responses
+src/github/copilot_sdk/callback_scope.clj # Identifies callback-owned lifecycle operations across worker pools
+src/github/copilot_sdk/interruption.clj # Interrupts application I/O outside event, discovery and protocol dispatch
 src/github/copilot_sdk/reverse.clj   # One reverse dispatcher per native client
 src/github/copilot_sdk/native_interaction.clj # Interactive requests and hooks
 src/github/copilot_sdk/discovery.clj # Model and request trace providers

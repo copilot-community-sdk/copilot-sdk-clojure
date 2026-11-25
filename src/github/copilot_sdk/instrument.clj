@@ -12,7 +12,7 @@
 (s/def ::client-options (s/keys :req-un [::mode]))
 (s/def ::client client/client?)
 (s/def ::session client/session?)
-(s/def ::session-id (s/and string? seq))
+(s/def ::session-id ::specs/session-id)
 (s/def ::result-channel #(satisfies? async/ReadPort %))
 (s/def ::prompt string?)
 (s/def ::message (s/or :prompt string? :options (s/keys :req-un [::prompt])))

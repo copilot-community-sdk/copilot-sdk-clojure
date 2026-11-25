@@ -19,7 +19,7 @@
           (throw (ex-info "No journal in the application store" {:session-id id})))
         ;; A fresh runtime must read the first client's journal from the provider.
         (copilot/with-client [client client-options]
-          (with-open [session (copilot/resume-session!! client id options)]
+          (copilot/with-resumed-session [session client id options]
             (let [history (copilot/await!! (copilot/history session))]
               (when-not (some #(and (= :copilot/session.info (:type %))
                                     (= message (get-in % [:data :message]))) history)

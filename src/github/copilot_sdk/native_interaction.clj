@@ -21,7 +21,8 @@
    "agentStop" :on-agent-stop "subagentStart" :on-subagent-start "subagentStop" :on-subagent-stop})
 
 (defn callbacks [opts]
-  {:hooks (get-in opts [:hooks :handlers])
+  ;; The confirmed session-end registration owns its callback separately.
+  {:hooks (dissoc (get-in opts [:hooks :handlers]) :on-session-end)
    :interaction (select-keys (:interaction opts)
                              [:on-user-input-request :on-exit-plan-mode-request
                               :on-auto-mode-switch-request :on-shell-authentication-request])
@@ -89,10 +90,7 @@
 (defn- hook [call hooks ctx {:keys [hook-type input]}]
   (check (string? hook-type))
   (if-let [f (get hooks (get hook-names hook-type))]
-    (let [result (try
-                   (call f (hook-input hook-type input) ctx)
-                   (catch InterruptedException t (throw t))
-                   (catch Throwable _ nil))]
+    (let [result (call f (hook-input hook-type input) ctx)]
       (if (nil? result) {} {:output (hook-output hook-type result)}))
     {}))
 
@@ -102,14 +100,9 @@
    (reduce-kv (fn [m section {:keys [content]}]
                 (check (string? content))
                 (let [id (if (keyword? section) (subs (str section) 1) section)
-                      f (get transforms id)]
-                  (assoc m id {:content (if f
-                                          (try
-                                            (let [result (call f content)]
-                                              (if (string? result) result content))
-                                            (catch InterruptedException t (throw t))
-                                            (catch Throwable _ content))
-                                          content)})))
+                      f (get transforms id)
+                      result (when f (call f content))]
+                  (assoc m id {:content (if (string? result) result content)})))
               {} sections)})
 
 (defn- attributed [result encoded]

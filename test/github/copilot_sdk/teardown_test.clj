@@ -183,6 +183,7 @@
    {:read-channel (recording-read-channel closed on-read-close)
     :write-channel (recording-write-channel closed)
     :state-atom (atom {:connection (protocol/initial-connection-state)})
+    :notification-queue (java.util.concurrent.LinkedBlockingQueue. 1)
     :incoming-ch (async/chan 1)
     :outgoing-ch (async/chan 1)}))
 

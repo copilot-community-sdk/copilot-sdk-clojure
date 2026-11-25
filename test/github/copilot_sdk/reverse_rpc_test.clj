@@ -164,14 +164,15 @@
                                                              :request-handler-queue-size 2})
           release (CountDownLatch. 1)
           entered (atom 0)
-          rejected-preparations (atom 0)]
+          released-preparations (CountDownLatch. 5)
+          released-count (atom 0)]
       (try
         (protocol/set-request-dispatch!
          conn
          (blocking-handler {:entered entered :release release})
          (fn [_method params]
            {:params params
-            :on-reject #(swap! rejected-preparations inc)}))
+            :release! #(do (swap! released-count inc) (.countDown released-preparations))}))
         ;; 2 execute, 2 queue, the 5th has nowhere to go.
         (dotimes [i 5]
           (write-framed! ->client (request (str "r" i) "hooks.invoke" {})))
@@ -187,14 +188,16 @@
               (is (= 2 (get-in msg [:error :data :maxConcurrency])))
               (is (= 2 (get-in msg [:error :data :queueSize]))))))
         (is (= 1 (:rejected-requests (connection-stats conn))))
-        (is (= 1 @rejected-preparations))
+        (is (= 1 @released-count))
         (testing "accepted requests still complete once handlers unblock"
           (.countDown release)
           (let [responses (collect-by-id! <-client 4 5000)]
             (is (not= ::timeout responses))
             (when (not= ::timeout responses)
               (is (= #{"r0" "r1" "r2" "r3"} (set (keys responses))))
-              (is (every? #(contains? % :result) (vals responses))))))
+              (is (every? #(contains? % :result) (vals responses)))))
+          (is (.await released-preparations 3 TimeUnit/SECONDS))
+          (is (= 5 @released-count)))
         (finally
           (.countDown release)
           (protocol/disconnect conn))))))

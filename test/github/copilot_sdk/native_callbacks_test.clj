@@ -7,7 +7,7 @@
             [github.copilot-sdk.protocol :as rpc])
   (:import [java.io ByteArrayOutputStream OutputStream PipedInputStream PipedOutputStream]
            [java.nio.charset StandardCharsets]
-           [java.util.concurrent CountDownLatch TimeUnit]))
+           [java.util.concurrent CountDownLatch ThreadPoolExecutor TimeUnit]))
 
 (defn- take!! [ch]
   (let [[v p] (a/alts!! [ch (a/timeout 5000)] :priority true)]
@@ -34,7 +34,7 @@
         conn (connect in out)
         peer (connect peer-in peer-out)
         replies (a/chan 16)
-        owner (cb/open! conn {})]
+        owner (cb/open! conn (constantly true))]
     (try
       (rpc/set-request-handler! peer (fn [method params]
                                        (a/>!! replies [method params])
@@ -234,7 +234,7 @@
                 ([b off len] (.write buffer ^bytes b (int off) (int len))))
               (flush [] (drain-frame)))
         conn (rpc/connect in out (atom {:connection (rpc/initial-connection-state)}))
-        owner (cb/open! conn {})]
+        owner (cb/open! conn (constantly true))]
     (try
       (let [reg (cb/register!
                  owner "s"
@@ -506,6 +506,52 @@
             (is (empty? (get-in @(:state-atom conn) [:connection :pending-requests]))))
           (finally (a/close! ack)))))))
 
+(deftest shutdown-releases-assigned-jobs-that-never-start
+  (with-peer
+    (fn [_ _ owner _]
+      (let [entered (CountDownLatch. 1)
+            release (CountDownLatch. 1)
+            ^ThreadPoolExecutor pool (get-in owner [:requests :executor])
+            _ (.setCorePoolSize pool 1)
+            reg (cb/register! owner "s" {:permissions
+                                         {:on-request (fn [_ _]
+                                                        (.countDown entered)
+                                                        (loop []
+                                                          (when-not (try (.await release) true
+                                                                         (catch InterruptedException _ false))
+                                                            (recur)))
+                                                        {:kind :reject})}})]
+        (try
+          (cb/publish! owner reg (permission-event "running"))
+          (is (.await entered 5 TimeUnit/SECONDS))
+          (cb/publish! owner reg (permission-event "assigned"))
+          (is (= (.size (.getQueue pool)) 1))
+          (is (nil? (cb/close! owner)))
+          (is (not (.isTerminated pool)))
+          (is (empty? @(get-in owner [:requests :active])))
+          (finally (.countDown release)))))))
+
+(deftest eof-drain-deadline-settles-receipts-without-waiting-for-the-observer
+  (with-peer
+    (fn [conn _ owner _]
+      (let [entered (promise)
+            release (promise)
+            reg (cb/register! owner "s" {:events {:on-event (fn [_]
+                                                              (deliver entered true)
+                                                              (loop []
+                                                                (when-not (try @release (catch InterruptedException _ false))
+                                                                  (recur))))}})]
+        (try
+          (let [first-receipt (cb/publish! owner reg {:id "first"})
+                _ (is (true? (deref entered 5000 false)))
+                last-receipt (cb/publish! owner reg {:id "last"})]
+            (rpc/end-input! conn)
+            (cb/finish-input! owner)
+            (is (= (mapv #(-> % take!! :error ex-data :type) [first-receipt last-receipt])
+                   [:observer-drain-timeout :observer-drain-timeout]))
+            (is (nil? @(:sessions owner))))
+          (finally (deliver release true)))))))
+
 (deftest observer-receipt-tracks-that-sessions-ordered-delivery
   (with-peer
     (fn [_ _ owner _]
@@ -561,6 +607,89 @@
           (is (= #{"thread" "channel"} @tool-calls))
           (is (nil? (a/poll! replies)))
           (finally (.countDown gate) (a/close! deferred)))))))
+
+(deftest forms-use-bounded-capacity-without-changing-waiting-queue-limits
+  (with-peer
+    (fn [_ _ owner replies]
+      (let [entered (a/chan 5)
+            hold (a/promise-chan)
+            calls (atom [])
+            register (fn [id]
+                       (cb/register! owner id
+                                     {:permissions {:on-request (fn [_ _] {:kind :reject})}
+                                      :interaction {:on-elicitation-request
+                                                    (fn [{:keys [message]}]
+                                                      (swap! calls conj message)
+                                                      (a/offer! entered message)
+                                                      (if (= message "new") {:action :decline} hold))}}))
+            form! (fn [reg id] (cb/publish! owner reg {:type :copilot/elicitation.requested
+                                                       :data {:request-id id :message id}}))
+            a-reg (register "A") b-reg (register "B") c-reg (register "C")]
+        (try
+          (doseq [request ["a1" "a2"]] (form! a-reg request))
+          (is (= (set (repeatedly 2 #(take!! entered))) #{"a1" "a2"}))
+          (dotimes [i 16] (form! a-reg (str "queued-" i)))
+          (cb/publish! owner a-reg (permission-event "independent"))
+          (is (= (take!! replies) ["session.permissions.handlePendingPermissionRequest"
+                                   {:session-id "A" :request-id "independent" :result {:kind "reject"}}]))
+          (form! a-reg "session-full")
+          (is (= (take!! replies) ["session.ui.handlePendingElicitation"
+                                   {:session-id "A" :request-id "session-full" :result {:action "cancel"}}]))
+          (doseq [request ["b1" "b2"]] (form! b-reg request))
+          (is (= (set (repeatedly 2 #(take!! entered))) #{"b1" "b2"}))
+          (form! c-reg "new")
+          (is (= (locking (:sessions owner) [(count @(get-in owner [:forms :active])) (count @(:waiting owner))])
+                 [4 17]))
+          (cb/unregister! owner a-reg)
+          (is (= (take!! replies) ["session.ui.handlePendingElicitation"
+                                   {:session-id "C" :request-id "new" :result {:action "decline"}}]))
+          (is (= (set @calls) #{"a1" "a2" "b1" "b2" "new"}))
+          (finally (a/close! hold)))))))
+
+(deftest rejected-busy-replies-allow-manual-correction-only-for-live-requests
+  (with-peer
+    (fn [_ peer owner _]
+      (let [held (a/chan)
+            entered (a/chan 2)
+            handler (fn [_ _] (a/offer! entered true) held)
+            reg (cb/register! owner "s" {:permissions {:on-request handler}
+                                         :tools {:definitions [{:name "lookup" :handler handler}]}})
+            busy (:busy-replies (get @(:sessions owner) "s"))
+            settled (a/chan 1)
+            invalid {:error {:code -32602 :message "invalid reply"}}
+            ok {:result {:success true}}]
+        (dotimes [i 18] (cb/publish! owner reg (permission-event (str i))))
+        (dotimes [_ 2] (take!! entered))
+        (add-watch busy ::settled (fn [_ _ _ n] (when (zero? n) (a/offer! settled true))))
+        (try
+          (doseq [[kind id ack retire? repair?]
+                  [[:permission "permission" invalid false true]
+                   [:tool "tool" invalid false true]
+                   [:permission "completed" invalid true false]
+                   [:permission "unknown" {:error {:code -32603 :message "outcome unknown"}} false false]
+                   [:tool "gone" {:result {:success false}} false false]
+                   [:tool "accepted" ok false false]]]
+            (let [tool? (= kind :tool)
+                  event ((if tool? tool-event permission-event) id)
+                  negative (if tool? {:error "Tool callback busy"} {:result {:kind "user-not-available"}})
+                  correction (if tool? {:error "cancelled"} {:result {:kind :reject}})
+                  sent (atom [])
+                  reply (a/promise-chan)]
+              (rpc/set-request-handler!
+               peer (fn [_ params]
+                      (if (= 1 (count (swap! sent conj (dissoc params :session-id :request-id))))
+                        reply (a/go ok))))
+              (cb/publish! owner reg event)
+              (when retire?
+                (cb/publish! owner reg {:type :copilot/permission.completed :data {:request-id id}}))
+              (a/put! reply ack)
+              (take!! settled)
+              (cb/publish! owner reg event)
+              (let [{:keys [ok error]} (take!! (cb/respond! owner reg kind (assoc correction :request-id id)))]
+                (is (= (or ok (:type (ex-data error))) (if repair? {:success true} :not-pending)) id))
+              (is (= @sent (cond-> [negative] repair? (conj (if tool? correction {:result {:kind "reject"}})))) id)))
+          (is (nil? (a/poll! entered)))
+          (finally (remove-watch busy ::settled) (cb/unregister! owner reg) (a/close! held)))))))
 
 (deftest withheld-overload-acknowledgements-fail-only-the-affected-session
   (with-peer
@@ -693,7 +822,8 @@
                                            {:permissions {:on-request (fn [_ _]
                                                                         (.countDown started)
                                                                         (.await gate)
-                                                                        {:kind :reject})}}))
+                                                                        {:kind :reject})}
+                                            :interaction {:on-elicitation-request (constantly {:action :decline})}}))
                            (range 9))
             occupied (take 8 sessions)
             newcomer (peek sessions)]
@@ -701,6 +831,9 @@
           (doseq [reg occupied] (cb/publish! owner reg (permission-event "held")))
           (is (.await started 5 TimeUnit/SECONDS))
           (doseq [reg occupied i (range 16)] (cb/publish! owner reg (permission-event (str i))))
+          (cb/publish! owner newcomer {:type :copilot/elicitation.requested :data {:request-id "free-form"}})
+          (is (= (take!! replies) ["session.ui.handlePendingElicitation"
+                                   {:session-id "8" :request-id "free-form" :result {:action "decline"}}]))
           (cb/publish! owner newcomer (permission-event "over-limit"))
           (is (= ["session.permissions.handlePendingPermissionRequest"
                   {:session-id "8" :request-id "over-limit" :result {:kind "user-not-available"}}] (take!! replies)))

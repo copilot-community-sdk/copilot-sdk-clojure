@@ -15,9 +15,11 @@ matrix. A published classifier is not a tested platform claim.
 ```
 
 The two questions share a session. The model's actual answers appear in the
-terminal. `--live` opts in to your signed-in Copilot account and may consume
-usage. Supply non-sensitive prompts. See `examples/README.md` in the checkout
-for the meeting-note, hook and custom-tool demos.
+terminal. `--live` opts in to a Copilot-enabled account and may consume
+usage. Sign in with GitHub CLI (`gh auth login`) if the isolated runtime
+cannot find an account. It does not use the Copilot CLI's normal state
+directory or system keychain. Supply non-sensitive prompts. See
+`examples/README.md` in the checkout for the meeting-note, hook and custom-tool demos.
 
 For a credential-free smoke test, omit `--live`: `./run-all-examples.sh basic-chat`.
 The fixture supplies a model that returns a fixed answer. The application
@@ -58,6 +60,14 @@ The SDK extracts the verified runtime once per JVM. A process crash can
 leave its temporary files behind. On Windows a loaded native library can
 remain locked until the JVM exits. Use a deployment-owned temporary directory
 that you can clean up **after** the application stops.
+
+The session storage root is not a filesystem sandbox. On macOS the pinned
+runtime can create `~/Library/Application Support/Microsoft/DeveloperTools/deviceid`
+under the process user's home, even if an `:empty` client only opens and
+pings with a separate `:base-directory`. An application session filesystem
+does not redirect host-wide files. If all writes must be isolated, run the
+JVM under a dedicated OS account or container with its own home and temp
+directory; enforce write restrictions at the OS boundary.
 
 Start the application REPL with `clojure -M`. From the SDK checkout instead,
 use `clojure -M:native-darwin-arm64` or `clojure -M:native-linux-x64`; the

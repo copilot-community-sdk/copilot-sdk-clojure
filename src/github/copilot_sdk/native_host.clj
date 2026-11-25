@@ -8,15 +8,15 @@
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.teardown :as teardown])
   (:import [com.sun.jna CallbackProxy Function Native NativeLibrary Platform Pointer]
-           [java.io ByteArrayInputStream File InputStream IOException OutputStream]
+           [java.io ByteArrayInputStream File InputStream IOException OutputStream UncheckedIOException]
            [java.net JarURLConnection]
            [java.nio.charset StandardCharsets]
-           [java.nio.file CopyOption FileVisitOption Files Path]
+           [java.nio.file CopyOption FileVisitOption Files NoSuchFileException Path]
            [java.nio.file.attribute FileAttribute]
            [java.security DigestInputStream MessageDigest]
-           [java.util Arrays HexFormat Objects Properties]
-           [java.util.concurrent ArrayBlockingQueue ConcurrentHashMap ScheduledFuture
-            ScheduledThreadPoolExecutor Semaphore ThreadFactory TimeUnit]
+           [java.util ArrayDeque Arrays HexFormat Objects Properties]
+           [java.util.concurrent ArrayBlockingQueue ConcurrentHashMap RejectedExecutionException ScheduledFuture
+            ScheduledThreadPoolExecutor Semaphore ThreadFactory ThreadPoolExecutor TimeUnit]
            [java.util.jar JarFile]))
 
 ;; Maven Central: com.microsoft:copilot-sdk-runtime:2.0.1:<classifier>.jar.sha256.
@@ -214,34 +214,44 @@
 (defn- inbound [chunk-limit byte-limit]
   ;; A callback may not wait for the reader: native close can itself be waiting
   ;; for that callback. Bound both the number of chunks and their total bytes.
-  (let [queue (ArrayBlockingQueue. chunk-limit)
+  (let [state (volatile! {:queue (ArrayDeque.)})
         budget (Semaphore. byte-limit)
-        terminal (atom nil)
-        current (volatile! nil)
         terminate! (fn [reason]
-                     (when (compare-and-set! terminal nil reason)
-                       (.clear queue)
-                       (.offer queue eof)))
+                     (locking state
+                       (when-not (:terminal @state)
+                         (vreset! state {:terminal reason})
+                         (.notifyAll state))))
+        enqueue! (fn [^bytes chunk]
+                   (locking state
+                     (when-let [^ArrayDeque queue (:queue @state)]
+                       (when (= (.size queue) chunk-limit)
+                         (throw (IOException. "Copilot runtime callback exceeded input capacity")))
+                       (.add queue (ByteArrayInputStream. chunk))
+                       (.notifyAll state))))
         read! (fn [^bytes buf off len]
                 (Objects/checkFromIndexSize (int off) (int len) (alength buf))
                 (if (zero? len)
                   0
-                  (let [chunk (or @terminal @current
-                                  (try (.take queue)
-                                       (catch InterruptedException e
-                                         (.interrupt (Thread/currentThread))
-                                         (throw (IOException. "Interrupted reading from Copilot runtime" e)))))
-                        chunk (or @terminal chunk)]
-                    (cond
-                      (identical? eof chunk) -1
-                      (instance? Throwable chunk) (throw (IOException. "Copilot runtime input failed" ^Throwable chunk))
-                      :else (let [^ByteArrayInputStream in (if (bytes? chunk)
-                                                             (ByteArrayInputStream. ^bytes chunk)
-                                                             chunk)
-                                  n (.read in buf off len)]
-                              (vreset! current (when (pos? (.available in)) in))
+                  (locking state
+                    (loop []
+                      (let [{:keys [^ArrayDeque queue current terminal]} @state]
+                        (cond
+                          (identical? eof terminal) -1
+                          terminal (throw (IOException. "Copilot runtime input failed" ^Throwable terminal))
+                          :else
+                          (if-let [^ByteArrayInputStream chunk (or current (.poll queue))]
+                            (let [n (.read chunk buf off len)
+                                  remaining (when (pos? (.available chunk)) chunk)]
+                              (when-not (identical? current remaining)
+                                (vswap! state assoc :current remaining))
                               (.release budget n)
-                              n)))))]
+                              n)
+                            (do
+                              (try (.wait state)
+                                   (catch InterruptedException e
+                                     (.interrupt (Thread/currentThread))
+                                     (throw (IOException. "Interrupted reading from Copilot runtime" e))))
+                              (recur)))))))))]
     {:in (proxy [InputStream] []
            (read
              ([] (let [b (byte-array 1)]
@@ -249,21 +259,20 @@
              ([b] (read! b 0 (alength ^bytes b)))
              ([b off len] (read! b off len)))
            (close [] (terminate! eof)))
-     :terminal terminal
+     :state state
      :terminate! terminate!
      :callback (reify CallbackProxy
                  (getParameterTypes [_] (into-array Class [Pointer Pointer Long/TYPE]))
                  (getReturnType [_] Void/TYPE)
                  (callback [_ args]
                    (try
-                     (when-not @terminal
+                     (when-not (:terminal @state)
                        (let [^Pointer data (aget args 1)
                              length (long (aget args 2))]
-                         (when-not (or (zero? length)
-                                       (and data (<= 1 length byte-limit)
-                                            (.tryAcquire budget (int length))
-                                            (.offer queue (.getByteArray data 0 (int length)))))
-                           (throw (IOException. "Copilot runtime callback exceeded input capacity or had invalid data")))))
+                         (when-not (zero? length)
+                           (when-not (and data (<= 1 length byte-limit) (.tryAcquire budget (int length)))
+                             (throw (IOException. "Copilot runtime callback exceeded input capacity or had invalid data")))
+                           (enqueue! (.getByteArray data 0 (int length))))))
                      (catch Throwable t
                        (terminate! t)))
                    nil))}))
@@ -289,13 +298,13 @@
 
 (def ^:private close-window-ms 1000)
 
-(defn- quiescent? [close-connection! conn-id]
+(defn- quiescent? [advance!]
   (let [deadline (+ (System/nanoTime) (.toNanos TimeUnit/MILLISECONDS close-window-ms))
         interrupted? (volatile! (Thread/interrupted))]
     (try
       (loop []
         (cond
-          (close-connection! conn-id) true
+          (advance!) true
           (>= (System/nanoTime) deadline) false
           :else (do
                   (try (Thread/sleep 10)
@@ -305,11 +314,12 @@
         (when @interrupted? (.interrupt (Thread/currentThread)))))))
 
 (defn- host-transport [{:keys [start open write close shutdown release-home! configure-ui run-ui-action]} argv env]
-  (let [{:keys [in callback terminal terminate!]} (inbound 1024 (* 64 1024 1024))
+  (let [{:keys [in callback state terminate!]} (inbound 1024 (* 64 1024 1024))
         conn-id (volatile! nil)
         ;; Disabling UI prevents new admissions but does not revoke calls already admitted.
         ui-enabled? (volatile! false)
-        ui-calls (volatile! 0)
+        ;; Close waits under conn-id, so admitted calls must release their count without it.
+        ui-calls (atom 0)
         close-confirmed? (volatile! false)
         _ (try (reserve! callback)
                (catch Throwable t
@@ -325,21 +335,20 @@
                      (when-let [^ScheduledFuture f @task]
                        (.cancel f false)
                        (vreset! task nil)))
-        finish (delay
-                 (when-not (shutdown host-id)
-                   (throw (ex-info "Copilot runtime host shutdown failed" {:host-id host-id})))
-                 (when release-home! (release-home!))
-                 (swap! owners dissoc callback)
-                 nil)
         quarantine! (fn [error]
                       (stop-task!)
                       (swap! owners assoc callback :quarantined)
                       (throw (vreset! conn-id error)))
         ;; Invoked under conn-id by both the blocking caller and the one retry
         ;; worker. Each background tick takes at most one native close attempt.
-        advance! (fn [barrier]
+        advance! (fn []
                    (let [id @conn-id]
                      (cond
+                       (= :closed id) true
+                       ;; A failed deletion is retryable; native retirement is not.
+                       (= :retired id) (do (when release-home! (release-home!))
+                                           (vreset! conn-id :closed)
+                                           true)
                        (= :opening id) (quarantine! (ex-info "Native connection open outcome unknown; host quarantined"
                                                              {:host-id host-id}))
                        (instance? Throwable id) (throw id)
@@ -348,21 +357,25 @@
                             ;; Native close cancels UI work. Its callback barrier
                             ;; does not imply that a synchronous UI call has returned.
                             (or @close-confirmed?
-                                (try (vreset! close-confirmed? (barrier close id))
+                                (try (vreset! close-confirmed? (close id))
                                      (catch Throwable t
                                        (quarantine! (ex-info "Native close outcome unknown; connection quarantined"
                                                              {:host-id host-id :connection-id id} t)))))
                             (zero? @ui-calls)))
-                       (do (vreset! conn-id nil)
-                           (when id (.remove ui-owners id callback))
+                       (do (when id (.remove ui-owners id callback))
                            (stop-task!)
-                           (try @finish (catch Throwable t (quarantine! t)))
-                           true)
+                           (try
+                             (when-not (shutdown host-id)
+                               (throw (ex-info "Copilot runtime host shutdown failed" {:host-id host-id})))
+                             (catch Throwable t (quarantine! t)))
+                           (vreset! conn-id :retired)
+                           (swap! owners dissoc callback)
+                           (recur))
                        :else false)))
         close! (fn []
                  (terminate! eof)
                  (locking conn-id
-                   (when-not (advance! quiescent?)
+                   (when-not (quiescent? advance!)
                      (when-not @task
                        (swap! owners assoc callback :closing)
                        (try
@@ -372,11 +385,12 @@
                                    ^Runnable (fn []
                                                (locking conn-id
                                                  (when @task
-                                                   (try (advance! (fn [f id] (f id)))
+                                                   (try (advance!)
                                                         (catch Throwable _
                                                           ;; Do not log ABI exception text or client options.
-                                                          (log/error "Deferred native cleanup failed; host quarantined "
-                                                                     {:host-id host-id}))))))
+                                                          (log/error "Deferred host cleanup failed "
+                                                                     {:host-id host-id
+                                                                      :quarantined? (instance? Throwable @conn-id)}))))))
                                    100 100 TimeUnit/MILLISECONDS))
                          (catch Throwable t
                            (quarantine! (ex-info "Cannot schedule native cleanup; host quarantined"
@@ -384,7 +398,7 @@
                      (throw (ex-info "Native connection not yet quiescent; cleanup scheduled"
                                      {:host-id host-id :connection-id @conn-id :retryable? true})))))
         live-id! (fn []
-                   (when @terminal (throw (IOException. "Copilot runtime connection is closed")))
+                   (when (:terminal @state) (throw (IOException. "Copilot runtime connection is closed")))
                    @conn-id)
         send! (fn [^bytes buf off len]
                 (Objects/checkFromIndexSize (int off) (int len) (alength buf))
@@ -413,7 +427,7 @@
         (throw (ex-info "Copilot runtime connection open failed" {:host-id host-id})))
       (when (.isInterrupted (Thread/currentThread))
         (throw (InterruptedException. "Interrupted during Copilot runtime connection startup")))
-      (when-let [failure @terminal]
+      (when-let [failure (:terminal @state)]
         (throw (IOException. "Copilot runtime input failed during startup" ^Throwable failure)))
       {:in in
        :out (proxy [OutputStream] []
@@ -444,14 +458,14 @@
                                     (let [id (live-id!)]
                                       (when-not @ui-enabled?
                                         (throw (ex-info "The UI thread handler is not enabled" {})))
-                                      (vswap! ui-calls inc)
+                                      (swap! ui-calls inc)
                                       id))]
                            ;; UI code must run on this thread, without holding the writer/close lock.
                            (try
                              (when-not (run-ui-action id (long action-id))
                                (throw (ex-info "Native UI action is retired, executed, or on the wrong thread"
                                                {:action-id action-id})))
-                             (finally (locking conn-id (vswap! ui-calls dec))))))
+                             (finally (swap! ui-calls dec)))))
        :close! close!}
       (catch Throwable t
         (teardown/cleanup-preserving! t close!)
@@ -459,14 +473,45 @@
 
 (defn- delete-home! [^Path home]
   ;; Session tools can create symlinks: walk the private directory, never their targets.
-  (with-open [paths (Files/walk home (make-array FileVisitOption 0))]
-    (doseq [^Path p (rseq (vec (iterator-seq (.iterator paths))))]
-      (Files/deleteIfExists p))))
+  (try
+    (with-open [paths (Files/walk home (make-array FileVisitOption 0))]
+      (doseq [^Path p (rseq (vec (iterator-seq (.iterator paths))))]
+        (Files/deleteIfExists p)))
+    (catch UncheckedIOException e (throw (.getCause e)))
+    (catch NoSuchFileException e
+      (when-not (= (.getFile e) (str home)) (throw e)))))
+
+(defonce ^:private ^ThreadPoolExecutor home-retries
+  (ThreadPoolExecutor. 0 1 30 TimeUnit/SECONDS (ArrayBlockingQueue. max-owners)
+                       (reify ThreadFactory
+                         (newThread [_ r] (doto (Thread. nil r "copilot-home-cleanup" 0 false) (.setDaemon true))))))
+
+(defn- private-home-release [^Path home]
+  (let [removed? (volatile! false)
+        remove! (fn [] (locking removed?
+                         (when-not @removed?
+                           (delete-home! home)
+                           (vreset! removed? true))))
+        ;; A failed open has no public client to retry the directory cleanup.
+        ;; Keep only the directory, never a native callback or handle, in this task.
+        retry (delay (.execute home-retries
+                               ^Runnable #(try (remove!)
+                                               (catch IOException e
+                                                 (log/error "Private runtime home cleanup retry failed"
+                                                            {:directory (str (.getFileName home))
+                                                             :exception (.getName (class e))})))))]
+    (fn []
+      (try (remove!)
+           (catch IOException e
+             (let [error (ex-info "Cannot remove the SDK-created temporary home" {:type :private-home-cleanup :path (str home)} e)]
+               (try (force retry)
+                    (catch RejectedExecutionException full (.addSuppressed error full)))
+               (throw error)))))))
 
 (defn- open-config! [abi {:keys [argv env]} virtual-home?]
   (let [argv (.getBytes (json/write-str argv) StandardCharsets/UTF_8)
         home (when virtual-home? (Files/createTempDirectory "copilot-sdk-home-" default-attrs))
-        release! (when home #(delete-home! home))
+        release! (when home (private-home-release home))
         ^bytes env-bytes (try
                            (.getBytes (json/write-str
                                        (cond-> env home (assoc "COPILOT_HOME" (str home)

@@ -1,5 +1,6 @@
 (ns github.copilot-sdk-test
   (:require [clojure.core.async :as a]
+            [clojure.core.async.impl.protocols :as ap]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
@@ -8,7 +9,28 @@
             [github.copilot-sdk.native-host :as host]
             [github.copilot-sdk.protocol :as rpc]
             [github.copilot-sdk.session-options :as options]
-            [github.copilot-sdk.specs :as specs]))
+            [github.copilot-sdk.specs :as specs])
+  (:import [java.util.concurrent.locks Lock]))
+
+(deftest interrupted-await-delivers-a-result-already-claimed
+  (let [parked (promise)
+        finished (promise)
+        port (reify ap/ReadPort
+               (take! [_ h] (deliver parked h) nil))
+        waiter (Thread. #(try
+                           (let [v (sdk/await!! port)]
+                             (deliver finished [v (.isInterrupted (Thread/currentThread))]))
+                           (catch Exception e (deliver finished e))))]
+    (try
+      (.start waiter)
+      (let [^Lock h (deref parked 3000 nil)
+            _ (.lock h)
+            deliver! (try (ap/commit h) (finally (.unlock h)))]
+        ;; The channel selected the take, but its delivery callback has not run.
+        (.interrupt waiter)
+        (deliver! {:ok :claimed})
+        (is (= (deref finished 3000 ::timeout) [:claimed true])))
+      (finally (.interrupt waiter) (.join waiter 3000)))))
 
 (deftest mcp-tool-result-conversion
   (let [resource-uri "file:///Report_DIR/Chart.PNG?My_Key=AbC"
@@ -64,7 +86,7 @@
               (a/go {:result
                      (case method
                        "connect" {:protocol-version 4}
-                       "session.create" {:session-id (:session-id params)}
+                       ("session.create" "session.resume") {:session-id (:session-id params)}
                        ("session.options.update" "session.detach") {:success (not @reject?)}
                        "session.abort" {:success true}
                        "runtime.shutdown" {})})))
@@ -80,7 +102,10 @@
               (is (= ["Runtime did not detach the session"] (mapv ex-message (.getSuppressed failure)))))
             (is (= @calls [["connect" nil] ["session.create" id] ["session.options.update" id] ["session.detach" id]]))
             (reset! reject? false)
-            (let [session (sdk/open-session!! c options)
+            (is (= (try (sdk/open-session!! c options)
+                        (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))
+                   :session-cleanup-unconfirmed))
+            (let [session (sdk/open-session!! c (assoc options :session-id "independent"))
                   body-error (ex-info "Body failed" {})
                   error (try
                           (sdk/with-session [other c {:session-id "other"}]
@@ -89,6 +114,13 @@
                           (catch Throwable t t))]
               (is (identical? body-error error))
               (is (= ["Runtime did not detach the session"] (mapv ex-message (.getSuppressed error))))
+              (let [history-error (ex-info "History failed" {})
+                    resumed-error (try (sdk/with-resumed-session [resumed c "saved" {}]
+                                         (is (= (sdk/session-id resumed) "saved"))
+                                         (throw history-error))
+                                       (catch Exception e e))]
+                (is (identical? resumed-error history-error))
+                (is (= (mapv ex-message (.getSuppressed resumed-error)) ["Runtime did not detach the session"])))
               (is (thrown-with-msg? clojure.lang.ExceptionInfo #"did not detach" (sdk/close!! session)))
               (is (nil? (sdk/await!! (sdk/abort! session))))
               (reset! reject? false)

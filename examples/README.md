@@ -12,7 +12,9 @@ Both questions use the **same session**. The demo prints `You:` and `Assistant:`
 
 ## Choose a demo
 
-`--live NAME` uses the runtime's signed-in GitHub Copilot account and its default model. Each demo has a default prompt; put your own quoted prompt after the name. To select a model explicitly, set `COPILOT_DEMO_MODEL` to a model ID available to your account. The script selects the platform; it does not require a running Copilot CLI or a token on the command line.
+For `--live`, use an account with GitHub Copilot access that the native runtime can discover in `:empty` mode. A supported sign-in path is GitHub CLI (`gh auth login`). Signing in **only** to the Copilot CLI is not sufficient when its credentials are stored in the system keychain or its usual state directory: the demo disables that keychain and starts with a fresh directory. Do not copy tokens or point the demo at your normal Copilot state.
+
+`--live NAME` uses the account's default model. Each demo has a default prompt; put your own quoted prompt after the name. To select a model explicitly, set `COPILOT_DEMO_MODEL` to a model ID available to your account. The script selects the platform; it does not require a running Copilot CLI or a token on the command line.
 
 | Demo | What to watch |
 |---|---|

@@ -21,6 +21,11 @@ All notable changes to this project will be documented in this file. This change
 - Waiting for human input no longer blocks filesystem or hook callbacks.
   Each client can wait up to five minutes for each of four concurrent prompts.
 
+### Added
+- Added `with-resumed-session` to scope handles restored from saved history.
+  The resume and filesystem examples preserve a read error if detach also
+  fails, as `with-session` does for a newly created handle.
+
 ### Added (v2.0.1 sync)
 - Added runtime discovery and session operations to the native facade:
   `list-models`, `session-info`, `lifecycle-events`, `set-model!`, timeline
@@ -38,18 +43,180 @@ All notable changes to this project will be documented in this file. This change
   output, prompt hooks, scoped tools, and resume. They print prompts, model
   output, and relevant callbacks. The offline runner exercises the same
   applications plus an application-owned filesystem without using an account.
-  The API reference lists hook inputs and results,
-  filesystem operations, and subscription overflow behavior.
+  The API reference lists hook inputs and results, filesystem operations,
+  subscription overflow behavior, and the 16 event-observer slots per native
+  client. Sessions using `subscribe` without `:on-event` do not occupy a slot.
   The [migration guide](doc/guides/native-2x.md) maps all 23 former examples.
   The JAR and POM can be tested in a fresh consumer with a separate runtime
   classifier. No authenticated account or CLI is needed for offline checks.
 
 ### Fixed (2.x)
+- A case variant of a locally reserved session ID no longer bypasses its
+  handle during deletion or opening. This prevents normal detach from
+  recreating a deleted session record on case-insensitive stores. Public
+  deletion checks the default store's listing even after detach; it also
+  refuses to delete an open handle or roll back a cloud allocation from
+  an unconfirmed configuration directory. Detach and delete now retain a
+  runtime-supplied refusal reason in `:reason`. Unused, unnamed sessions
+  can retain files after `:session-delete-unconfirmed`; local sessions
+  named at creation can be listed and deleted after detach without a turn.
+- An explicit create or resume that returns another ID no longer leaves
+  the acknowledged session running without a handle. Rollback detaches
+  only an ID it can reserve safely; it never deletes the saved conversation
+  or detaches another local owner's session. Create and resume reserve
+  known IDs before calling the application's trace provider.
+- A terminal callback failure now stops new session requests and wakes
+  waiting turns, forms, and subscribers with the original error. A manual
+  response or failed worker no longer has to wait for another event to
+  report the failure. New ordinary reverse callbacks and unsent answers
+  stop; the session filesystem and end hook remain available for cleanup.
+- Interrupting `await!!` no longer discards the operation's only result.
+  The caller can wait again on the same channel if the interrupt withdrew
+  its first wait. `respond!!`, which owns its result channel, instead waits
+  for the submitted answer's bounded outcome and preserves the interrupt.
+- Closing a `send-and-wait!` result frees its local wait slot and withdraws a
+  prompt still awaiting admission. It does not abort a turn already admitted.
+  Finished and abandoned waits no longer leave their deadline timers queued.
+- A detached session no longer sends a provider's unsent error payload.
+  A timed-out system-message transform no longer returns a partial result;
+  JVM errors in hooks and transforms now fail the request.
+- The example's in-memory session filesystem now replaces the destination
+  contents when a file is renamed over an existing file.
+- An invalid structured result from a post-tool hook now fails only that
+  hook, not the client connection. Additional tool-result fields retain
+  their exact JSON names through an identity hook. Passing a session handle
+  instead of an ID to `session-metadata` no longer disconnects the client.
+  A shell cancellation listener no longer runs on the protocol reader or
+  delays unrelated responses; cancellation before reply submission also
+  discards an answer the handler already returned.
+- A completed user-input, plan-exit, or auto-mode prompt frees its slot
+  before publishing its answer. A follow-up prompt no longer gets a busy
+  response merely because the previous reply's worker has not returned.
+- `elicit!` waits for an actual response or the end of its session instead
+  of timing out while the form remains open. Optional content keeps its
+  original field names on accept, decline, and cancel. Session failure or
+  acknowledged release now rejects a still-pending form without discarding
+  a reply already received. Calling `elicit!` on a closed handle reports
+  `:session-closed`, not a missing host capability. A client admits 64
+  unanswered outbound forms; excess requests return `:elicitation-capacity`
+  before sending, without a timeout for a human answer. A queued form is
+  not sent if the host withdraws the capability before admission. Unrelated application
+  specs no longer change whether a JSON-valued tool-result extension is valid.
+- Form handlers have capacity separate from tool callbacks, so two tools
+  can both wait for forms on the same session. Additional forms retain
+  bounded queuing without blocking an idle worker in the other pool.
+  A form handler cannot recursively wait on a session using the same
+  client's form workers.
+- A successful `uiThread.run` now returns JSON `null` as required by the
+  native runtime, rather than an empty object.
+- On unexpected connection loss, new decisions stop immediately, accepted
+  observations drain in order within a bounded window, and session handles
+  release their registrations without sending another detach. Explicit close
+  cancels pending observations instead of leaving handlers active after scope
+  exit. A turn whose reply and completion event arrived before EOF retains
+  the runtime outcome and its original deadline. A stopped connection
+  discards unwritten request payloads. Closing native input or exceeding its
+  buffer limit releases queued and partially read data, including a chunk
+  still being copied when the input closed.
+- Concurrent `list-models` calls receive separate results from one fetch,
+  including when more than 1,024 callers wait. Closing a caller's channel
+  does not affect the others. Closing the connection releases its model and
+  trace providers. An interrupted client startup now finishes bounded rollback
+  before restoring the opener's interrupt status.
+- A failure to remove the SDK's temporary home after confirmed native
+  shutdown no longer holds a native host slot. Closing the same client
+  again retries only directory cleanup and succeeds if the directory is
+  already absent. One bounded directory-only retry is also available after
+  a failed open, when no public client exists. The original failure stays
+  primary and the cleanup error identifies only the affected private home.
+- Decision handlers, event observers, and model-list or trace-context
+  providers cannot synchronously shut down their own client on its worker.
+  A decision handler cannot detach or delete its own session there, even
+  through a nested model or trace provider. Ordinary handlers can hand shutdown
+  to another thread; an observer can still detach its own session.
+  Filesystem providers and factories keep their lifecycle restrictions in
+  active continuations. A final storage write cannot wait for its own
+  client's shutdown, even by attempting to close a sibling session.
+- A successful direct detach or delete acknowledgment stops new decisions and
+  events for that handle. Its subscriptions and ordinary observer still receive
+  events accepted before the acknowledgment even when the callback queue is
+  full or the ID is reused. Repeating an ordinary close does not cancel that
+  drain. Broadcast decisions cannot enter the outgoing
+  queue after their registration loses authority.
+- Client shutdown stops decision and event callbacks, including those of a
+  session still opening. The runtime retains the session filesystem needed
+  to persist or clean up its data, and the registered `:on-session-end` hook
+  for an open session's graceful detach. A refused detach leaves final
+  storage available until runtime shutdown. An end hook can close its own handle
+  without waiting on itself. `force-close!!` can interrupt a graceful wait
+  without skipping native cleanup. A concurrent `close!!` reports
+  unconfirmed shutdown even if force close started first. Forced release
+  removes the session's callback and filesystem registrations from stale handles.
+  Detaches after a refused delete lookup share the same interruptible
+  ten-second wait as other shutdown detaches, rather than restarting it.
+  When a delete times out, a concurrent client close cannot return before
+  retiring the open handle's subscriptions.
+- Graceful shutdown now waits for a cloud create already sent even before
+  it receives a session ID. It reports a failed cleanup or timeout instead
+  of silently dropping the acknowledgment. Cleanup after a failed cloud open
+  never deletes an ambiguous ID or application-owned storage; it reports
+  the retained allocation alongside the setup error. If that allocation has
+  an unambiguous ID, refusing to delete from the wrong store or an
+  application-owned filesystem no longer skips detaching the live session.
+  A refused cleanup after an acknowledged open prevents ID reuse on that client. A refusal
+  of the initial open does not. If rollback cannot confirm detach, the
+  initialized filesystem for that acquisition can still persist final data
+  during shutdown; ordinary callbacks stay retired.
+- A timeout on a known session open or detach no longer cuts off final
+  filesystem writes. A late reply that confirms release or rejects the
+  acquisition retires that exact storage route without reopening the ID.
+  A late successful detach or delete also retires pending forms and callback
+  replies before the next frame, with or without application storage. A
+  detach timeout cancels the end hook without cancelling final filesystem
+  writes, including when the client is shutting down. Once the runtime
+  acknowledges shutdown, the SDK requests interruption of outstanding file
+  operations even if the registry was their last owner. If reverse workers
+  do not stop within the shared shutdown deadline, client close reports
+  `:reverse-worker-timeout` rather than claiming all local work stopped.
+- SDK workers no longer inherit Java thread-local state from the request
+  that starts them. Filesystem factories and event handlers cannot inherit an
+  earlier opener's context; Clojure dynamic bindings still carry the
+  submitting request's trace context to discovery providers.
+- A session's event observer can await a follow-up turn without waiting for
+  itself to return. Independent callers still wait for completion-event delivery.
+  An observer closing its own session after EOF no longer interrupts itself
+  or remains subject to a timer for events it has already stopped delivering.
+  A later close from another thread can still interrupt it until it returns.
+  A nonfatal application stream-close exception during interruption is logged
+  without replacing a successful release or the original opening error.
+- An accepted shell confirmation is no longer replaced with cancellation
+  just because its handler's worker has not returned. A real cancellation
+  received before reply submission still wins. A cancelled prompt now
+  answers the runtime without waiting for blocking application I/O cleanup.
+- Cancelling a broadcast handler no longer makes an unrelated session's events
+  wait for application I/O cleanup. A model-provider timeout reaches all
+  callers sharing the lookup without waiting for that cleanup either.
+- Interrupting an application's reverse callback during release no longer
+  runs the application's stream cleanup on the protocol reader or under the
+  callback registry lock. An explicit opening refusal revokes callbacks
+  before the next frame. End hooks cannot run before post-open setup succeeds.
+- Clarified that `:base-directory` and `:session-fs` isolate session storage
+  but do not confine every process write. On macOS the pinned runtime can
+  create a per-user Microsoft developer-tools file outside that directory.
+- Interrupting a session prefix or trace lookup releases that lookup
+  without starting the session request. An ordinary callback result still being prepared when
+  graceful shutdown starts can no longer direct the runtime.
+- `send-and-wait!` does not submit a prompt whose deadline passed during
+  preparation, lock acquisition, trace lookup, or wire conversion. After
+  submission, a timeout cancels only that request ID's pending wait. It
+  does not abort or resend. A trace provider cannot queue work behind its
+  own pending send on the same session (`:trace-provider-reentry`).
 - If the runtime explicitly rejects an automatic permission decision as
   invalid, the SDK sends `user-not-available` without running the handler
   again. If that decision is itself invalid, the live request can be answered
-  with `respond!!`. A timeout, disconnect, or negative acknowledgment does not
-  trigger another decision.
+  with `respond!!`. Explicit rejection of a busy tool or permission reply
+  also permits manual repair of that request. A timeout, disconnect, or
+  negative acknowledgment does not trigger another decision.
 - Resuming without a permission handler now delivers new requests for manual
   response instead of denying the tool without notifying the application.
   Create is unchanged. With `:continue-pending-work? true`, answer an

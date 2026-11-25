@@ -53,6 +53,13 @@
   `(let [~binding (open-session!! ~client ~options)]
      (teardown/with-cleanup #(close!! ~binding) ~@body)))
 
+(defmacro with-resumed-session
+  "Bind a resumed session for the body, then detach it. A body failure
+  remains primary if detach also fails."
+  [[binding client id options] & body]
+  `(let [~binding (resume-session!! ~client ~id ~options)]
+     (teardown/with-cleanup #(close!! ~binding) ~@body)))
+
 (defn session-id
   "Return the session ID that can be passed to resume-session!!."
   [session]
@@ -78,7 +85,8 @@
 
 (defn respond!!
   "Settle a pending :tool or :permission request. Pass :request-id and
-  :result (or :error for a failed tool). Wait for the runtime acknowledgment."
+  :result (or :error for a failed tool). After submission, wait for the
+  bounded outcome even if interrupted, and preserve the interrupt status."
   [session kind answer]
   (client/respond!! session kind answer))
 
@@ -137,10 +145,12 @@
   ([client filters] (client/list-sessions client filters)))
 
 (defn delete-session!!
-  "Permanently delete a runtime-stored session by exact ID and invalidate its
-  open handle. IDs that could be UUID prefixes are refused, even if that is
-  their full spelling. For application-owned storage, delete through the
-  filesystem provider after closing the session."
+  "Delete a saved session from the client's default runtime store. Confirm
+  its unique, exact ID with the runtime's listing before sending the delete.
+  Refuse UUID prefixes, unlisted IDs (:session-delete-unconfirmed), and
+  handles using another storage root. Refusal leaves the session's files intact.
+  Acknowledgment invalidates the matching open handle. For application-owned
+  storage, delete through the filesystem provider after closing the session."
   [client id]
   (client/delete-session!! client id))
 
@@ -163,7 +173,9 @@
 (defn send-and-wait!
   "Return this request's final root assistant event as {:ok event}, or
   {:ok nil} when the runtime completed it without an assistant response.
-  Errors arrive as {:error cause}. A wait timeout does not abort the turn."
+  Errors arrive as {:error cause}. Closing the result withdraws an unsent
+  reservation or ends its admitted wait. Neither close nor timeout aborts
+  a turn already admitted by the runtime connection."
   [session message]
   (client/send-and-wait! session message))
 
@@ -194,12 +206,17 @@
 (defn elicit!
   "Ask a capable host for structured input using :message and :requested-schema.
   The result contains :action (:accept, :decline or :cancel) and any :content.
-  The schema's property names belong to the application."
+  The schema's property names belong to the application. The request waits for
+  a response or for the session to close; it has no SDK timer for human input.
+  A client can have 64 unanswered outbound forms. An excess request returns
+  :elicitation-capacity without sending a form."
   [session form]
   (client/elicit! session form))
 
 (defn await!!
   "Block for one operation result. Return its value (including nil) or throw
-  its error. Inside a go block, use <! and inspect the result instead."
+  its error. Interrupting the wait does not cancel the operation. If the take
+  already claimed the result, deliver it and preserve the interrupt status.
+  Inside a go block, use <! and inspect the result instead."
   [result]
   (client/await!! result))

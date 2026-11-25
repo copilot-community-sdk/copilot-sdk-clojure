@@ -26,7 +26,9 @@
   An application that ignores interruption must check the predicate before
   performing side effects. Synchronous handlers and channel results share
   the invocation lifetime; there is no separate channel-only timeout.
-  Two requests per session and eight per connection can run concurrently,
+  Form responders have their own two slots per session and four per client;
+  they do not queue behind tools awaiting the user's answer.
+  Other requests use two slots per session and eight per connection,
   including the wait for the runtime acknowledgement. A shared FIFO holds
   up to 16 waiting requests per session, 128 per connection. Each free
   worker takes the oldest request whose session has a free slot. A session
@@ -43,35 +45,59 @@
   handler returns it receives a terminal {:error ex} instead of more events.
   Callback errors and interrupted/lost observations are reported separately
   from programmatic event subscriptions. A handler that ignores interruption
-  retains its worker until it exits; new observers cannot exceed the limit."
+  retains its worker until it exits; new observers cannot exceed the limit.
+  On connection loss, decisions stop immediately. Accepted observations can
+  drain for 500 ms after input ends; a timeout fails outstanding receipts."
   (:require [clojure.core.async :as a]
             [clojure.core.async.impl.protocols :as ap]
             [clojure.data.json :as json]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [github.copilot-sdk.callback-results :as results]
+            [github.copilot-sdk.callback-scope :as scope]
+            [github.copilot-sdk.interruption :as interruption]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.protocol :as rpc]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util])
-  (:import [java.util.concurrent ArrayBlockingQueue Callable ExecutionException FutureTask SynchronousQueue
-            RejectedExecutionException ThreadFactory ThreadPoolExecutor TimeUnit]))
+  (:import [java.util.concurrent ArrayBlockingQueue Callable CancellationException ExecutionException FutureTask SynchronousQueue
+            RejectedExecutionException ThreadFactory ThreadPoolExecutor TimeUnit TimeoutException]))
 
 (defn- pool [size queue label]
   (doto (ThreadPoolExecutor.
          size size 60 TimeUnit/SECONDS queue
          (reify ThreadFactory
-           (newThread [_ r] (doto (Thread. r label) (.setDaemon true)))))
+           (newThread [_ r] (doto (Thread. nil r label 0 false) (.setDaemon true)))))
     (.allowCoreThreadTimeOut true)))
+
+(defn- lane [limit form? label]
+  ;; An assigned successor may queue in the executor while its predecessor returns.
+  {:active (volatile! #{}) :limit limit :form? form?
+   :executor (pool limit (ArrayBlockingQueue. limit) label)})
 
 (defn- connected? [{:keys [connection-id]} state]
   (and (true? (get-in state [:connection :running?]))
        (identical? connection-id (get-in state [:connection :connection-id]))))
 
-(defn- current? [{:keys [conn sessions]} reg]
-  (and (:token reg)
-       (identical? (:token reg) (:token (get @sessions (:id reg))))
-       (connected? conn @(:state-atom conn))))
+(defn- registered? [sessions reg]
+  (and (:token reg) (identical? (:token reg) (:token (get @sessions (:id reg))))))
+
+(defn- decision-refusal [{:keys [conn sessions client-open?]} reg]
+  ;; A terminal failure belongs to this generation. Physical EOF and release
+  ;; also revoke decisions, but do not invalidate observations already accepted.
+  (let [live (get @sessions (:id reg))]
+    (if-not (and live (identical? (:token live) (:token reg)))
+      ::retired
+      (or @(:failure live)
+          (when-not (and (client-open?) (not @(:token live)) (not (ap/closed? (:closed live)))
+                         (connected? conn @(:state-atom conn)))
+            ::retired)))))
+
+(defn- require-decision! [owner reg]
+  (when-let [reason (decision-refusal owner reg)]
+    (throw (if (= reason ::retired)
+             (ex-info "Session is no longer active" {:type :session-closed})
+             reason))))
 
 (defn- fatal? [t] (and (instance? Error t) (not (instance? AssertionError t))))
 
@@ -84,62 +110,154 @@
         (try (.get ^FutureTask this)
              (catch ExecutionException e (throw (.getCause e))))))))
 
-(defn- cancel! [{:keys [^FutureTask task cancel]}]
+(defn- cancel! [{:keys [interrupt cancel]}]
   (a/close! cancel)
-  (.cancel task true))
+  (when interrupt (interrupt :cancel)))
 
 (defn- settle! [receipt outcome]
   (a/put! receipt outcome)
   (a/close! receipt)
   receipt)
 
-(defn- finish-observer! [{:keys [^ArrayBlockingQueue queue pending terminal]} cause]
+(defn- finish-observer! [{:keys [queue pending terminal]} cause]
   (let [outcome {:error cause}]
     (when (compare-and-set! terminal nil outcome)
       (doseq [receipt @pending] (settle! receipt outcome))
       (reset! pending #{})
-      (.clear queue)
-      (.offer queue [nil outcome]))))
+      (a/close! queue)
+      (while (a/poll! queue)))))
 
-(defn- release! [reg]
-  (a/close! (:closed reg))
-  (let [token (:token reg)]
-    (vswap! (:waiting reg) #(filterv (fn [job] (not (identical? token (:token job)))) %)))
-  (when-let [lane (:observer reg)]
-    (finish-observer! lane (ex-info "Session observer closed" {:type :session-closed}))
-    (when-let [^FutureTask t @(:task lane)] (.cancel t true)))
+(defn retire-forms! [conn id token]
+  (when-let [forms (rpc/withdraw-requests! conn token)]
+    (let [cause (ex-info "Session closed" {:type :session-closed :session-id id})]
+      (doseq [reply forms] (settle! reply cause)))))
+
+(defn- cancel-requests! [{:keys [conn id token closed failure] :as reg}]
+  (when-not (ap/closed? closed)
+    (when-not @failure (retire-forms! conn id token))
+    (a/close! closed))
+  (vswap! (:waiting reg) #(filterv (fn [job] (not (identical? token (:token job)))) %))
   (doseq [job (vals (first (reset-vals! (:jobs reg) {})))]
     (cancel! job)))
 
-(defn- stop! [{:keys [sessions requests observers conn]}]
+(defn- observer-thread? [lane]
+  (identical? (Thread/currentThread) @(:worker lane)))
+
+(defn- cancel-observer! [lane cause]
+  (finish-observer! lane cause)
+  (when-not (observer-thread? lane)
+    (when-let [interrupt @(:interrupt lane)] (interrupt :cancel))))
+
+(def ^:private shutdown-ms 500)
+
+(defn- await-observer-interrupt! [^FutureTask interrupt]
+  (when interrupt
+    (try (.get interrupt shutdown-ms TimeUnit/MILLISECONDS)
+         (catch CancellationException _ nil)
+         (catch ExecutionException e (throw (.getCause e)))
+         (catch TimeoutException _ (log/warn "Observer interruption did not finish before the shutdown deadline"))
+         (catch InterruptedException _ (.interrupt (Thread/currentThread))))))
+
+(defn- release! [reg]
+  (cancel-requests! reg)
+  (when-let [lane (:observer reg)]
+    (cancel-observer! lane (ex-info "Session observer closed" {:type :session-closed}))))
+
+(defn- fail-registration! [{:keys [failure on-failure] :as reg} cause]
+  ;; All callers hold the registry. Fence ordinary reverse work before the
+  ;; terminal cause is observable, including from a public handle on another thread.
+  (when-not @failure
+    (let [forms (rpc/withdraw-requests! (:conn reg) (:token reg))]
+      (when on-failure (on-failure cause))
+      (reset! failure cause)
+      (doseq [reply forms] (settle! reply cause))
+      (release! reg)))
+  @failure)
+
+(defn fail!
+  "Fail only the captured generation when publication cannot continue."
+  [{:keys [sessions]} registration cause]
+  (locking sessions
+    (when (registered? sessions registration)
+      (fail-registration! (get @sessions (:id registration)) cause))))
+
+(defn- stop-requests! [{:keys [sessions requests forms]}]
+  (locking sessions
+    (when-not (.isShutdown ^ThreadPoolExecutor (:executor requests))
+      (doseq [reg (vals @sessions)] (cancel-requests! reg))
+      ;; Discarded handoffs never enter run-job!'s finally. No more admits
+      ;; are possible; the executor, not this set, owns any surviving worker.
+      (doseq [{:keys [^ThreadPoolExecutor executor active]} [requests forms]]
+        (.clear (.getQueue executor))
+        (.shutdown executor)
+        (vreset! active #{})))))
+
+(defn- drain-observer! [{:keys [sessions draining]} {:keys [token observer]}]
+  (when (and observer (not (.isDone ^FutureTask @(:task observer))))
+    (vswap! draining assoc token observer)
+    (a/close! (:queue observer))
+    (a/take! (a/timeout shutdown-ms)
+             (fn [_]
+               (locking sessions
+                 (when-let [lane (get @draining token)]
+                   ;; Self-close has already settled its receipts. Only an
+                   ;; explicit owner close may interrupt the remaining callback.
+                   (when-not (= :closed (:self-release lane))
+                     (vswap! draining dissoc token)
+                     (log/warn "Session event observer did not drain before the shutdown deadline")
+                     (cancel-observer! lane (ex-info "Session event observer drain timed out"
+                                                     {:type :observer-drain-timeout}))))))
+             false)))
+
+(defn- stop! [{:keys [sessions draining conn ^ThreadPoolExecutor observers] :as owner} drain?]
   (locking sessions
     (when-some [regs @sessions]
+      (stop-requests! owner)
       (reset! sessions nil)
       (remove-watch (:state-atom conn) sessions)
-      (doseq [reg (vals regs)] (release! reg))
-      (doseq [^ThreadPoolExecutor executor [requests observers]]
-        (.shutdownNow executor)))))
+      (if drain?
+        (do (doseq [reg (vals regs)] (drain-observer! owner reg))
+            (.shutdown observers))
+        (doseq [lane (keep :observer (vals regs))]
+          (cancel-observer! lane (ex-info "Session observer closed" {:type :session-closed})))))
+    (when-not drain?
+      (doseq [lane (vals @draining)]
+        (cancel-observer! lane (ex-info "Session observer closed" {:type :session-closed})))
+      (vreset! draining {})
+      (.shutdown observers))))
+
+(defn finish-input!
+  "After the last accepted notification, close observer input without waiting for handlers."
+  [owner]
+  (stop! owner true))
+
+(defn cancel-all!
+  "Stop callback admission, cancel active and draining lanes, and do not join workers."
+  [owner]
+  (stop! owner false))
 
 (defn open!
   "Create a bounded broadcast owner. SessionFs and host reverse requests
   belong to their own dispatcher, not the event worker."
-  [conn _client-options]
+  [conn client-open?]
   (let [sessions (atom {})
-        owner {:conn conn :sessions sessions :waiting (volatile! []) :running (volatile! #{})
-               ;; Up to eight assigned successors can await executor handoff
-               ;; while their predecessors finish returning from run-job!.
-               :requests (pool 8 (ArrayBlockingQueue. 8) "copilot-native-request")
-               :observers (pool 16 (SynchronousQueue.) "copilot-native-observer")}
-        lost (a/chan)]
+        lost (a/chan)
+        owner {:conn conn :client-open? client-open? :sessions sessions :lost lost
+               :draining (volatile! {}) :waiting (volatile! [])
+               :requests (lane 8 false "copilot-native-request")
+               :forms (lane 4 true "copilot-native-form")
+               :observers (pool 16 (SynchronousQueue.) "copilot-native-observer")
+               :interrupts (interruption/owner (+ 8 4 16))}]
     ;; The protocol can change its state while holding the reader lock. Signal
     ;; the transition here; never acquire our admission lock from a watch.
-    (a/take! lost (fn [_] (stop! owner)) false)
+    (a/take! lost (fn [_] (stop-requests! owner)) false)
     (add-watch (:state-atom conn) sessions
                (fn [_ _ prev next]
                  (when (and (connected? conn prev) (not (connected? conn next)))
                    (a/close! lost))))
     (when-not (connected? conn @(:state-atom conn))
-      (stop! owner)
+      (stop! owner false)
+      (.shutdown ^ThreadPoolExecutor (:interrupts owner))
       (throw (ex-info "Callback connection is closed" {:type :connection-closed})))
     owner))
 
@@ -153,35 +271,49 @@
     handler))
 
 (defn- observer-lane [handler]
-  (when handler {:handler handler :queue (ArrayBlockingQueue. 64) :pending (atom #{})
-                 :task (atom nil) :terminal (atom nil)}))
+  (when handler {:handler handler :queue (a/chan 64) :pending (atom #{})
+                 :task (atom nil) :worker (volatile! nil) :interrupt (volatile! nil) :terminal (atom nil)}))
 
-(defn- start-observer! [{:keys [sessions observers] :as owner} reg]
-  (when-let [{:keys [handler ^ArrayBlockingQueue queue pending terminal task]} (:observer reg)]
-    (let [run (fn []
+(def ^:private ^:dynamic *observer-delivery* nil)
+
+(defn current-observer-receipt [token]
+  (when (identical? token (first *observer-delivery*)) (second *observer-delivery*)))
+
+(defn- start-observer! [{:keys [conn sessions observers draining interrupts]} {:keys [id token observer]}]
+  (when-let [{:keys [handler queue pending terminal task worker]} observer]
+    (let [notify! (fn [event]
+                    (try (handler event) {:ok nil}
+                         (catch Throwable t
+                           (when (fatal? t) (throw t))
+                           (log/warn "Event observer failed" {:session-id id})
+                           {:error (ex-info "Event observer failed" {:type :observer-failed})})))
+          run (fn []
+                (vreset! worker (Thread/currentThread))
                 (try
                   (loop []
-                    (let [[receipt event] (.take queue)]
-                      (when (and (current? owner reg) (or (nil? receipt) (nil? @terminal)))
-                        (let [outcome (try (handler event) {:ok nil}
-                                           (catch Throwable t
-                                             (when (fatal? t) (throw t))
-                                             (log/warn "Event observer failed" {:session-id (:id reg)})
-                                             {:error (ex-info "Event observer failed" {:type :observer-failed})}))]
-                          (when receipt
+                    (if-let [[receipt event] (a/<!! queue)]
+                      (do
+                        (when-not @terminal
+                          (let [outcome (binding [*observer-delivery* [token receipt]] (notify! event))]
                             (locking sessions
                               (when (contains? @pending receipt)
                                 (swap! pending disj receipt)
-                                (settle! receipt outcome))))))
-                      (when (and receipt (not (ap/closed? (:closed reg)))) (recur))))
+                                (settle! receipt outcome)))))
+                        (recur))
+                      (when (and (not (.isCancelled ^FutureTask @task))
+                                 (= :observer-overflow (-> @terminal :error ex-data :type)))
+                        (notify! @terminal))))
                   (catch InterruptedException _ nil)
                   (finally
                     (locking sessions
-                      (finish-observer! (:observer reg)
-                                        (ex-info "Session event observer stopped" {:type :observer-stopped}))))))
-          t (worker-task run)]
+                      (vreset! worker nil)
+                      (vswap! draining dissoc token)
+                      (finish-observer! observer (ex-info "Session event observer stopped" {:type :observer-stopped}))))))
+          t (worker-task #(scope/invoke conn token :observer run))
+          interrupt (interruption/task interrupts t)]
       (reset! task t)
-      (try (.execute ^ThreadPoolExecutor observers t)
+      (vreset! (:interrupt observer) interrupt)
+      (try (.execute ^ThreadPoolExecutor observers ^Runnable #(try (.run t) (finally (interrupt :finish))))
            (catch RejectedExecutionException _
              (throw (ex-info "No observer workers available" {:type :observer-capacity})))))))
 
@@ -189,13 +321,13 @@
   "Admit callbacks before session.create/resume. The caller must first validate
   session options with the closed create/resume builder; it rejects unimplemented
   callback groups. Keep the returned token, not just the session ID."
-  [{:keys [sessions conn waiting] :as owner} id opts]
+  [{:keys [sessions conn waiting] :as owner} id opts & [retired? on-failure]]
   (let [definitions (get-in opts [:tools :definitions])
         tools (into {} (map (juxt :name tool-handler)) definitions)
-        registration {:id id :token (Object.)}
-        reg (assoc registration :jobs (atom {}) :claims (atom {}) :closed (a/chan) :tools tools
+        registration {:id id :token (or retired? (volatile! false)) :closed (a/chan) :failure (atom nil)}
+        reg (assoc registration :conn conn :jobs (atom {}) :claims (atom {}) :tools tools
                    :waiting waiting
-                   :failure (atom nil) :busy-replies (atom 0)
+                   :on-failure on-failure :busy-replies (atom 0)
                    :permission (get-in opts [:permissions :on-request])
                    :elicitation (get-in opts [:interaction :on-elicitation-request])
                    :oauth (get-in opts [:mcp :on-auth-request])
@@ -214,21 +346,52 @@
       (swap! sessions assoc id reg))
     registration))
 
-(defn unregister! [{:keys [sessions]} {:keys [id token]}]
+(defn drain! [{:keys [sessions] :as owner} {:keys [id] :as registration}]
   (locking sessions
-    (when-let [reg (get @sessions id)]
-      (when (identical? token (:token reg))
+    (when (registered? sessions registration)
+      (let [{:keys [observer] :as reg} (get @sessions id)]
         (swap! sessions dissoc id)
-        (release! reg))))
+        (cancel-requests! reg)
+        (drain-observer! owner (cond-> reg
+                                 (and observer (observer-thread? observer))
+                                 (assoc-in [:observer :self-release] :draining)))))))
+
+(defn- close-observer! [draining token lane]
+  (when lane
+    ;; Self-close stops delivery, but an independent close still owns
+    ;; cancellation until the running callback exits.
+    (if (observer-thread? lane)
+      (vswap! draining assoc token (assoc lane :self-release :closed))
+      (vswap! draining dissoc token))
+    (cancel-observer! lane (ex-info "Session observer closed" {:type :session-closed}))))
+
+(defn close-retired-observer! [{:keys [sessions draining conn]} {:keys [token]}]
+  (await-observer-interrupt!
+   (locking sessions
+     (when-let [lane (get @draining token)]
+       ;; An ordinary acknowledged detach still owes already accepted events.
+       (when (or (:self-release lane) (not (connected? conn @(:state-atom conn))))
+         (close-observer! draining token lane)))))
+  nil)
+
+(defn unregister! [{:keys [sessions draining]} {:keys [id token] :as registration}]
+  (await-observer-interrupt!
+   (locking sessions
+     (let [reg (when (registered? sessions registration) (get @sessions id))]
+       (when reg
+         (swap! sessions dissoc id)
+         (cancel-requests! reg))
+       (close-observer! draining token (or (:observer reg) (get @draining token))))))
   nil)
 
 (defn close!
   "Fence the owner and interrupt its work. An uncooperative handler cannot
   delay teardown indefinitely. Report remaining workers without user data."
-  [{:keys [requests observers] :as owner}]
-  (stop! owner)
-  (doseq [^ThreadPoolExecutor executor [requests observers]]
-    (when-not (.awaitTermination executor 500 TimeUnit/MILLISECONDS)
+  [{:keys [requests forms observers ^ThreadPoolExecutor interrupts] :as owner}]
+  (cancel-all! owner)
+  (.shutdown interrupts)
+  (doseq [^ThreadPoolExecutor executor [(:executor requests) (:executor forms) observers interrupts]]
+    (when-not (.awaitTermination executor shutdown-ms TimeUnit/MILLISECONDS)
       (log/warn "Callback workers did not stop before the shutdown deadline")))
   nil)
 
@@ -238,7 +401,7 @@
     (string? value) value
     (and (map? value) (string? (:text-result-for-llm value))
          (s/valid? ::specs/result-type (:result-type value)))
-    (-> value results/structured-tool-result util/clj->wire util/opaque-json->wire)
+    (results/structured-tool-result value)
     :else (json/write-str (util/opaque-json->wire value))))
 
 (def ^:private response-method
@@ -268,14 +431,19 @@
         :else (throw (ex-info "Callback RPC timed out" {:method method}))))
     (finally (rpc/cancel-request! conn ch))))
 
+(defn- send-session-request [{:keys [conn sessions] :as owner} reg method params check!]
+  (rpc/send-request conn method (assoc params :session-id (:id reg))
+                    {:callback-registry sessions
+                     :check-admission! #(do (require-decision! owner reg)
+                                            (when check! (check!)))}))
+
 (defn- request-rpc!
   "Serialize submission, not response waiting, with unregister. The worker
   owns its pending RPC until response, cancellation or deadline."
-  [{:keys [sessions conn] :as owner} reg cancel method params]
-  (let [ch (locking sessions
-             (when-not (and (current? owner reg) (not (ap/closed? cancel)))
-               (throw (ex-info "Callback is no longer active" {:type :callback-cancelled})))
-             (rpc/send-request conn method (assoc params :session-id (:id reg))))]
+  [{:keys [conn] :as owner} reg cancel method params]
+  (let [ch (send-session-request owner reg method params
+                                 #(when (ap/closed? cancel)
+                                    (throw (ex-info "Callback is no longer active" {:type :callback-cancelled}))))]
     (await-rpc! conn cancel method ch)))
 
 (defn- await-value [value cancel]
@@ -286,18 +454,23 @@
             value)]
     (if (instance? Throwable v) (throw v) v)))
 
-(defn- invalid-params? [error]
+(defn- invalid-params? [response]
   ;; Other server failures may occur after the result was applied.
-  (= -32602 (get-in (ex-data error) [:error :code])))
+  (= -32602 (get-in response [:error :code])))
 
-(defn- permit-manual! [owner reg cancel key agent-id]
-  (locking (:sessions owner)
-    (when (and (current? owner reg) (not (ap/closed? cancel))
-               (= :automatic (first (get @(:claims reg) key))))
-      (swap! (:claims reg) assoc key [:manual agent-id])
-      true)))
+(defn- permit-manual! [owner reg cancel key]
+  ;; Each registration owns its claims. A concurrent completion or abort
+  ;; retires the same key and must win over a late rejection.
+  (let [[before after]
+        (swap-vals! (:claims reg)
+                    (fn [state]
+                      (let [[status agent-id] (get state key)]
+                        (if (and (= :automatic status) (nil? (decision-refusal owner reg)) (not (ap/closed? cancel)))
+                          (assoc state key [:manual agent-id])
+                          state))))]
+    (not (identical? before after))))
 
-(defn- deliver-response! [owner reg cancel [kind request-id :as key] agent-id body]
+(defn- deliver-response! [owner reg cancel [kind request-id :as key] body]
   (let [terminal (if (= :tool kind)
                    (if (contains? body :error) body {:error "Runtime rejected the tool result"})
                    (terminal-response kind))]
@@ -309,20 +482,20 @@
                     (log/warn "Runtime did not accept callback reply" {:kind kind})))
                 (catch clojure.lang.ExceptionInfo e
                   (cond
-                    (not (and terminal (invalid-params? e))) (throw e)
+                    (not (and terminal (invalid-params? (ex-data e)))) (throw e)
                     (not= reply terminal) (deliver! terminal)
                     (#{:oauth :elicitation} kind)
                     (log/warn "Runtime rejected callback cancellation"
                               {:kind kind :session-id (:id reg) :request-id request-id})
-                    (permit-manual! owner reg cancel key agent-id)
+                    (permit-manual! owner reg cancel key)
                     (log/warn "Runtime rejected terminal callback reply; manual response required"
                               {:kind kind :session-id (:id reg) :request-id request-id})))))]
       (deliver! body))))
 
-(defn- invoke-request! [owner reg kind event handler cancel]
+(defn- invoke-request! [{:keys [lost client-open?] :as owner} {:keys [token] :as reg} kind event handler cancel]
   (let [{:keys [data agent-id]} event
         {:keys [request-id permission-request arguments tool-name]} data
-        cancelled? #(ap/closed? cancel)
+        cancelled? #(or (ap/closed? cancel) (ap/closed? lost) @token (not (client-open?)))
         ctx {:session-id (:id reg) :cancelled? cancelled?}
         body (try
                (case kind
@@ -338,7 +511,7 @@
                                           :cancelled? cancelled?)
                              agent-id (assoc :agent-id agent-id)
                              metadata (assoc :available-tools metadata))]
-                   (when-not (ap/closed? cancel)
+                   (when-not (cancelled?)
                      {:result (tool-result (await-value (handler arguments ctx) cancel))}))
                  :permission
                  (let [ctx (merge ctx {:managed-settings-enabled? (:managed? reg)}
@@ -360,56 +533,78 @@
                    (log/warn "Application callback failed" {:kind kind})
                    (failed-response kind "failed"))))]
     (if body
-      (deliver-response! owner reg cancel [kind request-id] agent-id body)
+      (deliver-response! owner reg cancel [kind request-id] body)
       (when (= :permission kind)
-        (permit-manual! owner reg cancel [kind request-id] agent-id)))))
+        (permit-manual! owner reg cancel [kind request-id])))))
 
-(declare pump!)
+(declare pump-lane!)
 
-(defn- run-job! [{:keys [sessions running] :as owner} {:keys [reg k cancel ^FutureTask task] :as job}]
+(def ^:private ^:dynamic *form-handler* nil)
+
+(defn nested-form? [owner]
+  (and *form-handler* (identical? (:forms owner) (:pool *form-handler*))
+       @(:active? *form-handler*)))
+
+(defn- run-job! [{:keys [sessions] :as owner} {:keys [active] :as lane} {:keys [reg k cancel ^FutureTask task] :as job}]
   (try
-    (.run task)
+    (scope/invoke (:conn owner) (:token reg) :decision #(.run task))
     (catch Error fatal
       (locking sessions
-        (reset! (:failure reg) (ex-info "Session callback worker failed" {:type :callback-worker-failed}))
-        (release! reg))
+        (fail-registration! reg (ex-info "Session callback worker failed" {:type :callback-worker-failed})))
       (throw fatal))
     ;; Cancellation is not worker release: an interrupted application may
     ;; keep running. Only release capacity when its actual invocation exits.
     (finally
       (locking sessions
+        ((:interrupt job) :finish)
         (a/close! cancel)
         (swap! (:jobs reg) dissoc k)
-        (vswap! running disj job)
-        (pump! owner)))))
+        (vswap! active disj job)
+        (pump-lane! owner lane)))))
 
-(defn- pump! [{:keys [^ThreadPoolExecutor requests waiting running] :as owner}]
+(defn- start-job! [owner {:keys [active ^ThreadPoolExecutor executor] :as lane} job]
+  (let [job (assoc job :interrupt (interruption/task (:interrupts owner) (:task job)))]
+    (swap! (:jobs (:reg job)) assoc (:k job) job)
+    (vswap! active conj job)
+    (.execute executor ^Runnable #(run-job! owner lane job))))
+
+(defn- session-slot? [active token]
+  (< (count (filter #(identical? token (:token %)) active)) 2))
+
+(defn- pump-lane! [{:keys [waiting] :as owner} {:keys [active limit form?] :as lane}]
   ;; Admissions and exits hold the same lock. Hand off the oldest eligible
   ;; job without relying on a departing pool thread already being idle.
-  (when (and (< (count @running) 8) (seq @waiting))
-    (let [active (frequencies (map :token @running))]
-      (when-let [job (some #(when (< (get active (:token %) 0) 2) %) @waiting)]
-        (vswap! waiting #(filterv (fn [x] (not (identical? job x))) %))
-        (vswap! running conj job)
-        (.execute requests ^Runnable #(run-job! owner job))
-        (recur owner)))))
+  (when (and (< (count @active) limit) (seq @waiting))
+    (when-let [job (some #(when (and (= (:form? %) form?) (session-slot? @active (:token %))) %) @waiting)]
+      (vswap! waiting #(filterv (fn [x] (not (identical? job x))) %))
+      (start-job! owner lane job)
+      (recur owner lane))))
 
-(defn- submit! [{:keys [waiting] :as owner} {:keys [jobs token] :as reg} k work]
-  (when (and (< (count @waiting) 128)
-             (< (count (filter #(identical? token (:token %)) @waiting)) 16))
-    (let [cancel (a/chan)
-          task (worker-task (fn []
-                              (try
-                                (when (and (current? owner reg) (not (ap/closed? cancel)))
-                                  (work cancel))
-                                (catch Exception _
-                                  (when-not (ap/closed? cancel)
-                                    (log/warn "Callback dispatch failed"))))))
-          job {:token token :reg reg :k k :task task :cancel cancel}]
-      (swap! jobs assoc k job)
-      (vswap! waiting conj job)
-      (pump! owner)
-      true)))
+(defn- submit! [{:keys [waiting requests forms] :as owner} {:keys [jobs token] :as reg} k work]
+  (let [form? (= :elicitation (first k))
+        lane (if form? forms requests)
+        active @(:active lane)
+        immediate? (and (< (count active) (:limit lane)) (session-slot? active token))]
+    (when (or immediate? (and (< (count @waiting) 128)
+                              (< (count (filter #(identical? token (:token %)) @waiting)) 16)))
+      (let [cancel (a/chan)
+            task (worker-task (fn []
+                                (try
+                                  (when (and (nil? (decision-refusal owner reg)) (not (ap/closed? cancel)))
+                                    (if form?
+                                      (let [active? (volatile! true)]
+                                        (binding [*form-handler* {:pool (:forms owner) :active? active?}]
+                                          (try (work cancel) (finally (vreset! active? false)))))
+                                      (work cancel)))
+                                  (catch Exception _
+                                    (when-not (ap/closed? cancel)
+                                      (log/warn "Callback dispatch failed"))))))
+            job {:token token :reg reg :k k :task task :cancel cancel :form? form?}]
+        (swap! jobs assoc k job)
+        (if immediate?
+          (start-job! owner lane job)
+          (vswap! waiting conj job))
+        true))))
 
 (def ^:private requested
   {:copilot/external_tool.requested :tool :copilot/permission.requested :permission
@@ -425,10 +620,8 @@
 
 (defn- fail-session! [reg message cause-type]
   (let [cause (ex-info message {:type cause-type :session-id (:id reg)})]
-    (reset! (:failure reg) cause)
     (log/warn message (ex-data cause))
-    (release! reg)
-    (throw cause)))
+    (throw (fail-registration! reg cause))))
 
 (defn- claim! [{:keys [claims] :as reg} k status]
   ;; Evicting an old request ID would let a replay invoke a handler twice.
@@ -443,23 +636,38 @@
       (when (some #(identical? job %) @waiting)
         (vswap! waiting #(filterv (fn [x] (not (identical? job x))) %))
         (swap! (:jobs reg) dissoc key)))
-    (cancel! job)))
+    (cancel! job))
+  nil)
 
-(defn- reject-busy! [conn {:keys [busy-replies closed] :as reg} [kind request-id]]
+(defn- reserve-busy-reply! [{:keys [conn] :as owner} {:keys [busy-replies closed claims] :as reg} [kind request-id :as key]]
+  ;; Reserve under the event registry; prepare and submit after publication
+  ;; releases it, just as for an automatic or manual application decision.
   (when (>= @busy-replies 16)
     (fail-session! reg "Session callback replies saturated" :callback-overflow))
   (let [method (response-method kind)
-        params (assoc (failed-response kind "busy") :session-id (:id reg) :request-id request-id)
-        ch (rpc/send-request conn method params)]
+        params (assoc (failed-response kind "busy") :request-id request-id)]
     (swap! busy-replies inc)
-    (a/go
-      (try
-        (let [[response port] (a/alts! [ch closed (a/timeout 10000)] :priority true)]
-          (when (and (not= port closed) (not (true? (get-in response [:result :success]))))
-            (log/warn "Runtime did not accept busy callback reply" {:kind kind :session-id (:id reg)})))
-        (finally (rpc/cancel-request! conn ch) (swap! busy-replies dec))))))
+    (fn []
+      (when-let [ch (try
+                      (send-session-request owner reg method params
+                                            #(when-not (= :automatic (first (get @claims key)))
+                                               (throw (ex-info "Callback request is no longer pending" {:type :not-pending}))))
+                      (catch Throwable t
+                        (swap! busy-replies dec)
+                        ;; A retired decision is not a publication error. A
+                        ;; failed callback owner, however, retains its cause.
+                        (when-not (= :session-closed (:type (ex-data t)))
+                          (throw t))))]
+        (a/go
+          (try
+            (let [[response port] (a/alts! [ch closed (a/timeout 10000)] :priority true)]
+              (when (and (= port ch) (#{:permission :tool} kind) (invalid-params? response))
+                (permit-manual! owner reg closed key))
+              (when (and (not= port closed) (not (true? (get-in response [:result :success]))))
+                (log/warn "Runtime did not accept busy callback reply" {:kind kind :session-id (:id reg)})))
+            (finally (rpc/cancel-request! conn ch) (swap! busy-replies dec))))))))
 
-(defn- admit! [{:keys [conn] :as owner} reg kind event key]
+(defn- admit! [owner reg kind event key]
   (let [{:keys [agent-id data]} event
         {:keys [tool-name tool-call-id command-name permission-request resolved-by-hook]} data]
     (cond
@@ -476,9 +684,10 @@
         (if (or handler (= kind :command))
           (do (claim! reg key [:automatic agent-id])
               (when-not (submit! owner reg key #(invoke-request! owner reg kind event handler %))
-                (reject-busy! conn reg key)))
+                (reserve-busy-reply! owner reg key)))
           (when (#{:tool :permission} kind)
-            (claim! reg key [:manual agent-id])))))))
+            (claim! reg key [:manual agent-id])
+            nil))))))
 
 (defn- dispatch! [owner reg {:keys [type data agent-id] :as event}]
   (let [request-id (:request-id data)]
@@ -525,18 +734,19 @@
           id (:id registration)
           key [kind (:request-id opts)]
           method (response-method kind)
-          [{:keys [closed claims]} attempt ch]
+          [{:keys [closed claims] :as reg} attempt]
           (locking sessions
-            (when-not (current? owner registration)
-              (throw (ex-info "Session is no longer active" {:type :session-closed})))
+            (require-decision! owner registration)
             (let [{:keys [claims] :as reg} (get @sessions id)
                   [status agent-id] (get @claims key)
                   attempt [:responding agent-id]]
-              (when-let [cause @(:failure reg)] (throw cause))
               (when-not (or (nil? status) (= :manual status))
                 (throw (ex-info "Callback request is not pending" {:type :not-pending})))
               (claim! reg key attempt)
-              [reg attempt (rpc/send-request conn method (assoc body :session-id id :request-id (:request-id opts)))]))]
+              [reg attempt]))
+          ch (send-session-request owner reg method (assoc body :request-id (:request-id opts))
+                                   #(when-not (identical? attempt (get @claims key))
+                                      (throw (ex-info "Callback request is no longer pending" {:type :not-pending}))))]
       (a/go
         (let [outcome (try
                         (let [[response port] (a/alts! [ch closed (a/timeout 10000)] :priority true)]
@@ -546,7 +756,8 @@
                                             (throw (ex-info "Runtime did not accept the pending request response"
                                                             {:type :request-not-handled :method method})))
                                           {:ok ack})
-                            (= port closed) {:error (ex-info "Session is no longer active" {:type :session-closed})}
+                            (= port closed) {:error (or @(:failure reg)
+                                                        (ex-info "Session is no longer active" {:type :session-closed}))}
                             :else {:error (ex-info "Callback RPC timed out" {:method method})}))
                         (catch Exception e {:error e})
                         (finally (rpc/cancel-request! conn ch)))]
@@ -554,18 +765,18 @@
           ;; A replacement session has a different claims atom.
           (swap! claims (fn [state]
                           (if (identical? attempt (get state key))
-                            (assoc state key (if (invalid-params? (:error outcome))
+                            (assoc state key (if (invalid-params? (ex-data (:error outcome)))
                                                [:manual (second attempt)] [:retired]))
                             state)))
           outcome)))
     (catch Exception e (a/go {:error e}))))
 
-(defn- observe! [reg {:keys [^ArrayBlockingQueue queue pending terminal] :as lane} event]
+(defn- observe! [reg {:keys [queue pending terminal] :as lane} event]
   (if-let [outcome @terminal]
     (settle! (a/promise-chan) outcome)
     (let [receipt (a/promise-chan)]
       (swap! pending conj receipt)
-      (when-not (.offer queue [receipt event])
+      (when-not (a/offer! queue [receipt event])
         (let [cause (ex-info "Session event observer overflow"
                              {:type :observer-overflow :session-id (:id reg) :event-id (:id event)})]
           (log/warn "Disabling slow session event observer" (ex-data cause))
@@ -577,12 +788,15 @@
   A receipt delivers {:ok nil} after the synchronous observer returns, or
   {:error cause} on overflow, failure or teardown. Pass it to turn/publish!;
   never wait here. Observer overflow does not close event subscriptions.
-  A session callback failure throws for the router's session-local turn/close!."
-  [{:keys [sessions] :as owner} registration event]
-  (locking sessions
-    (when (current? owner registration)
-      (let [reg (get @sessions (:id registration))]
-        (when-let [cause @(:failure reg)] (throw cause))
-        (dispatch! owner reg event)
-        (when-let [lane (:observer reg)]
-          (observe! reg lane event))))))
+  A session callback failure closes only its registered turn state."
+  [{:keys [sessions client-open?] :as owner} registration event]
+  (let [[send-busy! receipt]
+        (locking sessions
+          (when (and (client-open?) (registered? sessions registration))
+            (let [reg (get @sessions (:id registration))]
+              [(let [reason (decision-refusal owner reg)]
+                 (cond (nil? reason) (dispatch! owner reg event)
+                       (not= reason ::retired) (throw reason)))
+               (when-let [lane (:observer reg)] (observe! reg lane event))])))]
+    (when send-busy! (send-busy!))
+    receipt))

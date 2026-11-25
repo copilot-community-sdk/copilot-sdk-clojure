@@ -405,6 +405,8 @@
     nil)},
   github.copilot-sdk/with-client
   {:kind :macro, :arglists ([[binding options] & body])},
+  github.copilot-sdk/with-resumed-session
+  {:kind :macro, :arglists ([[binding client id options] & body])},
   github.copilot-sdk/with-session
   {:kind :macro, :arglists ([[binding client options] & body])},
   github.copilot-sdk.instrument/instrument-all!

@@ -1,10 +1,13 @@
 (ns github.copilot-sdk.native-reverse-test
   (:require [clojure.core.async :as a]
+            [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing]]
+            [clojure.walk :as walk]
             [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.native-fs :as fs]
             [github.copilot-sdk.protocol :as protocol]
-            [github.copilot-sdk.reverse :as reverse])
+            [github.copilot-sdk.reverse :as reverse]
+            [github.copilot-sdk.util :as util])
   (:import [java.time Instant]
            [java.util.concurrent FutureTask ThreadPoolExecutor TimeUnit]))
 
@@ -23,7 +26,7 @@
                                  #(swap! calls conj [% (Thread/currentThread)]))
             run #(request! "uiThread.run" {:actionId %})]
         (try
-          (is (= (:result (run 4294967295)) {}))
+          (is (= (select-keys (run 4294967295) [:result :error]) {:result nil}))
           (is (= @calls [[4294967295 target-thread]]))
           (is (thrown? clojure.lang.ExceptionInfo (@next-action)))
           (is (= (get-in (run -1) [:error :code]) -32602))
@@ -42,31 +45,17 @@
            {:code "ENOENT" :message "missing"}))
     (is (= (:code (read-error (fn [p] (throw (java.nio.file.NoSuchFileException. p))) "missing")) "ENOENT"))))
 
-(deftest factory-lifecycle-guard-is-limited-to-its-owner-and-thread
-  (peer/with-peer {}
-    (fn [conn _]
-      (let [owner (reverse/open! conn {:session-fs {:initial-cwd "/v" :session-state-path "/s" :conventions "posix"}})
-            seen (atom nil)
-            factory (fn [_]
-                      (reset! seen [(reverse/assert-lifecycle-allowed! (Object.))
-                                    (deref (future (reverse/assert-lifecycle-allowed! owner)) 3000 :timeout)])
-                      (reverse/assert-lifecycle-allowed! owner))]
-        (try
-          (is (= (try (reverse/register! owner "s" nil {:state {:create-session-fs-provider factory}})
-                      (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))
-                 :session-fs-factory-reentry))
-          (is (= @seen [nil nil]))
-          (is (nil? (reverse/assert-lifecycle-allowed! owner)))
-          (finally (reverse/close! owner)))))))
-
 (defn- with-session [opts f]
   (peer/with-peer {}
     (fn [conn request!]
       (let [owner (reverse/open! conn {})]
         (try
           (let [reg (reverse/register! owner "s" nil opts)]
+            (reverse/confirm-open! reg)
             (f owner reg conn (fn [method params] (request! method (assoc params :sessionId "s")))))
           (finally (reverse/close! owner)))))))
+
+(s/def ::opaque-units nat-int?)
 
 (deftest framed-hooks
   (let [seen (atom nil)
@@ -77,7 +66,9 @@
                   {:permission-decision :deny :modified-args opaque})]
     (with-session {:hooks {:handlers {:on-pre-tool-use handler
                                       :on-pre-mcp-tool-call (fn [input _] {:meta-to-use (:_meta input)})
-                                      :on-post-tool-use (fn [{:keys [tool-result]} _] {:modified-result tool-result})
+                                      :on-post-tool-use (fn [{:keys [tool-result]} _]
+                                                          (reset! seen tool-result)
+                                                          {:modified-result tool-result})
                                       :on-session-end (fn [input _] {:session-summary (:error input)})
                                       :on-agent-stop (fn [& _] (throw (Exception. "sensitive")))}}}
       (fn [_ _ _ request!]
@@ -91,16 +82,79 @@
           (is (= (hook "preMcpToolCall" {:_meta opaque}) {:output {:metaToUse received}}))
           (is (= (hook "preMcpToolCall" {:_meta nil}) {:output {:metaToUse nil}}))
           (let [metadata {"vendorKey" 1 "vendor_key" 2 "provider/Asset_ID" [false]}
-                result {:textResultForLlm "ok" :resultType "success"
+                result {:textResultForLlm "ok" :resultType "success" "result-type" "vendor spelling"
+                        (subs (str ::opaque-units) 1) "tokens"
+                        :Custom_Metrics {"lab/count" 2 "model/count" 7}
                         :binaryResultsForLlm [{:type "image" :data "AQ==" :mimeType "image/png"
-                                               :metadata metadata}
+                                               "mime-type" "vendor spelling" :Vendor_Tag {"nested_key" true} :metadata metadata}
                                               {:type "resource" :data "Ag==" :mimeType "application/octet-stream"}]}]
             (is (= (hook "postToolUse" {:toolResult result})
-                   {:output {:modifiedResult (assoc-in result [:binaryResultsForLlm 0 :metadata]
-                                                       (update-keys metadata keyword))}})))
+                   {:output {:modifiedResult (walk/keywordize-keys result)}}))
+            (is (= (get @seen :Custom_Metrics) {:lab/count 2 :model/count 7}))
+            (is (= [(:result-type @seen) (get @seen "result-type")]
+                   [:success "vendor spelling"])))
           (is (= (hook "sessionEnd" {:error {:message "failed"}}) {:output {:sessionSummary "failed"}}))
           (doseq [type ["agentStop" "unspecified" "sessionStart"]]
             (is (= (hook type {}) {}))))))))
+
+(deftest callback-fallback-applies-only-to-ordinary-application-exceptions
+  (let [failure (atom (java.util.concurrent.TimeoutException. "application deadline"))
+        fail (fn [& _] (throw @failure))]
+    (with-session {:hooks {:handlers {:on-agent-stop fail}}
+                   :system-message {:sections {:safety {:action fail}}}}
+      (fn [_ _ _ request!]
+        (let [hook #(request! "hooks.invoke" {:hookType "agentStop" :input {}})
+              sections {:safety {:content "original"}}
+              transform #(request! "systemMessage.transform" {:sections sections})]
+          (is (= (:result (hook)) {}))
+          (is (= (:result (transform)) {:sections sections}))
+          (reset! failure (LinkageError. "broken callback"))
+          (is (= (get-in (hook) [:error :code]) -32603))
+          (is (= (get-in (transform) [:error :code]) -32603)))))))
+
+(deftest an-expired-transform-cannot-publish-a-partial-or-late-result
+  (let [until (java.util.concurrent.atomic.AtomicLong.)
+        calls (atom [])
+        transform (fn [content]
+                    (swap! calls conj content)
+                    (.set until (dec (System/nanoTime)))
+                    "changed")]
+    (with-session {:system-message {:sections {:safety {:action transform} :tone {:action transform}}}}
+      (fn [_ reg _ request!]
+        ;; Finish the job before the protocol worker calls FutureTask.get with
+        ;; an expired deadline. get can still succeed when the task is done.
+        (add-watch (:jobs reg) ::completed
+                   (fn [_ _ _ jobs]
+                     (when-let [job (ffirst jobs)]
+                       (try (.get ^FutureTask job 3 TimeUnit/SECONDS)
+                            (catch java.util.concurrent.ExecutionException _)))))
+        (try
+          (with-redefs-fn {#'reverse/deadline (fn [_] (.set until (+ (System/nanoTime) 60000000000)) until)}
+            #(doseq [sections [{:safety {:content "only"}}
+                               {:safety {:content "first"} :tone {:content "second"}}]]
+               (is (= (:error (request! "systemMessage.transform" {:sections sections}))
+                      {:code -32000 :message "Reverse callback timed out"}))))
+          (is (= @calls ["only" "first"]))
+          (finally (remove-watch (:jobs reg) ::completed)))))))
+
+(deftest a-completed-shell-answer-does-not-depend-on-the-task-returning
+  (let [entered (promise) release (promise) attached (promise)
+        accepted {:action :accept :value "yes"}]
+    (with-session {:interaction {:on-shell-authentication-request (fn [_ _] (deliver entered true) @release accepted)}}
+      (fn [_ reg _ request!]
+        (add-watch (:jobs reg) ::publishing
+                   (fn [_ _ _ jobs]
+                     (when-let [[result _] (first (vals jobs))] (deliver attached result))))
+        (try
+          (let [answer (future (request! "shellAuthentication.request"
+                                         {:requestId "confirm" :program "fixture" :prompt "Continue?" :inputKind "confirm"}))]
+            (is (true? (deref entered 3000 false)))
+            ;; Reproduce publication before the FutureTask returns without
+            ;; relying on the scheduler to pause between the two instructions.
+            (let [^java.util.concurrent.CompletableFuture result (deref attached 3000 nil)]
+              (is (.complete result {:result accepted})))
+            (is (= (:result (deref answer 3000 {})) {:action "accept" :value "yes"})))
+          (finally (remove-watch (:jobs reg) ::publishing) (deliver release true)))))))
 
 (deftest exact-shell-cancellation
   (let [entered (promise)
@@ -111,8 +165,10 @@
       (fn [owner reg conn _]
         (let [{:keys [request-handler request-preparer]} (:connection @(:state-atom conn))
               params {:session-id "s" :request-id "r" :program "ssh" :prompt "key" :input-kind "secret"}
-              prepare #(-> (request-preparer %1 %2) :params)
-              run #(a/<!! (request-handler %1 %2))
+              prepare request-preparer
+              run (fn [method {:keys [params release!]}]
+                    (try (a/<!! (request-handler method params))
+                         (finally (when release! (release!)))))
               ask "shellAuthentication.request"
               cancel "shellAuthentication.cancel"
               first-call (future (run ask (prepare ask params)))]
@@ -133,6 +189,136 @@
                                                                 (constantly {:action :accept :value "wrong"})}})
                 (is (= (:result (run ask old)) {:action "cancel"}))))
             (finally (future-cancel first-call))))))))
+
+(deftest shell-cancel-remains-effective-through-reply-conversion
+  (let [{:keys [conn ->client <-client]} (peer/open-connection {:request-handler-threads 2})
+        owner (reverse/open! conn {})
+        converted (promise)
+        resume (promise)
+        cancelled (promise)
+        calls (atom 0)
+        convert util/clj->wire
+        ask "shellAuthentication.request"
+        cancel "shellAuthentication.cancel"
+        send! (fn [id method]
+                (peer/write-framed! ->client {:jsonrpc "2.0" :id id :method method
+                                              :params {:sessionId "s" :requestId "same" :inputKind "confirm"
+                                                       :program "demo" :prompt "Continue?"}}))
+        read! #(let [f (future (peer/read-framed <-client))]
+                 (try (deref f 3000 ::timeout) (finally (future-cancel f))))]
+    (try
+      (reverse/register! owner "s" nil
+                         {:interaction {:on-shell-authentication-request
+                                        (fn [_ {:keys [cancel-ch]}]
+                                          (when (= 1 (swap! calls inc))
+                                            (a/take! cancel-ch (fn [_] (deliver cancelled true))))
+                                          {:action :accept :value "yes"})}})
+      (with-redefs [util/clj->wire (fn [v]
+                                     (when (and (= (:action v) "accept") (not (realized? converted)))
+                                       (deliver converted true)
+                                       (deref resume 5000 nil))
+                                     (convert v))]
+        (send! "pending" ask)
+        (is (= true (deref converted 3000 nil)))
+        (send! "cancel" cancel)
+        (is (= (select-keys (read!) [:id :result]) {:id "cancel" :result {}}))
+        (is (= true (deref cancelled 1000 false)))
+        (send! "duplicate" ask)
+        (is (= (:result (read!)) {:action "cancel"}))
+        (deliver resume true)
+        (is (= (select-keys (read!) [:id :result]) {:id "pending" :result {:action "cancel"}})))
+      (send! "reuse" ask)
+      (is (= (:result (read!)) {:action "accept" :value "yes"}))
+      (is (= @calls 2))
+      (finally
+        (deliver resume true)
+        (reverse/close! owner)
+        (protocol/disconnect conn)
+        (.close ^java.io.OutputStream ->client)
+        (.close ^java.io.InputStream <-client)))))
+
+(deftest shell-reply-offer-cannot-be-overtaken-by-a-later-cancel
+  (let [{:keys [conn ->client <-client]} (peer/open-connection {:request-handler-threads 2})
+        owner (reverse/open! conn {})
+        offering (promise) cancel-read (promise) cancel-offer (promise) resume (promise)
+        offer a/offer!
+        convert util/wire->clj
+        send! (fn [id method p]
+                (peer/write-framed! ->client {:jsonrpc "2.0" :id id :method method
+                                              :params (assoc p :sessionId "s" :requestId "r")}))]
+    (try
+      (reverse/register! owner "s" nil {:interaction {:on-shell-authentication-request
+                                                      (constantly {:action :accept :value "ok"})}})
+      (with-redefs [util/wire->clj (fn [m]
+                                     (when (= (:method m) "shellAuthentication.cancel") (deliver cancel-read true))
+                                     (convert m))
+                    a/offer! (fn [ch v]
+                               (when (and (identical? ch (:outgoing-ch conn)) (= "prompt" (:id v)))
+                                 (deliver offering true)
+                                 (deref resume 5000 nil))
+                               (let [sent (offer ch v)]
+                                 (when (and sent (= "cancel" (:id v))) (deliver cancel-offer true))
+                                 sent))]
+        (send! "prompt" "shellAuthentication.request" {:inputKind "confirm" :program "demo" :prompt "Continue?"})
+        (is (= true (deref offering 3000 nil)))
+        (send! "cancel" "shellAuthentication.cancel" {})
+        (is (= true (deref cancel-read 3000 nil)))
+        ;; Wait until the actual reader contends with the worker at the offer,
+        ;; or (regression) until it lets the cancel ACK onto the queue first.
+        (let [reader (:read-thread conn)
+              until (+ (System/nanoTime) (.toNanos TimeUnit/SECONDS 3))]
+          (loop []
+            (when-not (or (= (.getState ^Thread reader) Thread$State/BLOCKED)
+                          (realized? cancel-offer) (>= (System/nanoTime) until))
+              (Thread/yield)
+              (recur)))
+          (is (or (= (.getState ^Thread reader) Thread$State/BLOCKED) (realized? cancel-offer))))
+        (deliver resume true)
+        (let [frames (future (mapv (fn [_] (select-keys (peer/read-framed <-client) [:id :result])) (range 2)))]
+          (try
+            (is (= (deref frames 3000 nil) [{:id "prompt" :result {:action "accept" :value "ok"}}
+                                            {:id "cancel" :result {}}]))
+            (finally (future-cancel frames)))))
+      (finally
+        (deliver resume true)
+        (reverse/close! owner)
+        (protocol/disconnect conn)
+        (.close ^java.io.OutputStream ->client)
+        (.close ^java.io.InputStream <-client)))))
+
+(deftest disconnect-releases-a-shell-prompt-discarded-from-the-protocol-queue
+  (let [{:keys [conn ->client <-client]} (peer/open-connection {:request-handler-threads 1 :request-handler-queue-size 1})
+        owner (reverse/open! conn {})
+        entered (promise)
+        proceed (promise)
+        calls (atom [])
+        wire (fn [id method params] (peer/write-framed! ->client {:jsonrpc "2.0" :id id :method method
+                                                                  :params (assoc params :sessionId "s")}))]
+    (try
+      (let [reg (reverse/register! owner "s" nil
+                                   {:hooks {:handlers {:on-agent-stop (fn [& _]
+                                                                        (deliver entered true)
+                                                                        (deref proceed 5000 nil)
+                                                                        nil)}}
+                                    :interaction {:on-shell-authentication-request #(swap! calls conj [%1 %2])}})]
+        (wire "running" "hooks.invoke" {:hookType "agentStop" :input {}})
+        (is (= true (deref entered 3000 nil)))
+        (wire "queued" "shellAuthentication.request" {:requestId "r" :program "demo" :inputKind "confirm" :prompt "Continue?"})
+        (wire "excess" "unknown" {})
+        (let [rejected (deref (future (peer/read-framed <-client)) 3000 nil)]
+          (is (= [(:id rejected) (get-in rejected [:error :data :code])] ["excess" "request_handler_saturated"])))
+        (is (contains? @(:prompts reg) "r"))
+        (is (zero? (.availablePermits ^java.util.concurrent.Semaphore (:human-slots owner))))
+        (protocol/disconnect conn)
+        (is (= (.availablePermits ^java.util.concurrent.Semaphore (:human-slots owner)) 1))
+        (is (empty? @(:prompts reg)))
+        (is (empty? @calls)))
+      (finally
+        (deliver proceed true)
+        (reverse/close! owner)
+        (protocol/disconnect conn)
+        (.close ^java.io.OutputStream ->client)
+        (.close ^java.io.InputStream <-client)))))
 
 (deftest all-hook-types
   (let [metadata {:Vendor_Key false :vendorKey 2 :provider/Asset_ID [{:sourceKey true}]}
@@ -278,16 +464,61 @@
             p {:session-id "s" :summary "plan" :recommended-action "exit" :actions ["exit"]}
             {:keys [request-preparer request-handler]} (:connection @(:state-atom conn))
             prepare #(request-preparer method p)
-            run #(a/<!! (request-handler method (:params %)))]
+            run (fn [{:keys [params release!]}]
+                  (try (a/<!! (request-handler method params))
+                       (finally (when release! (release!)))))]
         (try
           (reverse/register! owner "s" nil {:interaction {:on-exit-plan-mode-request handler}})
           (let [first (prepare) surplus (prepare)]
             ;; A rejected protocol submission gives back its admission. A request
             ;; already refused must not claim a later opening or run a callback.
-            ((:on-reject first))
+            ((:release! first))
             (is (= (run surplus) {:result {:approved false}}))
             (is (= (run (prepare)) {:result {:approved true}})))
           (finally (reverse/close! owner)))))))
+
+(deftest a-visible-non-shell-answer-frees-its-slot-for-the-next-question
+  (let [{:keys [conn ->client <-client]} (peer/open-connection {})
+        owner (reverse/open! conn {})
+        occupied (java.util.concurrent.CountDownLatch. 3)
+        release-questions (promise)
+        answered (promise)
+        release-worker (promise)
+        calls (atom [])
+        offer a/offer!
+        ask! (fn [id question]
+               (peer/write-framed! ->client {:jsonrpc "2.0" :id id :method "userInput.request"
+                                             :params {:sessionId "s" :question question}}))
+        read! #(deref (future (peer/read-framed <-client)) 3000 nil)]
+    (try
+      (reverse/register! owner "s" nil
+                         {:interaction {:on-user-input-request
+                                        (fn [{:keys [question]} _]
+                                          (if (= question "hold")
+                                            (do (.countDown occupied) (deref release-questions 5000 nil))
+                                            (swap! calls conj question))
+                                          {:answer question :was-freeform? true})}})
+      (with-redefs [a/offer! (fn [ch msg]
+                               (let [sent (offer ch msg)]
+                                 (when (and sent (identical? ch (:outgoing-ch conn)) (= (:id msg) "first"))
+                                   (deliver answered true)
+                                   (deref release-worker 5000 nil))
+                                 sent))]
+        (dotimes [i 3] (ask! (str i) "hold"))
+        (is (.await occupied 3 TimeUnit/SECONDS))
+        (ask! "first" "first")
+        (is (true? (deref answered 3000 nil)))
+        (is (= (get-in (read!) [:result :answer]) "first"))
+        (ask! "next" "next")
+        (is (= (get-in (read!) [:result :answer]) "next"))
+        (is (= @calls ["first" "next"])))
+      (finally
+        (deliver release-worker true)
+        (deliver release-questions true)
+        (reverse/close! owner)
+        (protocol/disconnect conn)
+        (.close ^java.io.OutputStream ->client)
+        (.close ^java.io.InputStream <-client)))))
 
 (deftest admitted-prompt-survives-worker-handoff
   (peer/with-peer {:request-handler-threads 2}
@@ -308,7 +539,8 @@
           (is (= (.get ^FutureTask finishing 3 TimeUnit/SECONDS) :complete))
           (is (= (deref at-handoff 3000 nil) true))
           (let [prepared (request-preparer method p)
-                response (future (a/<!! (request-handler method (:params prepared))))
+                response (future (try (a/<!! (request-handler method (:params prepared)))
+                                      (finally ((:release! prepared)))))
                 ;; Observe enqueue or rejection without becoming a competing
                 ;; consumer on the executor's queue.
                 until (+ (System/nanoTime) (.toNanos TimeUnit/SECONDS 3))]
@@ -329,7 +561,9 @@
             method "shellAuthentication.request"
             p {:session-id "s" :request-id "secret" :program "ssh" :prompt "key" :input-kind "secret"}
             {:keys [request-preparer request-handler]} (:connection @(:state-atom conn))
-            run (fn [m preparation] (a/<!! (request-handler m (:params preparation))))]
+            run (fn [m {:keys [params release!]}]
+                  (try (a/<!! (request-handler m params))
+                       (finally (when release! (release!)))))]
         (try
           (reverse/register! owner "s" nil
                              {:interaction {:on-shell-authentication-request
@@ -348,7 +582,7 @@
             (let [m "autoModeSwitch.request"
                   surplus (request-preparer m {:session-id "s"})]
               ;; Do not queue work behind a cancelled handler that still owns the worker.
-              (is (nil? (:on-reject surplus)))
+              (is (nil? (:release! surplus)))
               (is (= (run m surplus) {:result {:response "no"}}))
               ;; A task behind the cancelled handler proves its run() has exited.
               (let [drained (.submit ^ThreadPoolExecutor (:human-pool owner) ^Runnable (fn []))]
