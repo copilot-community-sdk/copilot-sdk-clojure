@@ -189,6 +189,8 @@ All notable changes to this project will be documented in this file. This change
   A later close from another thread can still interrupt it until it returns.
   A nonfatal application stream-close exception during interruption is logged
   without replacing a successful release or the original opening error.
+  A fatal error during interruption reaches the worker's uncaught-exception
+  handler even when no caller waits for cancellation to finish.
 - An accepted shell confirmation is no longer replaced with cancellation
   just because its handler's worker has not returned. A real cancellation
   received before reply submission still wins. A cancelled prompt now

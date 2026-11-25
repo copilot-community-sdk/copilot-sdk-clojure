@@ -841,7 +841,9 @@ not the other subscribers. A callback exception is logged; it does not turn
 a successful runtime response into a failed turn. If application I/O throws
 a nonfatal exception during interruption, the SDK logs its class without
 including the application's exception message. That exception does not turn
-a confirmed detach or shutdown into a failure. Keep blocking decisions out
+a confirmed detach or shutdown into a failure. A fatal error during
+interruption reaches the worker's uncaught-exception handler even if no
+caller waits for it. Keep blocking decisions out
 of event observers.
 
 If the connection ends unexpectedly, the SDK stops accepting decisions and

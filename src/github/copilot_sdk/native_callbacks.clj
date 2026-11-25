@@ -60,7 +60,7 @@
             [github.copilot-sdk.protocol :as rpc]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util])
-  (:import [java.util.concurrent ArrayBlockingQueue Callable CancellationException ExecutionException FutureTask SynchronousQueue
+  (:import [java.util.concurrent ArrayBlockingQueue CancellationException ExecutionException FutureTask SynchronousQueue
             RejectedExecutionException ThreadFactory ThreadPoolExecutor TimeUnit TimeoutException]))
 
 (defn- pool [size queue label]
@@ -100,15 +100,6 @@
              reason))))
 
 (defn- fatal? [t] (and (instance? Error t) (not (instance? AssertionError t))))
-
-(defn- worker-task [f]
-  ;; FutureTask captures Throwable. Do not turn a fatal VM error into an
-  ;; invisible, unobserved future just because cancellation needs a handle.
-  (proxy [FutureTask] [(cast Callable f)]
-    (done []
-      (when-not (.isCancelled ^FutureTask this)
-        (try (.get ^FutureTask this)
-             (catch ExecutionException e (throw (.getCause e))))))))
 
 (defn- cancel! [{:keys [interrupt cancel]}]
   (a/close! cancel)
@@ -309,7 +300,7 @@
                       (vreset! worker nil)
                       (vswap! draining dissoc token)
                       (finish-observer! observer (ex-info "Session event observer stopped" {:type :observer-stopped}))))))
-          t (worker-task #(scope/invoke conn token :observer run))
+          t (interruption/worker-task #(scope/invoke conn token :observer run))
           interrupt (interruption/task interrupts t)]
       (reset! task t)
       (vreset! (:interrupt observer) interrupt)
@@ -588,17 +579,18 @@
     (when (or immediate? (and (< (count @waiting) 128)
                               (< (count (filter #(identical? token (:token %)) @waiting)) 16)))
       (let [cancel (a/chan)
-            task (worker-task (fn []
-                                (try
-                                  (when (and (nil? (decision-refusal owner reg)) (not (ap/closed? cancel)))
-                                    (if form?
-                                      (let [active? (volatile! true)]
-                                        (binding [*form-handler* {:pool (:forms owner) :active? active?}]
-                                          (try (work cancel) (finally (vreset! active? false)))))
-                                      (work cancel)))
-                                  (catch Exception _
-                                    (when-not (ap/closed? cancel)
-                                      (log/warn "Callback dispatch failed"))))))
+            task (interruption/worker-task
+                  (fn []
+                    (try
+                      (when (and (nil? (decision-refusal owner reg)) (not (ap/closed? cancel)))
+                        (if form?
+                          (let [active? (volatile! true)]
+                            (binding [*form-handler* {:pool (:forms owner) :active? active?}]
+                              (try (work cancel) (finally (vreset! active? false)))))
+                          (work cancel)))
+                      (catch Exception _
+                        (when-not (ap/closed? cancel)
+                          (log/warn "Callback dispatch failed"))))))
             job {:token token :reg reg :k k :task task :cancel cancel :form? form?}]
         (swap! jobs assoc k job)
         (if immediate?

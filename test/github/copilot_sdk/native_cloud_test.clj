@@ -1589,6 +1589,29 @@
                 (is (= (some-> v :error ex-data :type) :provider-timeout))))
             (finally (.complete release true))))))))
 
+(deftest unobserved-provider-interruption-reports-a-fatal-stream-error
+  (let [reading (promise) uncaught (promise) release (java.util.concurrent.CompletableFuture.)
+        failure (LinkageError. "Fixture stream close failed")
+        stream (proxy [java.io.InputStream] []
+                 (read ([_ _ _] (deliver reading true) (.join release) -1))
+                 (close []
+                   (.setUncaughtExceptionHandler (Thread/currentThread)
+                                                 (reify Thread$UncaughtExceptionHandler
+                                                   (uncaughtException [_ _ t] (deliver uncaught t))))
+                   (throw failure)))
+        list! (fn []
+                (with-open [ch (java.nio.channels.Channels/newChannel stream)]
+                  (.read ch (java.nio.ByteBuffer/allocate 1)))
+                [])]
+    (with-runtime {:models {:on-list list!}}
+      (fn [c _ _ _]
+        (try
+          (sdk/list-models c)
+          (bounded reading)
+          (sdk/force-close!! c)
+          (is (identical? failure (deref uncaught 3000 nil)))
+          (finally (.complete release true)))))))
+
 (deftest session-callback-workers-do-not-inherit-an-openers-context
   (let [context (InheritableThreadLocal.)]
     (with-runtime fs-options
