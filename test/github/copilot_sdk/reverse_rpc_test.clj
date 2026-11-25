@@ -188,7 +188,8 @@
               (is (= 2 (get-in msg [:error :data :maxConcurrency])))
               (is (= 2 (get-in msg [:error :data :queueSize]))))))
         (is (= 1 (:rejected-requests (connection-stats conn))))
-        (is (= 1 @released-count))
+        (is (wait-for #(= 1 @released-count) 3000)
+            "the rejected request must release its reservation before the accepted handlers unblock")
         (testing "accepted requests still complete once handlers unblock"
           (.countDown release)
           (let [responses (collect-by-id! <-client 4 5000)]
