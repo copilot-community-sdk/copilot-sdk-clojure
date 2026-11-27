@@ -3,8 +3,12 @@
             [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [clojure.walk :as walk]
+            [github.copilot-sdk.callback-results :as results]
+            [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.native-callbacks :as cb]
-            [github.copilot-sdk.protocol :as rpc])
+            [github.copilot-sdk.protocol :as rpc]
+            [github.copilot-sdk.turn :as turn])
   (:import [java.io ByteArrayOutputStream OutputStream PipedInputStream PipedOutputStream]
            [java.nio.charset StandardCharsets]
            [java.util.concurrent CountDownLatch ThreadPoolExecutor TimeUnit]))
@@ -88,8 +92,8 @@
         (cb/publish! owner reg perm)
         (let [[req ctx] (take!! calls)]
           (is (= req {:kind "read"}))
-          (is (= (select-keys ctx [:session-id :managed-settings-enabled? :prompt-request])
-                 {:session-id "s" :managed-settings-enabled? true :prompt-request {:kind "read"}})))
+          (is (= (select-keys ctx [:session-id :request-id :managed-settings-enabled? :prompt-request])
+                 {:session-id "s" :request-id "p" :managed-settings-enabled? true :prompt-request {:kind "read"}})))
         (is (= ["session.permissions.handlePendingPermissionRequest"
                 {:session-id "s" :request-id "p" :result {:kind "reject" :feedback "No"}}]
                (take!! replies)))
@@ -122,6 +126,29 @@
                     {:session-id "s" :request-id id :result {:kind expected}}]
                    (take!! replies))))
           (await-slot-release! owner reg))))))
+
+(deftest permission-choice-ids-reach-the-owning-runtime
+  (with-peer
+    (fn [_ _ owner replies]
+      (let [kinds [:approve-once :approve-for-session :approved :user-not-available :denied-interactively-by-user]
+            option "Host/Choice_A"
+            decision (fn [kind] {:kind kind :selected-option-id option})
+            automatic (cb/register! owner "automatic"
+                                    {:permissions {:on-request (fn [_ ctx] (decision (keyword (:request-id ctx))))}})
+            manual (cb/register! owner "manual" {})]
+        (doseq [reg [automatic manual] kind kinds]
+          (let [id (name kind)]
+            (cb/publish! owner reg (permission-event id))
+            (if (identical? reg automatic)
+              (await-slot-release! owner reg)
+              (is (= (take!! (cb/respond! owner reg :permission {:request-id id :result (decision kind)}))
+                     {:ok {:success true}})))
+            (is (= (take!! replies)
+                   ["session.permissions.handlePendingPermissionRequest"
+                    {:session-id (:id reg) :request-id id :result {:kind id :selected-option-id option}}]))))
+        (doseq [invalid [{:kind :approve-once :selected-option-id nil}
+                         {:kind :reject :selected-option-id option}]]
+          (is (:error (take!! (cb/respond! owner manual :permission {:request-id "bad" :result invalid})))))))))
 
 (deftest rejected-permission-decisions-fail-closed-without-repeating-the-handler
   (with-peer
@@ -238,29 +265,40 @@
     (try
       (let [reg (cb/register!
                  owner "s"
-                 {:interaction {:on-elicitation-request (fn [_] {:action :accept
+                 {:permissions {:on-request (fn [_ _] {:kind :approve-once :selected-option-id "allow-once"})}
+                  :interaction {:on-elicitation-request (fn [_] {:action :accept
                                                                  :content {"Row_ID" ["abc"] :Field-X false}})}
                   :tools {:definitions
                           [{:name "lookup"
                             :handler (fn [_ {:keys [request-id]}]
                                        (case request-id
                                          "ok" (a/go {:text-result-for-llm "image"
+                                                     :skip-large-output-processing? false
                                                      :tool-telemetry {"Scope" {:ab_X 3}}
                                                      :binary-results-for-llm
                                                      [{:type "image" :data "AQ==" :mime-type "image/png"
                                                        :metadata {:Vendor_Key [{:Item_ID false}]}}]
                                                      :result-type :success})
                                          "plain" {:text-result-for-llm "image"}
+                                         "nil-flag" {:text-result-for-llm "" :result-type :success
+                                                     :skip-large-output-processing? nil}
+                                         "wire-flag" {:text-result-for-llm "" :result-type :success
+                                                      "skipLargeOutputProcessing" "not a boolean"}
                                          "bad" (throw (ex-info "secret-from-application" {}))
                                          "assert" (throw (AssertionError. "secret assertion"))))}]}})]
         (doseq [[event rpc-method expected]
                 [[(tool-event "ok") "session.tools.handlePendingToolCall"
-                  {:result {:textResultForLlm "image" :toolTelemetry {:Scope {:ab_X 3}} :resultType "success"
+                  {:result {:textResultForLlm "image" :skipLargeOutputProcessing false
+                            :toolTelemetry {:Scope {:ab_X 3}} :resultType "success"
                             :binaryResultsForLlm [{:type "image" :data "AQ==" :mimeType "image/png"
                                                    :metadata {:Vendor_Key [{:Item_ID false}]}}]}}]
                  [(tool-event "plain") "session.tools.handlePendingToolCall" {:result "{\"text-result-for-llm\":\"image\"}"}]
+                 [(tool-event "nil-flag") "session.tools.handlePendingToolCall" {:error "Tool callback failed"}]
+                 [(tool-event "wire-flag") "session.tools.handlePendingToolCall" {:error "Tool callback failed"}]
                  [(tool-event "bad") "session.tools.handlePendingToolCall" {:error "Tool callback failed"}]
                  [(tool-event "assert") "session.tools.handlePendingToolCall" {:error "Tool callback failed"}]
+                 [(permission-event "choice") "session.permissions.handlePendingPermissionRequest"
+                  {:result {:kind "approve-once" :selectedOptionId "allow-once"}}]
                  [{:type :copilot/elicitation.requested :data {:request-id "form" :message "Choose"}}
                   "session.ui.handlePendingElicitation" {:result {:action "accept" :content {:Row_ID ["abc"] :Field-X false}}}]]]
           (cb/publish! owner reg event)
@@ -271,6 +309,55 @@
             (is (= params (assoc expected :requestId (get-in event [:data :request-id]) :sessionId "s"))))
           (await-slot-release! owner reg)))
       (finally (cb/close! owner) (rpc/disconnect conn) (.close server-out)))))
+
+(deftest elicitation-metadata-survives-the-event-handler-and-reply
+  (let [{:keys [conn ->client <-client]} (peer/open-connection {})
+        owner (cb/open! conn (constantly true))
+        ext "github.com/copilot/ask-user-images"
+        field "Screen_Shot"
+        offer {ext {"version" 1 "fieldNames" [field] "imageAttachmentConstraints"
+                    {"allowedMimeTypes" ["image/png"] "maxCount" 1 "maxBytesPerImage" 32}}
+               "vendor/request" {"traceID" 1 "trace_id" [nil]}}
+        answer {ext {"version" 1 "attachments" {field [{"type" "image" "mimeType" "image/png" "data" "AQ=="}]}}
+                "vendor/reply" {"traceID" 0 "trace_id" false}}
+        accepted {:action "accept" :content {(keyword field) ""} :_meta (walk/keywordize-keys answer)}
+        seen (atom nil)
+        reg (cb/register! owner "s"
+                          {:interaction
+                           {:on-elicitation-request
+                            (fn [{:keys [request-id _meta]}]
+                              (reset! seen [request-id _meta])
+                              {:action :accept :content {field ""} :_meta answer})}})]
+    (try
+      (doseq [[request-id invitation expected]
+              [["form" {:_meta offer} accepted]
+               ["field-offer" {:_meta (update offer ext dissoc "imageAttachmentConstraints")} accepted]
+               ["no-offer" {} {:action "cancel"}]
+               ["external" {:_meta offer :elicitationSource "external"} {:action "cancel"}]
+               ["other-field" {:_meta (assoc-in offer [ext "fieldNames"] ["other"])} {:action "cancel"}]
+               ["over-limit" {:_meta (assoc-in offer [ext "imageAttachmentConstraints" "maxBytesPerImage"] 0)}
+                {:action "cancel"}]
+               ["other-version" {:_meta (assoc-in offer [ext "version"] 2)} {:action "cancel"}]]]
+        (peer/write-framed! ->client {:method "session.event"
+                                      :params {:sessionId "s" :event {:type "elicitation.requested"
+                                                                      :data (assoc invitation :requestId request-id
+                                                                                   :message "Show image")}}})
+        (cb/publish! owner reg (turn/normalize-event (get-in (take!! (rpc/notifications conn)) [:params :event])))
+        (let [{:keys [id method params]} (peer/read-framed <-client)]
+          (is (= @seen [request-id (:_meta invitation)]))
+          (is (= method "session.ui.handlePendingElicitation"))
+          (is (= params {:sessionId "s" :requestId request-id :result expected}))
+          (peer/write-framed! ->client {:id id :result {:success true}}))
+        (await-slot-release! owner reg))
+      (finally (cb/close! owner) (rpc/disconnect conn) (.close ->client) (.close <-client)))))
+
+(deftest elicitation-answers-keep-private-images-out-of-primitive-content
+  (is (= (:result (results/elicitation-response {} {:action :accept :_meta {}}))
+         {:action "accept" "_meta" {}}))
+  (doseq [response [{:action :accept :content {"Photo" [{"type" "image" "data" "AQ=="}]}}
+                    {:action :decline :_meta nil}
+                    {:action :decline :_meta {"invalid" [[:not-json]]}}]]
+    (is (thrown? clojure.lang.ExceptionInfo (results/elicitation-response {} response)))))
 
 (deftest slow-observer-isolated-from-requests-subscriptions-and-other-sessions
   (with-peer
@@ -352,11 +439,11 @@
                   "session.permissions.handlePendingPermissionRequest"
                   {:decision-context label-wire :result {:kind "approve-for-location" :location-key "/work"
                                                          :approval {:kind "mcp" :server-name "x" :tool-name nil}}}]]]
-          (let [id (str (random-uuid))]
+          (let [id (if (= event :copilot/elicitation.requested) "form" (str (random-uuid)))]
             (cb/publish! owner reg {:type event :data (assoc data :request-id id)})
             (is (= [method (assoc body :session-id "s" :request-id id)] (take!! replies)))
             (await-slot-release! owner reg)))
-        (is (= [(assoc cmd :session-id "s") (assoc elic :session-id "s")]
+        (is (= [(assoc cmd :session-id "s") (assoc elic :session-id "s" :request-id "form")]
                (mapv #(dissoc % :cancelled?) @calls)))))))
 
 (deftest manual-responses-preserve-scope-and-reject-stale-claims
@@ -385,9 +472,14 @@
         ;; Resume does not replay pending requests. Let the runtime match this ID.
         (is (= {:success true} (reply :tool tool)))
         (is (= ["session.tools.handlePendingToolCall" (assoc tool :session-id "s")] (take!! replies)))
-        (cb/publish! owner reg {:type :copilot/permission.completed :data {:request-id "completed"}})
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not pending"
-                              (reply :permission (assoc request :request-id "completed"))))
+        (cb/publish! owner reg (permission-event "manual-copy"))
+        (doseq [event [{:type :copilot/permission.completed :data {:request-id "completed"}}
+                       {:type :copilot/permission.completed :checkpoint true :data {:request-id "completed-copy"}}
+                       {:type :copilot/permission.completed :checkpoint true :data {:request-id "manual-copy"}}
+                       (-> (permission-event "hook-copy") (assoc :checkpoint true) (assoc-in [:data :resolved-by-hook] true))]]
+          (cb/publish! owner reg event)
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not pending"
+                                (reply :permission (assoc request :request-id (get-in event [:data :request-id]))))))
         (rpc/set-request-handler! peer (fn [_ _] (a/go {:result {:success false}})))
         (is (= :request-not-handled
                (try (reply :tool (assoc tool :request-id "no-longer-pending"))
@@ -409,12 +501,14 @@
                                            ack)))
         (doseq [[id reject-code retire] [["repair" -32602 nil] ["unknown" -32603 nil]
                                          ["completed" -32602 :copilot/permission.completed]
+                                         ["checkpoint" -32602 :copilot/permission.completed]
                                          ["aborted" -32602 :copilot/abort]]]
           (cb/publish! owner reg (assoc (permission-event id) :agent-id "agent"))
           (let [result (answer id :approve-once)
                 [_ ack] (take!! received)]
             (is (= (code (answer id :reject)) :not-pending))
-            (when retire (cb/publish! owner reg {:type retire :agent-id "agent" :data {:request-id id}}))
+            (when retire (cb/publish! owner reg {:type retire :agent-id "agent" :checkpoint (= id "checkpoint")
+                                                 :data {:request-id id}}))
             (a/put! ack {:error {:code reject-code :message "not accepted"}})
             (is (= (-> result take!! :error ex-data :error :code) reject-code))
             (let [corrected (answer id :reject)]
@@ -426,7 +520,32 @@
                   (a/put! (second reply) {:result {:success true}})
                   (is (= (take!! corrected) {:ok {:success true}}))
                   (is (= (code (answer id :reject)) :not-pending)))
-                (is (= (code corrected) :not-pending))))))))))
+                (let [[v port] (a/alts!! [corrected received (a/timeout 5000)])]
+                  (when (= port received) (a/put! (second v) {:result {:success false}}))
+                  (is (= [port (some-> v :error ex-data :type)] [corrected :not-pending]) id))))))))))
+
+(deftest historical-hook-settlement-does-not-cancel-a-live-handler-or-reopen-it
+  (with-peer
+    (fn [_ _ owner replies]
+      (doseq [kind [:reject :no-result]]
+        (let [id (name kind) entered (promise) release (a/promise-chan)
+              reg (cb/register! owner id {:permissions {:on-request (fn [_ ctx]
+                                                                      (deliver entered (:cancelled? ctx)) release)}})
+              request (permission-event "p")]
+          (try
+            (cb/publish! owner reg request)
+            (let [cancelled? (deref entered 5000 nil)]
+              (is (some? cancelled?))
+              (cb/publish! owner reg (-> request (assoc :checkpoint true) (assoc-in [:data :resolved-by-hook] true)))
+              (is (false? (cancelled?))))
+            (a/put! release {:kind kind})
+            (await-slot-release! owner reg)
+            (when (= kind :reject)
+              (is (= (take!! replies) ["session.permissions.handlePendingPermissionRequest"
+                                       {:session-id id :request-id "p" :result {:kind "reject"}}])))
+            (is (= (-> (cb/respond! owner reg :permission {:request-id "p" :result {:kind :reject}})
+                       take!! :error ex-data :type) :not-pending))
+            (finally (a/close! release))))))))
 
 (deftest explicitly-rejected-interactions-cancel-once-without-resending-application-data
   (with-peer
@@ -542,9 +661,9 @@
                                                                 (when-not (try @release (catch InterruptedException _ false))
                                                                   (recur))))}})]
         (try
-          (let [first-receipt (cb/publish! owner reg {:id "first"})
+          (let [[first-receipt] (cb/publish! owner reg {:id "first"})
                 _ (is (true? (deref entered 5000 false)))
-                last-receipt (cb/publish! owner reg {:id "last"})]
+                [last-receipt] (cb/publish! owner reg {:id "last"})]
             (rpc/end-input! conn)
             (cb/finish-input! owner)
             (is (= (mapv #(-> % take!! :error ex-data :type) [first-receipt last-receipt])
@@ -565,7 +684,7 @@
         (try
           (cb/publish! owner reg {:id "message" :type :copilot/assistant.message})
           (is (= true (deref entered 5000 :timeout)))
-          (let [receipt (cb/publish! owner reg {:id "idle" :type :copilot/session.idle})]
+          (let [[receipt] (cb/publish! owner reg {:id "idle" :type :copilot/session.idle})]
             (is (nil? (a/poll! receipt)))
             (.countDown gate)
             (is (= {:ok nil} (take!! receipt) (take!! receipt)))
@@ -674,12 +793,14 @@
                   negative (if tool? {:error "Tool callback busy"} {:result {:kind "user-not-available"}})
                   correction (if tool? {:error "cancelled"} {:result {:kind :reject}})
                   sent (atom [])
+                  offered (promise)
                   reply (a/promise-chan)]
               (rpc/set-request-handler!
                peer (fn [_ params]
                       (if (= 1 (count (swap! sent conj (dissoc params :session-id :request-id))))
-                        reply (a/go ok))))
+                        (do (deliver offered true) reply) (a/go ok))))
               (cb/publish! owner reg event)
+              (is (= true (deref offered 5000 :timeout)))
               (when retire?
                 (cb/publish! owner reg {:type :copilot/permission.completed :data {:request-id id}}))
               (a/put! reply ack)
@@ -688,6 +809,22 @@
               (let [{:keys [ok error]} (take!! (cb/respond! owner reg kind (assoc correction :request-id id)))]
                 (is (= (or ok (:type (ex-data error))) (if repair? {:success true} :not-pending)) id))
               (is (= @sent (cond-> [negative] repair? (conj (if tool? correction {:result {:kind "reject"}})))) id)))
+          (let [preparing (promise) release (promise) frames (atom []) send-request rpc/send-request]
+            (rpc/set-request-handler! peer (fn [method _] (swap! frames conj method) (a/go ok)))
+            (try
+              (with-redefs [rpc/send-request (fn [conn method params opts]
+                                               (when (= (:request-id params) "withdrawn")
+                                                 (deliver preparing true) (deref release 5000 nil))
+                                               (send-request conn method params opts))]
+                (let [publishing (future (cb/publish! owner reg (permission-event "withdrawn")))]
+                  (is (true? (deref preparing 5000 false)))
+                  (cb/publish! owner reg {:type :copilot/permission.completed :data {:request-id "withdrawn"}})
+                  (deliver release true)
+                  (is (= (deref publishing 5000 ::timeout) [nil]))
+                  (take!! settled)))
+              (rpc/send-request! (:conn owner) "ping" {} 5000)
+              (is (= @frames ["ping"]))
+              (finally (deliver release true))))
           (is (nil? (a/poll! entered)))
           (finally (remove-watch busy ::settled) (cb/unregister! owner reg) (a/close! held)))))))
 
@@ -735,8 +872,9 @@
         (try
           (doseq [id ["a" "b"]] (cb/publish! owner reg (tool-event id)))
           (is (= #{"a" "b"} (set (repeatedly 2 #(take!! entered)))))
-          (doseq [id ["c" "retired" "d" "d" "e"]] (cb/publish! owner reg (tool-event id)))
+          (doseq [id ["c" "retired" "saved" "d" "d" "e"]] (cb/publish! owner reg (tool-event id)))
           (cb/publish! owner reg {:type :copilot/external_tool.completed :data {:request-id "retired"}})
+          (cb/publish! owner reg {:type :copilot/external_tool.completed :checkpoint true :data {:request-id "saved"}})
           (cb/publish! owner other (permission-event "independent"))
           (is (= ["session.permissions.handlePendingPermissionRequest"
                   {:session-id "other" :request-id "independent" :result {:kind "reject"}}] (take!! replies)))
@@ -851,6 +989,8 @@
       (let [calls (atom {})
             sent (atom [])
             rejected {:error {:code -32602 :message "private rejection details"}}
+            checkpoint-sent (promise)
+            checkpoint-reply (a/promise-chan)
             stale (a/promise-chan)
             stale-sent (promise)
             reg (cb/register! owner "s" {:tools {:definitions
@@ -865,6 +1005,7 @@
                 (swap! sent conj (select-keys params [:request-id :result :error]))
                 (cond
                   (= "replaced" request-id) (do (deliver stale-sent true) stale)
+                  (and (= "checkpoint" request-id) result) (do (deliver checkpoint-sent true) checkpoint-reply)
                   (= "gone" request-id) (a/go {:result {:success false}})
                   (= "ambiguous" request-id) (a/go {:error {:code -32603 :message "outcome unknown"}})
                   (or (= "private result" result)
@@ -887,6 +1028,13 @@
         (doseq [id ["fallback" "gone" "ambiguous"]]
           (is (= :not-pending (-> (cb/respond! owner reg :tool {:request-id id :result "again"})
                                   take!! :error ex-data :type))))
+        (cb/publish! owner reg (tool-event "checkpoint"))
+        (is (= true (deref checkpoint-sent 5000 :timeout)))
+        (cb/publish! owner reg {:type :copilot/external_tool.completed :checkpoint true :data {:request-id "checkpoint"}})
+        (a/put! checkpoint-reply rejected)
+        (await-slot-release! owner reg)
+        (is (= (filterv #(= "checkpoint" (:request-id %)) @sent)
+               [{:request-id "checkpoint" :result "private result"}]))
         (cb/publish! owner reg (tool-event "replaced"))
         (is (= true (deref stale-sent 5000 :timeout)))
         (cb/unregister! owner reg)
@@ -894,4 +1042,5 @@
           (a/put! stale rejected)
           (is (= {:ok {:success true}} (take!! (cb/respond! owner replacement :tool {:request-id "live" :result "ok"}))))
           (is (= [{:request-id "replaced" :result "private result"}] (filterv #(= "replaced" (:request-id %)) @sent))))
-        (is (= {"fallback" 1 "repair" 1 "gone" 1 "ambiguous" 1 "replaced" 1 "failed-handler" 1} @calls))))))
+        (is (= {"fallback" 1 "repair" 1 "gone" 1 "ambiguous" 1 "checkpoint" 1 "replaced" 1 "failed-handler" 1}
+               @calls))))))

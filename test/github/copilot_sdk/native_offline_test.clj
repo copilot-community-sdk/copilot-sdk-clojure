@@ -47,10 +47,11 @@
                   (swap! calls conj {:args arguments :tool-call-id tool-call-id :tool-name tool-name
                                      :session-id session-id :cancelled? (cancelled?)
                                      :worker (.getName (Thread/currentThread))})
-                  (get lookup (:ticketCode arguments) "unknown ticket"))
+                  {:result-type :success :skip-large-output-processing? true
+                   :text-result-for-llm (get lookup (:ticketCode arguments) "unknown ticket")})
         authorize (fn [request ctx]
                     (let [scope (select-keys request [:kind :tool-call-id :tool-name :args])]
-                      (swap! permissions conj (assoc scope :session-id (:session-id ctx)))
+                      (swap! permissions conj (merge scope (select-keys ctx [:session-id :request-id])))
                       (if (allowed scope)
                         {:kind :approve-once}
                         {:kind :reject})))
@@ -185,7 +186,10 @@
         (fixture/exercise-turn! ["-m" "github.copilot-sdk.native-offline-test" "tool"] (partial tool-model tickets))]
     (is (= (mapv #(get-in % [:function :name]) (:tools (first requests))) [tool-name]))
     (is (= (count requests) 2))
-    (is (= (frequencies permissions)
+    (let [ids (map :request-id permissions)]
+      (is (every? #(and (string? %) (not (str/blank? %))) ids))
+      (is (= (count (set ids)) (count tickets))))
+    (is (= (frequencies (map #(dissoc % :request-id) permissions))
            (frequencies (map (fn [[id ticket]] (assoc (permission id ticket) :session-id "fixture-tool-session"))
                              tickets))))
     (is (= (frequencies calls)

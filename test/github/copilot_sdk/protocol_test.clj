@@ -384,7 +384,7 @@
     (let [state (atom {:connection (protocol/initial-connection-state)})
           conn (protocol/connect client-in client-out state)
           reader (Channels/newChannel server-in)
-          read-request #(#'protocol/read-message reader (ByteBuffer/allocate 1))
+          read-request #(#'protocol/parse-frame (#'protocol/read-frame reader (ByteBuffer/allocate 1)))
           params {:session-id "s1"}
           method "session.getMessages"
           raw-opts {:raw-json? true}

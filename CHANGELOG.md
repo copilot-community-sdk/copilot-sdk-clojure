@@ -3,6 +3,44 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (v2.0.3 sync)
+- Target [Microsoft Copilot SDK 2.0.3](https://github.com/microsoft/copilot-sdk/releases/tag/v2.0.3)
+  with native engine `1.0.116`. The wire protocol remains `4`. Use the `2.0.3`
+  runtime classifier with this build; `2.0.3.0-SNAPSHOT` is the separate
+  community SDK version. A Rust panic terminates the host JVM.
+- Create and resume accept `:extension-paths` for trusted standalone entries.
+  MCP servers can set `:defer-tools` to `:auto` or `:never`; omission leaves
+  tool discovery to the runtime.
+- Regenerated the release schemas, including the new extension manifest.
+  Session events can include `:occurred-at` alongside the recording timestamp.
+- Permission and elicitation callbacks receive pending request IDs. Forms
+  preserve negotiated metadata separately from field values, and legacy
+  `ask_user` handlers can return images when the request advertises support.
+  Structured tool results can opt out of spill-to-file processing per result.
+- Automatic and manual permission decisions can return the selected
+  confirmation option when the host advertises one.
+- Cloud creates retain early events for the ID assigned by the runtime.
+  The open-time observer receives these events without replaying them to
+  later subscriptions. Holding is bounded by event count and bytes.
+  Deletion, hook resolution, cancellation, and storage initialization
+  determine which pending requests the application can still answer.
+  Deletion of a saved ID without a handle refuses to overtake an unidentified
+  cloud allocation on the same client.
+- A manual tool or permission reply cannot take a request from an automatic
+  handler while its event is waiting for delivery. New lifecycle subscribers
+  receive only future events. Closing a handle still joins its own detach
+  when the runtime has already reused its ID.
+- Pending turns and forms report the session's callback failure instead of
+  accepting later replies. A turn does not report success when client
+  shutdown, an observer drain timeout, or a stopped observer worker prevents
+  delivery of its completion event.
+- A deletion notification that arrives after timeout cannot free the ID
+  for reuse. A notification that confirms deletion first does not retain
+  an unused late-reply handler. Confirmed release retires unsent trace
+  reservations without waiting for the event observer.
+- If the connection ends during detach or delete, subscriptions still receive
+  accepted events. Without an event observer, a turn keeps its confirmed result.
+
 ### Changed (2.x)
 - **BREAKING**: The default source tree and JAR now contain only the native
   Clojure SDK. Removed CLI spawning, stdio/TCP attachment, parent extension

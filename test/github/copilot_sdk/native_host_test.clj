@@ -522,5 +522,5 @@
                                   ["-m" "github.copilot-sdk.native-host-test"]
                                   (fn [_] (throw (ex-info "Host pings must not call a model" {}))))]
     (is (= requests []))
-    (is (= event {:protocol 4 :runtime "1.0.114" :other "pong: other" :large-reply? true
+    (is (= event {:protocol 4 :runtime "1.0.116" :other "pong: other" :large-reply? true
                   :closed? true :survivor "pong: survivor"}))))

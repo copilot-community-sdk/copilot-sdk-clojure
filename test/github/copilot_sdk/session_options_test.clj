@@ -73,13 +73,33 @@
       (is (= (get (build {:github {:token ""}}) "github") {"token" ""}))
       (is (= (select-keys (build {}) ["state" "sessionFs"]) {"state" {}})))))
 
+(deftest explicit-extension-paths-and-mcp-tool-deferral
+  (doseq [resume? [false true]]
+    (let [build #(open-params resume? coding %)
+          servers {"stdio" {:command "fixture" :defer-tools :never}
+                   "http" {:type :http :url "https://example.invalid" :defer-tools :auto}
+                   "default" {:command "fixture"}}
+          opts {:extension-paths ["./extension.mjs"] :mcp {:servers servers}}
+          p (wire (build opts))]
+      (is (= (get p "extensionPaths") ["./extension.mjs"]))
+      (is (= (get (build {:extension-paths []}) "extensionPaths") []))
+      (is (not (contains? (build {}) "extensionPaths")))
+      (is (= (mapv #(get-in p ["mcp" "servers" % "deferTools"] ::absent) ["stdio" "http" "default"])
+             ["never" "auto" ::absent]))
+      (is (nil? (options/open-options-patch coding opts)))
+      (doseq [[bad path] [[{:extension-paths nil} [:extension-paths]]
+                          [{:extension-paths [false]} [:extension-paths 0]]
+                          [{:mcp {:servers {"s" {:command "x" :defer-tools nil}}}} [:mcp :servers "s" :defer-tools]]
+                          [{:mcp {:servers {"s" {:type :sse :url "u" :defer-tools :always}}}} [:mcp :servers "s" :defer-tools]]]]
+        (is (= (error-path #(build bad)) path))))))
+
 (deftest stable-agent-mcp-policy-and-provider-routing
   (let [servers {"Build-TOOLS_2" {:command "server" :working-directory "." :tools []
                                   :env {"User_KEY" "${LITERAL}"}}
-                 "remote" {:type :sse :url "https://example.invalid" :timeout 0
+                 "remote" {:type :sse :url "https://example.invalid" :timeout 0 :defer-tools :never
                            :headers {"X-Header_Case" "value"}}}
         wire-servers {"Build-TOOLS_2" {"command" "server" "cwd" "." "tools" [] "env" {"User_KEY" "${LITERAL}"}}
-                      "remote" {"type" "sse" "url" "https://example.invalid" "timeout" 0
+                      "remote" {"type" "sse" "url" "https://example.invalid" "timeout" 0 "deferTools" "never"
                                 "headers" {"X-Header_Case" "value"}}}
         agent {:name "review" :prompt "" :infer? false :tools nil :mcp-servers servers
                :hooks {"Before-Invoke" [{:Vendor/keep_Name [nil {"x-Y" false}]}]}

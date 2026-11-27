@@ -512,7 +512,10 @@
   :github.copilot-sdk.specs/session-idle-timeout-seconds
   :github.copilot-sdk.specs/session-log
   :github.copilot-sdk.specs/session-state-path
+  :github.copilot-sdk.specs/skip-large-output-processing?
   :github.copilot-sdk.specs/text-result-for-llm
   :github.copilot-sdk.specs/tool-references
   :github.copilot-sdk.specs/tool-result-object
-  :github.copilot-sdk.specs/tool-telemetry)}
+  :github.copilot-sdk.specs/tool-telemetry
+  :github.copilot-sdk.specs/user-input-image-attachment
+  :github.copilot-sdk.specs/user-input-image-attachment-constraints)}

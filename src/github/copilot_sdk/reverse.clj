@@ -352,6 +352,10 @@
                 (when @(:confirmed? end-hook) end-hook)
                 (= method "gitHubToken.getToken") (get-in routes [:credentials registration-id])
                 (= method "uiThread.run") (:ui routes)
+                ;; A named route is needed for storage I/O before the factory
+                ;; returns. That does not make its application decisions ready.
+                (and (interaction/method-names method) (:provider cleanup))
+                (when (initialized-storage? session) session)
                 :else session)
           shell? (= method "shellAuthentication.request")
           existing (when (and reg (or shell? (= method "shellAuthentication.cancel")))

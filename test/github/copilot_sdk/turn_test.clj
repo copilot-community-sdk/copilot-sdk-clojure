@@ -300,11 +300,11 @@
       (a/close! subscribers))))
 
 (deftest observer-fence-is-bounded-by-the-original-deadline-and-session-close
-  (doseq [stop [:deadline :close :observer-error :wire-error]]
+  (doseq [stop [:deadline :close :session-closed :observer-stopped :observer-failed :observer-overflow :wire-error]]
     (let [state (turn/new-state)
           deadline (a/chan)
           {:keys [receipt resolve! waiting]} (observable-receipt)
-          cause (ex-info "Interrupted" {})
+          cause (ex-info "Interrupted" {:type stop})
           id "fence"
           reply (if (= stop :wire-error)
                   {:error {:code -32000 :message "Runtime error" :data {:completionEventId id}}}
@@ -317,12 +317,12 @@
       (case stop
         :deadline (a/close! deadline)
         :close (turn/close! state cause)
-        (:observer-error :wire-error) (resolve! {:error cause}))
+        (resolve! {:error cause}))
       (let [{:keys [error ok]} (one op)]
         (case stop
           :deadline (is (= :turn-timeout (:type (ex-data error))))
-          :close (is (identical? cause error))
-          :observer-error (is (= id (get-in ok [:data :content])))
+          (:close :session-closed :observer-stopped) (is (identical? cause error))
+          (:observer-failed :observer-overflow) (is (= id (get-in ok [:data :content])))
           :wire-error (is (= (:error reply) (:error (ex-data error))))))
       (resolve! {:ok nil})
       (is (empty? (:waiters @state))))))

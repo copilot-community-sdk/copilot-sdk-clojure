@@ -1,5 +1,6 @@
 (ns github.copilot-sdk.native-certification-test
-  (:require [clojure.edn :as edn]
+  (:require [clojure.data.json :as json]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.set :as set]
@@ -66,6 +67,50 @@
 (defn- discrepancies [catalog source]
   {:not-in-catalog (set/difference source catalog)
    :not-in-source (set/difference catalog source)})
+
+(deftest pinned-2-0-3-declarations-match-the-classified-delta
+  (when (= "true" (System/getenv "COPILOT_UPSTREAM_VALIDATION"))
+    (let [{:keys [tag commit runtime protocol added-root-types added-option-fields payload-fields
+                  package-entrypoints event-source-blob baseline-tag added-node-event-variants selected-option-id-variants]}
+          (edn/read-string (slurp (io/resource "resources/native_2_0_3_delta.edn")))
+          base (ledger)
+          repo (str/trim (output! "bash" ".github/skills/update-upstream/scripts/resolve-upstream.sh"))
+          git (fn [& args] (apply output! "git" "-C" repo args))
+          show (fn [pin path] (git "show" (str pin ":" path)))
+          src #(show commit (str "nodejs/src/" % ".ts"))
+          types (src "types")
+          old-types (show (get-in base [:upstream :commit]) "nodejs/src/types.ts")
+          rpc (src "generated/rpc")
+          decisions (re-seq #"\bPermissionDecision\w+" (second (re-find #"(?ms)^export type PermissionDecision =\n(.*?);" rpc)))
+          variants (fn [source]
+                     (set (map symbol (re-seq #"\w+Event\b" (second (re-find #"(?ms)^export type SessionEvent =\n(.*?);" source))))))
+          root (re-exports (src "index"))
+          package (json/read-str (show commit "nodejs/package.json"))]
+      (is (= (str/trim (git "rev-parse" (str tag "^{commit}"))) commit))
+      (is (= (get-in base [:upstream :tag]) baseline-tag))
+      (is (= (get package "copilotCliVersion") (str/trim (slurp ".copilot-schema-version")) runtime))
+      (is (= (get (json/read-str (show commit "sdk-protocol-version.json")) "version") protocol))
+      (is (= (set (keys (get package "exports"))) package-entrypoints))
+      (is (= (str/trim (git "rev-parse" (str commit ":nodejs/src/generated/session-events.ts"))) event-source-blob))
+      (is (= (variants (src "generated/session-events"))
+             (into (variants (show baseline-tag "nodejs/src/generated/session-events.ts")) added-node-event-variants)))
+      (is (= (:values root) (set (keys (:root-values base)))))
+      (is (= (:types root) (into (set (declared-types base)) (mapcat val added-root-types))))
+      (is (= (into #{} (comp (map symbol) (filter #(contains? (direct-fields rpc % 2) 'selectedOptionId))) decisions)
+             selected-option-id-variants))
+      (is (apply distinct? (mapcat val added-root-types)))
+      (doseq [[owner fields] (:option-fields base)]
+        (is (= (direct-fields types owner 4)
+               (into (set (mapcat val fields)) (keys (get added-option-fields owner)))) (name owner)))
+      (doseq [[owner added] payload-fields]
+        (is (= (direct-fields types owner 4)
+               (into (direct-fields old-types owner 4) (keys added))) (name owner)))
+      (doseq [[owner file] {'CopilotClient "client" 'CopilotSession "session"}]
+        (is (= (public-members (src file) owner)
+               (set (for [[member [class]] (get-in base [:methods owner]) :when (not= class :internal)] member)))
+            (name owner)))
+      (is (= (re-exports (src "extension"))
+             (re-exports (show (get-in base [:upstream :commit]) "nodejs/src/extension.ts")))))))
 
 (deftest pinned-upstream-declarations-match-catalog
   (when (= "true" (System/getenv "COPILOT_UPSTREAM_VALIDATION"))

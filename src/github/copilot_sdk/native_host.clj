@@ -19,16 +19,16 @@
             ScheduledThreadPoolExecutor Semaphore ThreadFactory ThreadPoolExecutor TimeUnit]
            [java.util.jar JarFile]))
 
-;; Maven Central: com.microsoft:copilot-sdk-runtime:2.0.1:<classifier>.jar.sha256.
+;; Maven Central: com.microsoft:copilot-sdk-runtime:2.0.3:<classifier>.jar.sha256.
 (def ^:private classifier-sha256
-  {"darwin-arm64" "407b49b7c3b44594f77cf276abdbd001c3da926d95f614c8880c6dbe71347b80"
-   "darwin-x64" "3b55894715649a2d25c4d083843a5cb85086cd7c882ac731814e0dea5ea765f5"
-   "linux-arm64" "fe3fc0fcd62d5f28350320b4a330112b516f4a2bb9ef6365e1996ec18f0b90ab"
-   "linux-x64" "ed31e64de870a1cd52cad6efa4c65442ff49420d32818496192ecbda2c576a0b"
-   "linuxmusl-arm64" "08881493eafc15b2f5057ea949909aaa9f7bbfd4d7dc87370779ef4ba0d5c8da"
-   "linuxmusl-x64" "931778dddcb9340b3e85223342cd65a60b8a3285446eada8b20427885b2287da"
-   "win32-arm64" "882c8909968ddf0ed618af4560990c97874710756d515b9e687ff35be1b0f911"
-   "win32-x64" "463f35c33d192f9cec4187f2e5920f423b5bbfcb9b5c980db246245ca8dbd20e"})
+  {"darwin-arm64" "ef155db72a5bae6cad70434e2753e73c7f3f1715911f7d3ebd4042c5e70979e8"
+   "darwin-x64" "ae8c8a351139f85b691dbd93210870877d7c5e5733be4399e9d3c8d92889786d"
+   "linux-arm64" "10472a5a3a34ba62f3efd8457ce611ef3bf690e7f782faf23c7f02e930780a03"
+   "linux-x64" "7c4ba89030d4a61b268b60cc27b4b57799f5a2cf6f133a9c6363a0238207cf71"
+   "linuxmusl-arm64" "ca2bad77dd715f2e9349e0dc47afea425e5639e7ca6b3e5ee34127ec6f817f50"
+   "linuxmusl-x64" "fac43b3e1179fee39748d52c42015db605b2c33da9680d27981614a6c5308b78"
+   "win32-arm64" "ab3d8891a3b5820d6db91df96b2036b864ff2517ad01de33a398ef14ebb5c25b"
+   "win32-x64" "d4875fd0fb769fd6d6a3193c16279027dfcc410acc58f9af63ea3e09043ea6ca"})
 
 (def ^:private ^"[Ljava.nio.file.CopyOption;" new-file (make-array CopyOption 0))
 (def ^:private ^"[Ljava.nio.file.attribute.FileAttribute;" default-attrs (make-array FileAttribute 0))
@@ -44,7 +44,7 @@
         supplied (filter #(.getResource loader (str "native/" % "/runtime.node")) candidates)]
     (if (= 1 (count supplied))
       (first supplied)
-      (throw (ex-info "Supply exactly one Copilot SDK 2.0.1 runtime classifier for this JVM"
+      (throw (ex-info "Supply exactly one Copilot SDK 2.0.3 runtime classifier for this JVM"
                       {:os (System/getProperty "os.name") :arch Platform/ARCH
                        :candidates candidates :supplied (vec supplied)})))))
 
@@ -53,7 +53,7 @@
         jar-url (when (= "jar" (some-> resource .getProtocol))
                   (.getJarFileURL ^JarURLConnection (.openConnection resource)))]
     (when-not (= "file" (some-> jar-url .getProtocol))
-      (throw (ex-info "A local Copilot SDK 2.0.1 platform classifier JAR is required"
+      (throw (ex-info "A local Copilot SDK 2.0.3 platform classifier JAR is required"
                       {:classifier classifier})))
     (let [digest (MessageDigest/getInstance "SHA-256")
           expected (get classifier-sha256 classifier)
@@ -67,7 +67,7 @@
 (defn- extract-library! ^File [^ClassLoader loader]
   (let [classifier (host-classifier loader)
         prefix (str "native/" classifier "/")
-        root (Files/createTempDirectory "copilot-sdk-2.0.1-" default-attrs)
+        root (Files/createTempDirectory "copilot-sdk-2.0.3-" default-attrs)
         archive (.resolve root "classifier.jar")]
     ;; Until process exit, the library may open assets beside its own image.
     ;; Register parents before children: deleteOnExit removes in reverse order.
@@ -79,7 +79,7 @@
           (with-open [^InputStream in (entry "platform.properties")]
             (let [props (doto (Properties.) (.load in))]
               (when-not (and (= classifier (.getProperty props "classifier"))
-                             (= "1.0.114" (.getProperty props "version")))
+                             (= "1.0.116" (.getProperty props "version")))
                 (throw (ex-info "Unexpected Copilot runtime metadata" {:classifier classifier})))))
           (with-open [manifest (io/reader (entry "runtime-assets.list") :encoding "UTF-8")]
             (doseq [line (line-seq manifest)

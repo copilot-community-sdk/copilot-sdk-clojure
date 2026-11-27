@@ -30,7 +30,7 @@ The first dependency download requires network access.
 
 ## Add the SDK to another application
 
-Community SDK version in this checkout: `2.0.1.0-SNAPSHOT`. Do not substitute
+Community SDK version in this checkout: `2.0.3.0-SNAPSHOT`. Do not substitute
 a published 1.x JAR or assume a development build is on Maven Central. For example,
 place the 2.x checkout next to your application. On macOS arm64, use this
 application `deps.edn`:
@@ -39,7 +39,7 @@ application `deps.edn`:
 {:deps
  {io.github.copilot-community-sdk/copilot-sdk-clojure
   {:local/root "../copilot-sdk-clojure"}
-  com.microsoft/copilot-sdk-runtime$darwin-arm64 {:mvn/version "2.0.1"}}}
+  com.microsoft/copilot-sdk-runtime$darwin-arm64 {:mvn/version "2.0.3"}}}
 ```
 
 For glibc Linux x64, use `com.microsoft/copilot-sdk-runtime$linux-x64`

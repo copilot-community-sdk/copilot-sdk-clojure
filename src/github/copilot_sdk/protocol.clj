@@ -110,16 +110,18 @@
         (let [[k v] (str/split line #": " 2)]
           (recur (assoc headers (str/lower-case (str/trim k)) (str/trim (or v "")))))))))
 
-(defn- read-message
-  "Read a single JSON-RPC message from channel. Returns parsed JSON map or nil on EOF/close."
+(defn- read-frame
+  "Read one complete frame body, or nil at EOF. No admission lock covers I/O."
   [^ReadableByteChannel channel ^ByteBuffer single-byte-buf]
   (when-let [headers (read-headers channel single-byte-buf)]
     (let [content-length (some-> (get headers "content-length") parse-long)]
       (when-not content-length
         (throw (IOException. "Missing Content-Length header")))
-      (let [content-bytes (read-bytes channel content-length)
-            content (String. content-bytes StandardCharsets/UTF_8)]
-        (update-keys (json/read-str content) keyword)))))
+      (read-bytes channel content-length))))
+
+(defn- parse-frame [^bytes body]
+  (with-meta (update-keys (json/read-str (String. body StandardCharsets/UTF_8)) keyword)
+    {::frame-bytes (alength body)}))
 
 (defn- write-message!
   "Write a JSON-RPC message to channel with Content-Length framing."
@@ -304,12 +306,8 @@
                     (decode-record-list raw-msg "models" "metadata" :metadata)
                     (and (= method "session.tools.getCurrentMetadata") (vector? (get-in raw-msg [:result "tools"])))
                     (decode-record-list raw-msg "tools" "input_schema" :input-schema)
-                    (and (= method "session.ui.elicitation")
-                         (contains? (:result raw-msg) "content"))
-                    (-> (update raw-msg :result dissoc "content")
-                        walk/keywordize-keys
-                        normalize-incoming
-                        (assoc-in [:result :content] (get-in raw-msg [:result "content"])))
+                    (and (= method "session.ui.elicitation") (map? (:result raw-msg)))
+                    (update raw-msg :result #(update-keys (select-keys % ["action" "content" "_meta"]) keyword))
                     :else (normalize-response method (walk/keywordize-keys raw-msg)))]
           (if-let [error (:error msg)]
             (do
@@ -639,10 +637,26 @@
       :else
       converted)))
 
-(defn- enqueue-notification! [{:keys [prepare-notification state-atom notification-queue] :as conn} msg]
-  (let [prepared (try
-                   (let [prepared (prepare-notification msg)]
-                     (when-not (map? prepared)
+(defn offer-notification!
+  "Return true if the notification was queued. A full queue ends input.
+  prepare, if supplied, is an internal admission step under the input lock."
+  [{:keys [state-atom notification-queue] :as conn} msg & [prepare]]
+  (locking notification-queue
+    ;; Input closure must not overtake an accepted notification.
+    (locking state-atom
+      (when (connection-running? conn)
+        (or (.offer ^LinkedBlockingQueue notification-queue (if prepare (prepare msg) msg))
+            (do (.incrementAndGet ^AtomicLong (:dropped-notifications conn))
+                (log/warn "Notification queue full; closing connection" {:method (:method msg)})
+                (close-input! conn {:code -32000 :message "Notification queue full"
+                                    :data {:code "notification_queue_full" :method (:method msg)}})
+                false))))))
+
+(defn- enqueue-notification! [{:keys [prepare-notification] :as conn} msg]
+  (let [normalized (with-meta (normalize-incoming (walk/keywordize-keys msg)) (meta msg))
+        prepared (try
+                   (let [prepared (prepare-notification normalized)]
+                     (when-not (or (nil? prepared) (map? prepared))
                        (throw (IllegalStateException. "Expected a prepared notification map")))
                      prepared)
                    (catch Throwable failure
@@ -650,32 +664,19 @@
                                          :data {:code "notification_admission_failed"}})
                      (when-not (instance? Exception failure) (throw failure))
                      nil))]
-    (when prepared
-      ;; Input closure must not overtake an accepted notification.
-      (locking state-atom
-        (when (and (connection-running? conn)
-                   (not (.offer ^LinkedBlockingQueue notification-queue prepared)))
-          (.incrementAndGet ^AtomicLong (:dropped-notifications conn))
-          (log/warn "Notification queue full; closing connection" {:method (:method msg)})
-          (close-input! conn {:code -32000 :message "Notification queue full"
-                              :data {:code "notification_queue_full" :method (:method msg)}}))))))
+    (when prepared (offer-notification! conn prepared))))
 
 (defn- dispatch-message!
-  "Route incoming message to appropriate handler."
-  [conn msg]
-  (let [{:keys [state-atom]} conn]
-    ;; The pending request determines which parts of the result are opaque.
-    (if (and (:id msg) (not (:method msg)))
-      (handle-response! state-atom msg)
-      (let [normalized (normalize-incoming (walk/keywordize-keys msg))]
-        (cond
-          ;; Request (has id and method) - hand off to the bounded worker pool
-          (and (:id normalized) (:method normalized))
-          (handle-request! conn normalized)
-
-          (:method normalized) (enqueue-notification! conn normalized)
-
-          :else nil)))))
+  "Order parsing and notification admission against local router markers.
+  Response hooks and reverse requests run outside the notification monitor."
+  [conn frame]
+  (when-let [msg (locking (:notification-queue conn)
+                   (let [msg (parse-frame frame)]
+                     (if (:id msg) msg
+                         (do (when (:method msg) (enqueue-notification! conn msg)) nil))))]
+    (if (:method msg)
+      (handle-request! conn (normalize-incoming (walk/keywordize-keys msg)))
+      (handle-response! (:state-atom conn) msg))))
 
 ;; -----------------------------------------------------------------------------
 ;; Reader and Writer Loops
@@ -694,10 +695,10 @@
        (try
          (loop []
            (when (connection-running? conn)
-             (if-let [msg (read-message read-channel single-byte-buf)]
+             (if-let [frame (read-frame read-channel single-byte-buf)]
                (do
                  (when (connection-running? conn)
-                   (dispatch-message! conn msg))
+                   (dispatch-message! conn frame))
                  (recur))
                (do
                  (log/debug "Read loop: EOF from remote")
@@ -733,6 +734,25 @@
            (log/debug "Read loop ending"))))
      "jsonrpc-nio-reader" 0 false)))
 
+(defn- claim-queued-write! [state-atom id refusal]
+  ;; Refusal and approval each claim this queued entry before the owner's
+  ;; lock is released. A concurrent withdrawal observes one or neither.
+  (let [path [:connection :pending-requests id]
+        [before after] (swap-vals! state-atom
+                                   #(if (:queued? (get-in % path))
+                                      (if refusal (update-in % [:connection :pending-requests] dissoc id)
+                                          (update-in % path dissoc :queued?))
+                                      %))]
+    (when-not (identical? before after)
+      (if refusal [(:ch (get-in before path)) refusal] true))))
+
+(defn- commit-write! [state-atom msg]
+  (if-let [guard (::on-write (meta msg))]
+    (guard (fn claim!
+             ([] (claim! nil))
+             ([error] (claim-queued-write! state-atom (:id msg) error))))
+    true))
+
 (defn- start-write-loop!
   "Write and flush frames on one connection-owned thread."
   [conn]
@@ -744,8 +764,12 @@
                            (loop []
                              (when-let [msg (<!! outgoing-ch)]
                                (when (connection-running? conn)
-                                 (write-message! write-channel msg)
-                                 (.flush ^OutputStream output-stream)
+                                 (let [decision (commit-write! state-atom msg)]
+                                   (cond
+                                     (true? decision) (do (write-message! write-channel msg) (.flush ^OutputStream output-stream))
+                                     decision (let [[ch error] decision]
+                                                (put! ch {:error error})
+                                                (close! ch))))
                                  (recur))))
                            (catch Throwable failure
                              (close-input! conn
@@ -781,7 +805,7 @@
    state-atom: atom containing :connection key with connection state.
    Internal [:options :prepare-notification] can stamp a normalized notification
    with its current registration before enqueue. It runs on the reader thread
-   and must return a map without blocking or calling application code.
+   and must return a map (or nil to omit it) without calling application code.
    
    Returns a Connection record."
   [^InputStream in ^OutputStream out state-atom]
@@ -935,38 +959,52 @@
       (when-let [request (some (fn [[_ {:keys [ch]} :as entry]]
                                  (when (identical? ch target-ch) entry))
                                pending)]
-        (let [[id {:keys [on-late-response]}] request]
-          (if (compare-and-set! state-atom state
-                                (cond-> (update-in state [:connection :pending-requests] dissoc id)
-                                  on-late-response (assoc-in [:connection :late-responses id] on-late-response)))
+        (let [[id {:keys [on-late-response queued? withdraw-written]}] request
+              claim! (fn [keep-late?]
+                       (compare-and-set! state-atom state
+                                         (cond-> (update-in state [:connection :pending-requests] dissoc id)
+                                           (and on-late-response keep-late?)
+                                           (assoc-in [:connection :late-responses id] on-late-response))))]
+          (if (if (and withdraw-written (not queued?)) (withdraw-written claim!) (claim! (not queued?)))
             request
             (recur)))))))
+
+(defn- cancel-turn-wait! [conn [id {:keys [method queued?]}]]
+  (when (and (= method "session.sendAndWait") (not queued?))
+    (enqueue! conn {:jsonrpc "2.0" :method "$/cancelRequest" :params {:id id}})))
 
 (defn ^:no-doc cancel-request!
   "Cancel a pending request by response-channel identity.
 
-   Returns true only when this call atomically removed the pending request.
+   Returns nil if this call lost ownership, ::unwritten if it withdrew a
+   guarded request before the writer claimed it, or true for other withdrawals.
    A response already claimed by the reader remains deliverable. Cancelling a
    sent session.sendAndWait retires only that request, not the underlying turn."
   [conn response-ch]
-  (when-let [[id {:keys [method]}] (pop-pending-by-chan! (:state-atom conn) response-ch)]
-    (when (= method "session.sendAndWait")
-      (enqueue! conn {:jsonrpc "2.0" :method "$/cancelRequest" :params {:id id}}))
+  (when-let [[_ {:keys [queued?]} :as request] (pop-pending-by-chan! (:state-atom conn) response-ch)]
+    (cancel-turn-wait! conn request)
     (close! response-ch)
-    true))
+    (if queued? ::unwritten true)))
 
 (defn ^:no-doc withdraw-requests!
-  "Claim one owner's pending requests for local settlement. The caller must
-   settle the returned reply channels. A reader or EOF claim is never undone."
-  [{:keys [state-atom]} owner]
+  "Claim this owner's unanswered [id entry] pairs, or return nil if EOF won.
+   An empty vector is a successful claim on a live connection with no waits."
+  [{:keys [state-atom connection-id]} owner]
   (loop []
-    (let [state @state-atom
-          owned (filterv #(identical? owner (:request-owner (val %))) (get-in state [:connection :pending-requests]))]
-      (when (seq owned)
-        (if (compare-and-set! state-atom state
-                              (update-in state [:connection :pending-requests] #(reduce dissoc % (map key owned))))
-          (mapv (comp :ch val) owned)
-          (recur))))))
+    (let [state @state-atom connection (:connection state)]
+      (when (and (:running? connection) (identical? connection-id (:connection-id connection)))
+        (let [owned (filterv #(identical? owner (:request-owner (val %))) (:pending-requests connection))]
+          (if (or (empty? owned)
+                  (compare-and-set! state-atom state
+                                    (update-in state [:connection :pending-requests] #(reduce dissoc % (map key owned)))))
+            owned
+            (recur)))))))
+
+(defn ^:no-doc settle-withdrawn! [conn requests cause]
+  (doseq [[_ {:keys [ch]}] requests]
+    (put! ch cause)
+    (close! ch))
+  (doseq [request requests] (cancel-turn-wait! conn request)))
 
 (defn- register-and-offer! [{:keys [state-atom connection-id outgoing-ch]} msg entry check!]
   ;; Disconnect either owns this pending entry or refuses registration. Never
@@ -983,6 +1021,21 @@
         connection-closed)
       (when-not (async/offer! outgoing-ch msg) ::full))))
 
+(defn- admit-request! [conn msg entry {:keys [check-admission! callback-registry registration-failure on-submitted]}]
+  (if-not callback-registry
+    (register-and-offer! conn msg entry check-admission!)
+    (locking callback-registry
+      (let [lock (.readLock ^ReentrantReadWriteLock (:reply-barrier conn))]
+        (.lock lock)
+        (try
+          ;; A later EOF cannot replace a failure elected by this registration
+          ;; during wire preparation. Deadlines and capacity only govern a live offer.
+          (when-let [cause (some-> registration-failure deref)] (throw cause))
+          (let [refusal (register-and-offer! conn msg entry check-admission!)]
+            (when (and (nil? refusal) on-submitted) (on-submitted))
+            refusal)
+          (finally (.unlock lock)))))))
+
 (defn send-request
   "Send a JSON-RPC request and return a channel for the response.
    The channel delivers a single {:result ...} or {:error ...} map, then closes.
@@ -994,6 +1047,18 @@
    - `:callback-registry` — for requests tied to a session registration, acquire its registry
      monitor, then the shared reply barrier, only for the final ownership check,
      registration and nonblocking offer. No conversion or teardown under either.
+   - `:registration-failure` — this registration's terminal cause, checked under
+     its registry lock even if the connection ended during request preparation.
+   - `:on-submitted` — mark an admitted turn after its nonblocking offer and
+     before releasing the registration's reply barrier. No I/O or user code.
+   - `:with-admission` — internal worker-side ordering of that final check and offer
+     after wire preparation. Takes the nonblocking admission function.
+   - `:on-write` — verify generation ownership on the writer. Call (write!)
+     to commit the write, or (write! error) to claim a local refusal, under
+     the same ownership lock. Return its result. No I/O under the lock.
+   - `:withdraw-written` — order withdrawal of a written request with generation
+     ownership. Call (claim! keep-late?) under the owning lock and return
+     whether that pending-entry CAS succeeded. Internal; no application code.
    - `:request-owner` — identity for local withdrawal. Such a request can also
      deliver the owner's terminal exception instead of a protocol response.
    - `:on-error-inline` — revoke local authority on an explicit runtime error
@@ -1012,30 +1077,29 @@
      any later inbound message can be dispatched. See upstream PR #1479."
   ([conn method params]
    (send-request conn method params {}))
-  ([conn method params {:keys [on-response-inline on-error-inline on-late-response raw-json? check-admission! callback-registry request-owner]}]
+  ([conn method params {:keys [on-response-inline on-error-inline on-late-response raw-json?
+                               with-admission request-owner on-write withdraw-written] :as opts}]
    (when (and raw-json? (not= "session.getMessages" method))
      (throw (IllegalArgumentException. ":raw-json? requires session.getMessages")))
    (let [id (str (java.util.UUID/randomUUID))
          ch (chan 1)
          wire-params (when params (util/clj->wire params))
-         msg {:jsonrpc "2.0"
-              :id id
-              :method method
-              :params wire-params}
+         ;; A withdrawn queued request must not start writing or install a late hook.
+         write-guard (or on-write (when (or on-late-response request-owner) (fn [claim!] (claim!))))
+         msg (cond-> {:jsonrpc "2.0" :id id :method method :params wire-params}
+               write-guard (with-meta {::on-write write-guard}))
          entry (cond-> {:ch ch :method method}
+                 write-guard (assoc :queued? true)
+                 withdraw-written (assoc :withdraw-written withdraw-written)
                  request-owner (assoc :request-owner request-owner)
                  raw-json? (assoc :raw-json? true)
                  on-error-inline (assoc :on-error-inline on-error-inline)
                  on-late-response (assoc :on-late-response on-late-response)
                  on-response-inline (assoc :on-response-inline on-response-inline))]
      (log/debug "Sending request: method=" method " id=" id)
-     (let [failure (if callback-registry
-                     (locking callback-registry
-                       (let [lock (.readLock ^ReentrantReadWriteLock (:reply-barrier conn))]
-                         (.lock lock)
-                         (try (register-and-offer! conn msg entry check-admission!)
-                              (finally (.unlock lock)))))
-                     (register-and-offer! conn msg entry check-admission!))]
+     (let [failure (if with-admission
+                     (with-admission #(admit-request! conn msg entry opts))
+                     (admit-request! conn msg entry opts))]
        ;; Overflow can stop the connection and wake arbitrary waiters. Release
        ;; the reply barrier before that, or before notifying a refused caller.
        (cond
@@ -1059,12 +1123,11 @@
      (async/go
        (let [[result port] (async/alts! [response-ch timeout-ch] :priority true)]
          (if (= port timeout-ch)
-           (if (cancel-request! conn response-ch)
+           (if-let [withdrawal (cancel-request! conn response-ch)]
              (async/>! result-ch
-                       {:error ^{::timeout true}
-                        {:code -32000
-                         :message "Request timeout"
-                         :data {:method method :timeout-ms timeout-ms}}})
+                       {:error (with-meta {:code -32000 :message "Request timeout"
+                                           :data {:method method :timeout-ms timeout-ms}}
+                                 {::timeout true ::unwritten (= withdrawal ::unwritten)})})
              (when-let [claimed-response (async/<! response-ch)]
                (async/>! result-ch claimed-response)))
            (when (some? result)

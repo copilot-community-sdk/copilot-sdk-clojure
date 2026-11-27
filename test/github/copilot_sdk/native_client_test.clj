@@ -36,9 +36,12 @@
                                 "auth.getStatus" {:isAuthenticated false}
                                 ("session.create" "session.resume") {:sessionId (:sessionId params)
                                                                      :capabilities {:ui {:elicitation true}}}
-                                "session.ui.elicitation" (if (= "dismiss" (:message params))
-                                                           {:action "cancel"}
+                                "session.ui.elicitation" (case (:message params)
+                                                           "dismiss" {:action "cancel"}
+                                                           "metadata only" {:action "decline" :_meta {}}
+                                                           "null metadata" {:action "cancel" :_meta nil}
                                                            {:action (:message params)
+                                                            :_meta {"example.com/form" {"receiptID" 1 "receipt_id" [nil]}}
                                                             :content {"ticketCode" ["a"] "ticket_code" false
                                                                       "extra" {"vendor/a.b" 1 "fieldOne" false
                                                                                "field_one" 2}}})
@@ -47,6 +50,7 @@
                                 "session.list" {:sessions [metadata]}
                                 "session.getMessages" {:events [{:id "evt" :type "assistant.message"
                                                                  :timestamp "2026-11-01T00:00:00Z"
+                                                                 :occurredAt "2026-10-31T23:59:59Z"
                                                                  :data {:content "hi" :Original_Key nil
                                                                         :precise 100000000000000000001N}}]}
                                 "runtime.shutdown" {})
@@ -106,9 +110,14 @@
         (doseq [action ["accept" "decline" "cancel"]]
           (is (= (form action)
                  {:action (keyword action)
+                  :_meta {"example.com/form" {"receiptID" 1 "receipt_id" [nil]}}
                   :content {"ticketCode" ["a"] "ticket_code" false
                             "extra" {"vendor/a.b" 1 "fieldOne" false "field_one" 2}}})))
-        (is (= (form "dismiss") {:action :cancel}))))))
+        (is (= (form "dismiss") {:action :cancel}))
+        (is (= (form "metadata only") {:action :decline :_meta {}}))
+        (is (thrown? clojure.lang.ExceptionInfo (form "null metadata")))
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (sdk/await!! (sdk/elicit! session {:message "dismiss" :requested-schema {} :_meta {}}))))))))
 
 (deftest metadata-and-history-preserve-their-distinct-contracts
   (let [closed (atom 0)
@@ -131,6 +140,9 @@
           (is (= (-> (client/session-metadata c s) a/<!! :error ex-data :type) :invalid-session-id))
           (is (= (:message (client/await!! (client/ping c "still-open"))) "pong: still-open"))
           (is (= (:type idiom) :copilot/assistant.message))
+          (is (= [(:occurred-at idiom) (:timestamp idiom)]
+                 [(get raw "occurredAt") (get raw "timestamp")]
+                 ["2026-10-31T23:59:59Z" "2026-11-01T00:00:00Z"]))
           (is (= (get raw "data") {"Original_Key" nil "precise" 100000000000000000001N "content" "hi"}))
           (client/delete-session!! c "sample")
           (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Session is closed"

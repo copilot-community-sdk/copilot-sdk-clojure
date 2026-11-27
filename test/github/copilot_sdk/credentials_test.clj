@@ -180,5 +180,5 @@
                                   ["-m" "github.copilot-sdk.credentials-test"]
                                   (fn [_] (throw (ex-info "A cancelled acquisition must not call a model" {}))))]
     (is (= requests []))
-    (is (= event {:runtime {:version "1.0.114" :protocol-version 4} :outcome -32603
+    (is (= event {:runtime {:version "1.0.116" :protocol-version 4} :outcome -32603
                   :calls [{:host "https://github.com" :reason :initial :session-id "credential-cancel-check"}]}))))

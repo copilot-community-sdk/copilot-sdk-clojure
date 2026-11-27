@@ -46,6 +46,7 @@
 
 (def ^:private tool-result-fields
   {:text-result-for-llm :textResultForLlm, :result-type :resultType, :binary-results-for-llm :binaryResultsForLlm,
+   :skip-large-output-processing? :skipLargeOutputProcessing,
    :session-log :sessionLog, :tool-telemetry :toolTelemetry, :tool-references :toolReferences})
 
 (defn- rename-members [m names]
@@ -121,20 +122,20 @@
 
 (def ^:private permission-decisions
   {:no-result [{}]
-   :approve-once [{} {:approved-interactively? boolean?}]
-   :approve-for-session [{} {:approval scope? :domain string?}]
+   :approve-once [{} {:approved-interactively? boolean? :selected-option-id string?}]
+   :approve-for-session [{} {:approval scope? :domain string? :selected-option-id string?}]
    :approve-for-location [{:approval scope? :location-key string?}]
    :approve-read-only-for-session [{:directories nonempty-strings?}]
    :approve-permanently [{:domain string?}]
    :reject [{} {:feedback string?}]
-   :user-not-available [{}]
-   :approved [{}]
+   :user-not-available [{} {:selected-option-id string?}]
+   :approved [{} {:selected-option-id string?}]
    :approved-for-session [{:approval recorded-scope?}]
    :approved-for-location [{:approval recorded-scope? :location-key string?}]
    :cancelled [{} {:reason string?}]
    :denied-by-rules [{:rules rules?}]
    :denied-no-approval-rule-and-could-not-request-from-user [{}]
-   :denied-interactively-by-user [{} {:feedback string? :force-reject? boolean?}]
+   :denied-interactively-by-user [{} {:feedback string? :force-reject? boolean? :selected-option-id string?}]
    :denied-by-content-exclusion-policy [{:path string? :message string?}]
    :denied-by-permission-request-hook [{} {:message string? :interrupt? boolean?}]})
 
@@ -156,14 +157,56 @@
 (defn- form-value? [v]
   (or (string? v) (boolean? v) (strings? v) (and (number? v) (s/valid? ::specs/json-value v))))
 
-(defn elicitation-response [answer]
+(defn allowed-image? [{:keys [allowed-mime-types max-bytes-per-image]} {:keys [mime-type data] :as image}]
+  (and (some #{mime-type} allowed-mime-types)
+       (string? data)
+       ;; Check the decoded size before allocating bytes for Base64 validation.
+       (<= (- (* 3 (quot (count data) 4))
+              (cond (.endsWith ^String data "==") 2 (.endsWith ^String data "=") 1 :else 0))
+           max-bytes-per-image)
+       (s/valid? ::specs/user-input-image-attachment image)))
+
+(defn elicitation-metadata [v]
+  (check (map? v))
+  (util/opaque-json->wire v))
+
+(def ^:private ask-user-images "github.com/copilot/ask-user-images")
+
+(defn- negotiated-form-images? [offer groups]
+  (let [eligible (get offer "fieldNames")
+        limits (get offer "imageAttachmentConstraints")
+        constraints (when (and (map? limits) (= (set (keys limits)) #{"allowedMimeTypes" "maxCount" "maxBytesPerImage"}))
+                      (util/wire->clj (update-keys limits keyword)))]
+    (and (strings? eligible) (map? groups) (every? (set eligible) (keys groups))
+         (every? vector? (vals groups))
+         (or (not (contains? offer "imageAttachmentConstraints"))
+             (and (s/valid? ::specs/user-input-image-attachment-constraints constraints)
+                  (<= (reduce + (map count (vals groups))) (:max-count constraints))))
+         (every? (fn [image]
+                   (and (map? image)
+                        (every? #{"type" "data" "mimeType" "displayName" "description"} (keys image))
+                        (let [image (update (util/wire->clj (update-keys image keyword)) :type keyword)]
+                          (if constraints (allowed-image? constraints image)
+                              (s/valid? ::specs/user-input-image-attachment image)))))
+                 (mapcat val groups)))))
+
+(defn- answer-metadata [ctx answer]
+  (let [metadata (elicitation-metadata (:_meta answer))]
+    (when (contains? metadata ask-user-images)
+      (let [offer (get-in ctx [:_meta ask-user-images])
+            reply (get metadata ask-user-images)]
+        (check (and (not (contains? ctx :elicitation-source)) (= (:action answer) :accept)
+                    (= (get offer "version") (get reply "version") 1)
+                    (negotiated-form-images? offer (get reply "attachments"))))))
+    metadata))
+
+(defn elicitation-response [ctx answer]
   (fields answer {:action #{:accept :decline :cancel}}
-          {:decision-context map? :content #(and (map? %) (every? form-value? (vals %)))})
+          {:decision-context map? :_meta map? :content #(and (map? %) (every? form-value? (vals %)))})
   (cond-> {:result (cond-> {:action (name (:action answer))}
+                     (contains? answer :_meta) (assoc "_meta" (answer-metadata ctx answer))
                      (contains? answer :content)
-                     (assoc :content (let [content (util/opaque-json->wire (:content answer))]
-                                       (check (every? string? (keys content)))
-                                       content)))}
+                     (assoc :content (util/opaque-json->wire (:content answer))))}
     (contains? answer :decision-context) (assoc :decision-context (decision-context->wire (:decision-context answer)))))
 
 (defn oauth-response [request {:keys [kind access-token] :as answer}]

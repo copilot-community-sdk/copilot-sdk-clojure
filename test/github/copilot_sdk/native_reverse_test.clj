@@ -82,7 +82,8 @@
           (is (= (hook "preMcpToolCall" {:_meta opaque}) {:output {:metaToUse received}}))
           (is (= (hook "preMcpToolCall" {:_meta nil}) {:output {:metaToUse nil}}))
           (let [metadata {"vendorKey" 1 "vendor_key" 2 "provider/Asset_ID" [false]}
-                result {:textResultForLlm "ok" :resultType "success" "result-type" "vendor spelling"
+                result {:textResultForLlm "ok" :resultType "success" :skipLargeOutputProcessing true
+                        "result-type" "vendor spelling"
                         (subs (str ::opaque-units) 1) "tokens"
                         :Custom_Metrics {"lab/count" 2 "model/count" 7}
                         :binaryResultsForLlm [{:type "image" :data "AQ==" :mimeType "image/png"
@@ -91,6 +92,7 @@
             (is (= (hook "postToolUse" {:toolResult result})
                    {:output {:modifiedResult (walk/keywordize-keys result)}}))
             (is (= (get @seen :Custom_Metrics) {:lab/count 2 :model/count 7}))
+            (is (true? (:skip-large-output-processing? @seen)))
             (is (= [(:result-type @seen) (get @seen "result-type")]
                    [:success "vendor spelling"])))
           (is (= (hook "sessionEnd" {:error {:message "failed"}}) {:output {:sessionSummary "failed"}}))
@@ -389,6 +391,33 @@
                {:sections {:environment_context {:content "cwd!"}
                            :environment-context {:content "untouched"}
                            :safety {:content "fallback"}}}))))))
+
+(deftest legacy-user-input-honors-the-request-image-constraints
+  (let [seen (atom nil)
+        image {:type :image :data "AQ==" :mime-type "image/png" :display-name "screen" :description ""}
+        constraints {:allowedMimeTypes ["image/png"] :maxBytesPerImage 1 :maxCount 1}
+        answer {:answer "" :was-freeform? true :attachments [image]}
+        reply (atom answer)]
+    (with-session {:interaction {:on-user-input-request (fn [p _] (reset! seen p) @reply)}}
+      (fn [_ _ _ request!]
+        (let [ask #(request! "userInput.request" (merge {:question "Show image"} %))]
+          (is (= (:result (ask {:imageAttachmentConstraints constraints}))
+                 {:answer "" :wasFreeform true :attachments [{:type "image" :data "AQ==" :mimeType "image/png"
+                                                              :displayName "screen" :description ""}]}))
+          (is (= (:image-attachment-constraints @seen) {:allowed-mime-types ["image/png"] :max-bytes-per-image 1 :max-count 1}))
+          (doseq [bad [{} {:imageAttachmentConstraints nil}
+                       {:imageAttachmentConstraints (assoc constraints :maxCount 0)}
+                       {:imageAttachmentConstraints (assoc constraints :maxBytesPerImage 0)}
+                       {:imageAttachmentConstraints (assoc constraints :allowedMimeTypes ["image/jpeg"])}]]
+            (is (= (get-in (ask bad) [:error :code]) -32603)))
+          (doseq [bad [(assoc answer :attachments nil) (assoc answer :was-freeform? false)
+                       (assoc-in answer [:attachments 0 :data] "AQI=")
+                       (assoc-in answer [:attachments 0 :data] "AQ")
+                       (assoc-in answer [:attachments 0 :description] nil)]]
+            (reset! reply bad)
+            (is (= (get-in (ask {:imageAttachmentConstraints constraints}) [:error :code]) -32603)))
+          (reset! reply {:answer "ok" :was-freeform? false :attachments []})
+          (is (= (:result (ask {:imageAttachmentConstraints constraints})) {:answer "ok" :wasFreeform false :attachments []})))))))
 
 (deftest unsolicited-callbacks-dont-grant-authority
   (with-session {}

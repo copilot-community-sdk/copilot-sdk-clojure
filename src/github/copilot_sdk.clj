@@ -205,7 +205,8 @@
 
 (defn elicit!
   "Ask a capable host for structured input using :message and :requested-schema.
-  The result contains :action (:accept, :decline or :cancel) and any :content.
+  The result contains :action (:accept, :decline or :cancel) and optional
+  :content and :_meta maps with the host's original JSON member names.
   The schema's property names belong to the application. The request waits for
   a response or for the session to close; it has no SDK timer for human input.
   A client can have 64 unanswered outbound forms. An excess request returns

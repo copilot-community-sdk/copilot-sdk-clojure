@@ -42,11 +42,11 @@ the handle; it does not erase history.
 
 ## Install and migrate
 
-Community SDK version in this checkout: `2.0.1.0-SNAPSHOT`. A checkout version
+Community SDK version in this checkout: `2.0.3.0-SNAPSHOT`. A checkout version
 does not establish that the artifact is available from Maven Central.
 Use the checkout as a [local dependency](./doc/getting-started.md). Add the
 matching `com.microsoft/copilot-sdk-runtime` platform classifier, version
-`2.0.1`. The pinned runtime is `1.0.114`, SDK protocol `4`. `bb jar` builds
+`2.0.3`. The pinned runtime is `1.0.116`, SDK protocol `4`. `bb jar` builds
 the community SDK locally without bundling the platform binary or publishing.
 
 | I want to… | Start here |
@@ -59,9 +59,9 @@ the community SDK locally without bundling the platform binary or publishing.
 | Verify the JAR from another JVM before release | [Candidate and release checks](./PUBLISHING.md) |
 
 The compatibility target is the **stable in-process** surface of the
-[upstream Node.js SDK at 2.0.1](https://github.com/microsoft/copilot-sdk/tree/3ce61458503b6b27ebd1f674a980f4d9596d9b22/nodejs),
+[upstream Node.js SDK at 2.0.3](https://github.com/microsoft/copilot-sdk/tree/5671812ecd4ce58ee040e9a41d98da2f849c8095/nodejs),
 not every generated RPC or experimental extension. In-process hosting is not
-a security sandbox: a native crash can terminate the JVM. If you need a
+a security sandbox: a Rust panic terminates the host JVM. If you need a
 separate CLI process, TCP, or a parent extension host, keep using the
 [1.x SDK and its manual](https://github.com/copilot-community-sdk/copilot-sdk-clojure/tree/01246672fc5fb8e8f2b50437eea6a55145e54934).
 

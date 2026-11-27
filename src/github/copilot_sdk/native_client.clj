@@ -26,7 +26,7 @@
 (declare close-client! close-session! client-connection)
 (declare ^:private finish-input!)
 
-(deftype Client [connection options callbacks reverseOwner discovery lifecycle sessions closeHost]
+(deftype Client [connection options callbacks reverseOwner discovery lifecycle sessions heldEvents closeHost]
   AutoCloseable
   (close [this] (close-client! this)))
 
@@ -84,38 +84,209 @@
                            (update :start-time instant)
                            (update :modified-time instant))))))
 
-(defn- capture-event [sessions id]
+(def ^:private held-event-limit 8192)
+(def ^:private held-byte-limit (* 16 1024 1024))
+(def ^:private ownership-changed
+  {:code -32001 :message "Session ownership changed before request write"
+   :data {:code "session_ownership_changed"}})
+
+(def ^:private allocation-unresolved
+  {:code -32001 :message "A server-assigned session allocation is unidentified"
+   :data {:code "session_allocation_unresolved"}})
+
+(defn- unresolved-allocation [held]
+  (let [{:keys [windows unidentified?]} @held]
+    (when (or unidentified? (seq windows))
+      allocation-unresolved)))
+
+(defn- retain-events [state keep?]
+  (let [events (filterv keep? (:events state))]
+    (assoc state :events events :bytes (transduce (map peek) + 0 events))))
+
+;; A create can claim only frames received since its own window opened,
+;; even if another anonymous create kept the buffer alive between calls.
+(defn- start-event-window! [held window write!]
+  (locking held
+    (cond
+      (:unidentified? @held) (write! allocation-unresolved)
+      @window (write! ownership-changed)
+      (write!)
+      (let [serial (inc (:serial @held))]
+        (vreset! window serial)
+        (swap! held #(-> % (assoc :serial serial) (update :windows conj serial)))
+        true)
+      :else false)))
+
+(defn- end-event-window! [held window allocation-settled?]
+  (locking held
+    (let [serial @window]
+      (vreset! window ::closed)
+      (when (number? serial)
+        (swap! held (fn [state]
+                      (let [windows (disj (:windows state) serial)]
+                        (cond-> (assoc (if-let [oldest (first windows)]
+                                         (retain-events state #(<= oldest (first %)))
+                                         (assoc state :events [] :bytes 0))
+                                       :windows windows)
+                          ;; A withdrawn written create cannot register a late reply.
+                          (not allocation-settled?) (assoc :unidentified? true :events [] :bytes 0)))))))))
+
+(defn- withdraw-allocation! [held window claim!]
+  ;; If the reader claimed the reply, it alone establishes the ID. Otherwise
+  ;; no unknown-ID event can be attributed to any overlapping allocation.
+  (locking held
+    (when (claim! false)
+      (end-event-window! held window false)
+      true)))
+
+(defn- discard-held-events! [held id]
+  ;; The reader's ownership check and insert hold this same monitor.
+  (locking held
+    (swap-vals! held retain-events #(not= (second %) id))))
+
+(defn- take-held-events! [held id window]
+  (when window
+    (let [[before _] (discard-held-events! held id)]
+      (into [] (keep (fn [[serial session-id event]]
+                       (when (and (<= window serial) (= id session-id)) event)))
+            (:events before)))))
+
+(defn- make-room [state size]
+  (let [{:keys [events bytes]} state
+        needed (- (+ bytes size) held-byte-limit)]
+    (if (and (< (count events) held-event-limit) (not (pos? needed)))
+      state
+      ;; Drop complete IDs, oldest first. One large frame can evict many IDs.
+      (let [sizes (reduce (fn [m [_ id _ n]] (update m id (fnil + 0) n)) {} events)
+            evicted (loop [ids (distinct (map second events)) dropped #{} freed 0]
+                      (let [id (first ids) total (+ freed (sizes id)) dropped (conj dropped id)]
+                        (if (>= total needed) dropped (recur (next ids) dropped total))))]
+        (retain-events state #(not (evicted (second %))))))))
+
+(defn- hold-event! [held sessions id event size]
+  ;; Order the writer's admitted create with unknown-ID event admission.
+  (locking held
+    (when (and (not (:unidentified? @held)) (seq (:windows @held))
+               (let [owner (get @sessions id)]
+                 (or (nil? owner) (::saved-delete owner)
+                     (and (session? owner) (:release-ack? @(.-lifecycle ^Session owner))))))
+      (if (> size held-byte-limit)
+        ;; This may be a completion for an earlier request. Keep neither
+        ;; half of this ID's batch, without evicting unrelated sessions.
+        (let [[before after] (discard-held-events! held id)]
+          (log/warn "Dropped held events for a session with an oversized frame"
+                    {:session-id id :frame-bytes size :byte-limit held-byte-limit
+                     :dropped (- (inc (count (:events before))) (count (:events after)))
+                     :dropped-bytes (- (+ size (:bytes before)) (:bytes after))}))
+        (let [[before after]
+              (swap-vals! held
+                          (fn [{:keys [serial] :as state}]
+                            (-> (make-room state size)
+                                (update :events conj [serial id event size])
+                                (update :bytes + size))))
+              dropped (- (inc (count (:events before))) (count (:events after)))]
+          (when (pos? dropped)
+            (log/warn "Dropped events held for unregistered sessions"
+                      {:oldest-session-id (second (first (:events before))) :dropped dropped
+                       :dropped-bytes (- (+ size (:bytes before)) (:bytes after))})))))))
+
+(defn- capture-event!
+  [sessions held {:keys [params] :as msg}]
   ;; Only the reader increments this count or sets the generation's ACK bit.
   ;; The router returns each accepted frame after publication, not after user code.
-  (let [s (get @sessions id)]
-    (when (and (session? s) (not @(:token (.-registration ^Session s))))
-      (.incrementAndGet (.-publications ^Session s))
-      s)))
+  (let [{:keys [session-id event]} params
+        s (get @sessions session-id)]
+    (cond
+      (and (session? s) (not @(:token (.-registration ^Session s))))
+      (let [receipt (callbacks/track-decision! (.-registration ^Session s) event)]
+        (.incrementAndGet (.-publications ^Session s))
+        (cond-> (assoc msg ::session s ::turn-cursor (turn/admission-cursor (.-turns ^Session s)))
+          receipt (assoc ::decision-receipt receipt)))
+
+      (and (string? session-id)
+           (or (not (session? s)) (:release-ack? @(.-lifecycle ^Session s))))
+      (do (hold-event! held sessions session-id event (::rpc/frame-bytes (meta msg))) nil))))
+
+(defn- release-reservation! [sessions id reservation]
+  (swap! sessions
+         (fn [routes]
+           (if (identical? reservation (get routes id))
+             (let [requested (::requested-id reservation)]
+               (cond-> (dissoc routes id)
+                 (and requested (identical? (:done reservation) (get routes requested))) (dissoc requested)))
+             routes))))
+
+(defn- take-delete-confirmation! [boundary]
+  (when boundary
+    (let [phase @boundary]
+      (cond (delay? phase) (do (vreset! boundary {:confirmed phase}) phase)
+            (= phase :inventory) (do (vreset! boundary :invalid) nil)))))
+
+(defn- delete-confirmation [entry]
+  (some-> entry ::delete-boundary deref :confirmed))
+
+(defn- released? [^Session session]
+  (let [state @(.-lifecycle session)]
+    (or (:release-ack? state) (delete-confirmation state))))
+
+(defn- deleted! [held sessions id]
+  (when (string? id)
+    (when-let [confirmation
+               (locking held
+                 (discard-held-events! held id)
+                 (let [owner (get @sessions id)]
+                   (if-let [boundary (::saved-delete owner)]
+                     (do (when-not (= :withdrawn @boundary)
+                           (release-reservation! sessions id owner))
+                         nil)
+                     (take-delete-confirmation!
+                      (::delete-boundary (if (session? owner) @(.-lifecycle ^Session owner) owner))))))]
+      (force confirmation))))
+
+(defn- update-capabilities! [^Session s event]
+  (when (= :copilot/capabilities.changed (:type event))
+    (swap! (.-lifecycle s) update-in [:info :capabilities] merge-capabilities (:data event))))
+
+(defn- tracked-handle? [sessions ^Session s]
+  (or (identical? s (get sessions (.-id s))) (contains? sessions s)))
 
 (defn- route! [^Client client]
   (a/go-loop []
-    (if-let [{:keys [method params] captured ::session} (a/<! (rpc/notifications (.-connection client)))]
+    (if-let [{:keys [method params] captured ::session held ::events cursor ::turn-cursor receipt ::decision-receipt}
+             (a/<! (rpc/notifications (.-connection client)))]
       (do
         (case method
+          ::storage-ready
+          (when-let [^Session s captured]
+            (try
+              (when (identical? s (get @(.-sessions client) (.-id s)))
+                (callbacks/storage-ready! (.-callbacks client) (.-registration s)))
+              (catch Exception e
+                (callbacks/fail! (.-callbacks client) (.-registration s) e))
+              (finally (a/close! receipt))))
           "session.lifecycle"
           (try
             (if-let [event (lifecycle-event params)]
-              (turn/publish! (.-lifecycle client) event)
+              (turn/publish! (.-lifecycle client) event nil cursor)
               (log/warn "Ignoring invalid session lifecycle notification"))
             (catch java.time.DateTimeException _
               (log/warn "Ignoring invalid session lifecycle timestamp")))
           "session.event"
           (when-let [^Session s captured]
             (try
-              (when (identical? s (get @(.-sessions client) (:session-id params)))
-                (let [event (turn/normalize-event (:event params))]
-                  (when (= :copilot/capabilities.changed (:type event))
-                    (swap! (.-lifecycle s) update-in [:info :capabilities] merge-capabilities (:data event)))
-                  (turn/publish! (.-turns s) event
-                                 (callbacks/publish! (.-callbacks client) (.-registration s) event))))
+              (let [routes @(.-sessions client)]
+                (when (tracked-handle? routes s)
+                  (if held
+                    (do (doseq [event held] (update-capabilities! s event))
+                        (callbacks/publish-held! (.-callbacks client) (.-registration s) held))
+                    (let [event (turn/normalize-event (:event params))]
+                      (update-capabilities! s event)
+                      (when-let [[delivery] (callbacks/publish! (.-callbacks client) (.-registration s) event)]
+                        (turn/publish! (.-turns s) event delivery cursor))))))
               (catch Exception e
                 (callbacks/fail! (.-callbacks client) (.-registration s) e))
               (finally
+                (when receipt (a/close! receipt))
                 (.decrementAndGet (.-publications s))
                 (when (and @(:token (.-registration s)) (zero? (.get (.-publications s))))
                   (.complete (.-published s) nil)))))
@@ -166,9 +337,16 @@
       (let [{:keys [in out close! configure-ui! run-ui-action!]} (host/open! host-opts)
             _ (vswap! rollback conj close!)
             sessions (atom {})
+            held (atom {:serial 0 :windows (sorted-set) :events [] :bytes 0})
+            lifecycle (turn/new-state)
             prepare (fn [{:keys [method params] :as notification}]
-                      (cond-> notification
-                        (= method "session.event") (assoc ::session (capture-event sessions (:session-id params)))))
+                      (case method
+                        "session.event" (capture-event! sessions held notification)
+                        "session.lifecycle" (let [cursor (turn/admission-cursor lifecycle)]
+                                              (when (= "session.deleted" (:type params))
+                                                (deleted! held sessions (:session-id params)))
+                                              (assoc notification ::turn-cursor cursor))
+                        notification))
             conn (rpc/connect in out (atom {:connection (rpc/initial-connection-state)
                                             :options {:prepare-notification prepare}}))
             _ (vswap! rollback conj #(release-connection! conn))
@@ -192,7 +370,7 @@
         (when fs-config
           (when-not (true? (:success (rpc/send-request! conn "sessionFs.setProvider" fs-params 10000)))
             (throw (ex-info "Runtime did not register the session filesystem" {:type :session-fs-rejected}))))
-        (let [client (Client. conn (select-keys opts [:mode :base-directory]) owner reverse-owner discover (turn/new-state) sessions close-host)]
+        (let [client (Client. conn (select-keys opts [:mode :base-directory]) owner reverse-owner discover lifecycle sessions held close-host)]
           (route! client)
           client))
       (catch Throwable t
@@ -204,6 +382,13 @@
             (finally (when @*close-interrupted* (.interrupt (Thread/currentThread))))))
         (throw t)))))
 
+(defn- connection-end-cause [conn]
+  (let [error (get-in @(:state-atom conn) [:connection :terminal-error])]
+    (ex-info (or (:message error) "Runtime connection closed") {:type :connection-closed :error error})))
+
+(defn- input-ended? [^Client client]
+  (not (get-in @(:state-atom (.-connection client)) [:connection :running?])))
+
 (defn- release-opts [^Client client token]
   ;; A positive ACK retires just this generation before the next frame.
   ;; The lifecycle owner still releases registrations and interrupts work.
@@ -211,12 +396,34 @@
     (let [owner (.-reverseOwner client)
           conn (.-connection client)
           id @(:id token)
-          release! (fn [success]
+          s (get @(.-sessions client) id)
+          ^Session session (when (and (session? s) (identical? retired? (:token (.-registration ^Session s)))) s)
+          turns (when session (.-turns session))
+          admission-closed (when session (:admission-closed (.-registration session)))
+          failure-claimed? (when session (:failure-claimed? (.-registration session)))
+          cause (ex-info "Session closed" {:type :session-closed :session-id id})
+          release! (fn [success timely?]
                      (when (true? success)
                        (reverse/retire-generation! owner id retired?)
-                       (callbacks/retire-forms! conn id retired?)))]
-      {:on-response-inline #(release! (:success %))
-       :on-late-response (fn [result _] (release! (get result "success")))})))
+                       ;; A timeout can remove the ID route before its late reply.
+                       (when-not (and failure-claimed? @failure-claimed?)
+                         (let [requests (if turns
+                                          ;; Serialize the claim and turn state change with EOF retirement.
+                                          (locking turns
+                                            (when-let [requests (rpc/withdraw-requests! conn retired?)]
+                                              (turn/release-waits! turns cause timely?)
+                                              (a/close! admission-closed)
+                                              requests))
+                                          (rpc/withdraw-requests! conn retired?))]
+                           (rpc/settle-withdrawn! conn requests cause)))
+                       true))]
+      ;; Only a timely ACK transfers ingress. A late one revokes authority
+      ;; without freeing an uncertain ID or retaining the old handle.
+      {:on-response-inline (fn [result]
+                             (when (and (release! (:success result) true) session
+                                        (identical? session (get @(.-sessions client) id)))
+                               (swap! (.-lifecycle session) assoc :release-ack? true)))
+       :on-late-response (fn [result _] (release! (get result "success") false))})))
 
 (defn- check-release! [method id response]
   (let [{:keys [error] :as result} (rpc/response-result! method response)]
@@ -264,10 +471,15 @@
      (locking client
        (let [reverse-token (:reverse-token @(.-lifecycle s))]
          (when reverse-token
-           (reset! (.-lifecycle s) (cond-> {:status :closed} keep-cleanup? (assoc :reverse-token reverse-token))))
-         (cleanup! [#(turn/close! (.-turns s) cause (= :connection-closed (:type (ex-data cause))))
-                    ;; An observer can still be draining after EOF released the reverse token.
-                    #((if drain-events? callbacks/drain! callbacks/unregister!) (.-callbacks client) (.-registration s))
+           ;; Graceful shutdown closes this handle before joining a delete.
+           ;; The reader still owns that delete's notification/write boundary.
+           (swap! (.-lifecycle s) #(cond-> (assoc (select-keys % [:release-ack? ::delete-boundary]) :status :closed)
+                                     keep-cleanup? (assoc :reverse-token reverse-token))))
+         ;; Arbitrate callback retirement before closing turns. A callback
+         ;; failure that already owns the registry must publish its cause first.
+         (cleanup! [#((if drain-events? callbacks/drain! callbacks/unregister!) (.-callbacks client) (.-registration s))
+                    #(let [conn (.-connection client) eof? (and drain-events? (input-ended? client))]
+                       (turn/close! (.-turns s) (if eof? (connection-end-cause conn) cause) eof?))
                     #(.complete (.-published s) nil)
                     #(when reverse-token
                        ((if keep-cleanup? reverse/drain! reverse/unregister!) (.-reverseOwner client) reverse-token))
@@ -275,12 +487,11 @@
                     #(when (:open? @(.-closeHost client))
                        (swap! (.-sessions client)
                               (fn [sessions]
-                                (if (identical? s (get sessions (.-id s))) (dissoc sessions (.-id s)) sessions))))]))))))
+                                (dissoc sessions (if (identical? s (get sessions (.-id s))) (.-id s) s)))))]))))))
 
 (defn- finish-input! [^Client client]
   (let [sessions (.-sessions client)
-        error (get-in @(:state-atom (.-connection client)) [:connection :terminal-error])
-        cause (ex-info (or (:message error) "Runtime connection closed") {:type :connection-closed :error error})]
+        cause (connection-end-cause (.-connection client))]
     (locking client
       (when (:open? @(.-closeHost client))
         (callbacks/finish-input! (.-callbacks client))
@@ -307,6 +518,10 @@
   ;; an observer can synchronously detach its own session.
   (teardown/with-cleanup
     #(retire-session! s false true (ex-info "Session closed" {:type :session-closed :session-id (.-id s)}))
+    ;; A delete timeout can observe the notification before its release action
+    ;; has finished. Apply that action once before retiring the turn waiters.
+    (when-let [confirmation (delete-confirmation @(.-lifecycle s))]
+      (force confirmation))
     (when (pos? (.get (.-publications s)))
       (.join (.orTimeout (.-published s) 10 TimeUnit/SECONDS)))))
 
@@ -361,44 +576,62 @@
           (reverse/retire-end-hook! (.-reverseOwner c) (:reverse-token entry)))))
     (when-let [failure (combined-failure @errors)] (throw failure))))
 
-(defn- uncertain-response? [^Client client failure]
-  (or (::rpc/timeout (meta (:error (ex-data failure))))
-      (not (get-in @(:state-atom (.-connection client)) [:connection :running?]))))
+(defn- uncertain-response? [failure eof?]
+  (let [outcome (meta (:error (ex-data failure)))]
+    (and (not (::rpc/unwritten outcome)) (or (::rpc/timeout outcome) eof?))))
+
+(defn- close-after-eof! [^Session s]
+  (let [client (.-client s) id (.-id s)]
+    ;; Only accepted frames still need the handle. Revoke the ID route now;
+    ;; the router retires the object-keyed route after its last publication.
+    (swap! (.-sessions client)
+           #(if (identical? s (get % id)) (assoc (dissoc % id) s s) %))
+    (swap! (.-lifecycle s) #(-> % (assoc :status :closed) (dissoc :done)))
+    (teardown/with-cleanup
+      #(when (zero? (.get (.-publications s)))
+         (retire-session! s false true (connection-end-cause (.-connection client))))
+      (callbacks/close-retired-observer! (.-callbacks client) (.-registration s))))
+  nil)
 
 (defn- fence-uncertain! [^Client client id owner failure]
-  (when (uncertain-response? client failure)
-    (swap! (.-sessions client) #(if (identical? owner (get % id)) (assoc % id ::unconfirmed-cleanup) %))
-    (when (session? owner)
-      (let [token (:reverse-token @(.-lifecycle ^Session owner))]
-        (teardown/cleanup-preserving!
-         failure
-         #(if (and (get-in @(:state-atom (.-connection client)) [:connection :running?]) (reverse/initialized-storage? token))
-            (do (retire-session! owner true) (retain-storage! owner))
-            (unregister! owner)))))))
+  (let [eof? (input-ended? client)]
+    (cond
+      (and eof? (session? owner))
+      (teardown/cleanup-preserving! failure #(close-after-eof! owner))
+
+      (uncertain-response? failure eof?)
+      (do (swap! (.-sessions client) #(if (identical? owner (get % id)) (assoc % id ::unconfirmed-cleanup) %))
+          (when (session? owner)
+            (let [token (:reverse-token @(.-lifecycle ^Session owner))]
+              (teardown/cleanup-preserving!
+               failure
+               #(if (reverse/initialized-storage? token)
+                  (do (retire-session! owner true) (retain-storage! owner))
+                  (unregister! owner)))))))))
 
 (defn- close-session* [^Session s]
   (let [client (.-client s)
         own-end-hook? (= :ending (scope/check! (.-connection client) :detach (:token (.-registration s))))
         [role done]
         (locking client
-          (let [connected? (get-in @(:state-atom (.-connection client)) [:connection :running?])
-                shutdown (:done @(.-closeHost client))
+          (let [shutdown (:done @(.-closeHost client))
                 {:keys [status done]} @(.-lifecycle s)]
             (cond
               own-end-hook? nil
-              (not (identical? s (get @(.-sessions client) (.-id s))))
+              (not (tracked-handle? @(.-sessions client) s))
               [:close-retired-observer]
               shutdown (do (scope/check! (.-connection client) :shutdown)
                            [:wait shutdown])
               :else (case status
+                      :closed [:close-retired-observer]
                       (:opening :deleting) (throw (ex-info "Session lifecycle operation in progress"
                                                            {:type :session-busy :session-id (.-id s)}))
                       :closing [:wait done]
-                      :open (if connected?
+                      :open (if (input-ended? client)
+                              (close-after-eof! s)
                               (let [d (a/promise-chan)]
                                 (swap! (.-lifecycle s) assoc :status :closing :done d)
-                                [:detach d])
-                              (unregister! s))
+                                [:detach d]))
                       nil))))]
     (case role
       :close-retired-observer (callbacks/close-retired-observer! (.-callbacks client) (.-registration s))
@@ -495,17 +728,38 @@
 (defn- check-callback-failure! [^Session s]
   (when-let [failure @(:failure (.-registration s))] (throw failure)))
 
+(defn- check-reservation! [^Session s]
+  (let [c (.-client s) turns (.-turns s)]
+    ;; The registry and turn monitors order earlier failures and release
+    ;; claims before EOF. Neither admission nor its cause waits for publication.
+    (locking (:sessions (.-callbacks c))
+      (locking turns
+        (let [{:keys [closed released]} @turns]
+          (when-let [cause (:error (or closed released))] (throw cause))
+          (when (input-ended? c) (throw (connection-end-cause (.-connection c)))))))))
+
+(defn- initialize-storage! [^Client c token ^Session s config]
+  (when (get-in config [:state :create-session-fs-provider])
+    (reverse/initialize-fs!! (.-reverseOwner c) token s config)
+    ;; Completions admitted while the factory ran must settle before any
+    ;; deferred handler starts. Do not wait for the router or an observer.
+    (when-not (rpc/offer-notification! (.-connection c) {:method ::storage-ready ::session s}
+                                       #(assoc % ::decision-receipt (vreset! (:decision-fence (.-registration s)) (a/chan))))
+      (throw (ex-info "Connection closed before session storage could be activated"
+                      {:type :connection-closed :session-id (.-id s)})))))
+
 (defn- session-admission [^Client client ^Session s opts]
-  ;; The failure transition can run while a different thread prepares a request.
-  (let [check! (:check-admission! opts)]
-    (assoc opts :callback-registry (:sessions (.-callbacks client))
-           :check-admission! #(do (check-callback-failure! s) (when check! (check!))))))
+  (assoc opts :callback-registry (:sessions (.-callbacks client))
+         :registration-failure (:failure (.-registration s))))
 
 (defn- assert-opening! [^Client client ^Session s]
   (when-not (and (:open? @(.-closeHost client))
                  (identical? s (get @(.-sessions client) (.-id s)))
                  (= :opening (:status @(.-lifecycle s))))
     (throw (ex-info "Session setup no longer owns this connection" {:type :session-closed})))
+  (let [connection (:connection @(:state-atom (.-connection client)))]
+    (when-not (:running? connection)
+      (throw (ex-info "Session connection closed during setup" {:type :connection-closed :error (:terminal-error connection)}))))
   (check-callback-failure! s))
 
 (defn- opening-request!!
@@ -544,33 +798,66 @@
 (defn- lost-reservation [id]
   (ex-info "Session opening no longer owns its reservation" {:type :session-cleanup-unconfirmed :session-id id}))
 
-(defn- register-opening! [^Client client id token config abandoned handle done server-acquired-id]
+(defn- transfer-allocation! [^Client client id done acquired]
+  (let [displaced
+        (locking (.-heldEvents client)
+          (let [sessions @(.-sessions client)
+                ;; The default store can alias IDs by case.
+                reserved-id (if (or (contains? sessions id) (:fs-config (.-reverseOwner client))) id
+                                (some #(when (alternate-id? id %) %) (keys sessions)))
+                entry (get sessions reserved-id)
+                saved-delete (::saved-delete entry)
+                draining? (and (:open? @(.-closeHost client)) (session? entry)
+                               (:release-ack? @(.-lifecycle ^Session entry)))
+                available (when (or draining? (and saved-delete (= :inventory @saved-delete))) reserved-id)]
+            (when-not (identical? done (get sessions done)) (throw (lost-reservation id)))
+            (assert-available! client id (dissoc sessions available))
+            ;; A displaced handle retains its own publications and shutdown
+            ;; join. Its release caller cannot remove the replacement's route.
+            (swap! (.-sessions client) #(cond-> (-> % (dissoc done available) (assoc id done))
+                                          draining? (assoc entry entry)))
+            (vreset! acquired id)
+            (when draining? entry)))]
+    (when-let [^Session old displaced]
+      (callbacks/unroute-released! (.-callbacks client) (.-registration old))
+      (when-let [old-token (:reverse-token @(.-lifecycle old))]
+        (reverse/unregister! (.-reverseOwner client) old-token)))))
+
+(defn- register-opening! [^Client client id token config abandoned handle done server-acquired-id window]
   (when-not (spec/valid? ::specs/session-id id)
     (throw (ex-info "Runtime did not return a session ID" {:type :missing-session-id})))
   (locking client
     (if server-acquired-id
-      (do
-        (when-not (identical? done (get @(.-sessions client) done))
-          (throw (lost-reservation id)))
-        (assert-available! client id)
-        ;; Transfer the anonymous reservation before callback admission can fail.
-        (swap! (.-sessions client) #(-> % (dissoc done) (assoc id done)))
-        (vreset! server-acquired-id id))
+      (transfer-allocation! client id done server-acquired-id)
       (when-not (identical? done (get @(.-sessions client) id))
         (throw (lost-reservation id))))
-    (when-not @abandoned
-      (client-connection client)
-      (reverse/bind! (.-reverseOwner client) token id)
-      (let [turns (turn/new-state)
-            reg (callbacks/register! (.-callbacks client) id config (:retired? token)
-                                     (fn [cause]
-                                       (reverse/drain! (.-reverseOwner client) token)
-                                       (turn/close! turns cause)))
-            s (Session. client id turns reg (atom {:status :opening :reverse-token token :done done
-                                                   :config-directory (:config-directory config)})
-                        (AtomicInteger.) (CompletableFuture.))]
-        (swap! (.-sessions client) assoc id s)
-        (vreset! handle s)))))
+    ;; Even an abandoned open must discard the acquired generation's batch.
+    ;; A collision above did not acquire the ID and must leave the batch intact.
+    (let [events (take-held-events! (.-heldEvents client) id window)]
+      (when-not @abandoned
+        (client-connection client)
+        (reverse/bind! (.-reverseOwner client) token id)
+        (let [events (mapv turn/normalize-event events)
+              turns (turn/new-state (some? (get-in config [:events :on-event])))
+              reg (callbacks/register! (.-callbacks client) id config (:retired? token)
+                                       (fn [cause]
+                                         (reverse/drain! (.-reverseOwner client) token)
+                                         (turn/close! turns cause))
+                                       events (some? (get-in config [:state :create-session-fs-provider])))
+              s (Session. client id turns reg (atom {:status :opening :reverse-token token :done done
+                                                     :config-directory (:config-directory config)})
+                          (AtomicInteger.) (CompletableFuture.))]
+          (swap! (.-sessions client) assoc id s)
+          (vreset! handle s)
+          ;; This callback runs on the sole frame reader. One queue position
+          ;; orders the reconciled batch before every notification after the reply.
+          (when (seq events)
+            (.incrementAndGet (.-publications s))
+            (when-not (rpc/offer-notification! (.-connection client) {:method "session.event" ::session s ::events events})
+              (.decrementAndGet (.-publications s))
+              (throw (ex-info "Connection closed before initial session events could be delivered"
+                              {:type :connection-closed :session-id id}))))
+          s)))))
 
 (defn- reserve-mismatch! [^Client client requested returned token handle done]
   ;; The requested ID still owns the callbacks and shutdown join. The returned
@@ -585,6 +872,7 @@
                    (throw (lost-reservation returned)))
                  (assert-available! client returned (dissoc sessions requested))
                  (assoc sessions returned token))))
+      (discard-held-events! (.-heldEvents client) returned)
       returned)))
 
 (defn- finish-open! [^Client client ^Session s opened config on-interrupt]
@@ -604,13 +892,18 @@
                                                                              (get-in state [:info :capabilities])))))))
   s)
 
-(defn- fence-opening! [^Client client ^Session s token done]
-  ;; Stop all application callbacks, but reserve the ID until rollback settles.
-  (if s
-    (let [id (.-id s)]
-      (locking client (swap! (.-sessions client) #(if (identical? s (get % id)) (assoc % id done) %)))
-      (retire-session! s true))
-    (reverse/drain! (.-reverseOwner client) token)))
+(defn- fence-opening! [^Client client ^Session s token done & [release]]
+  (locking client
+    (let [sessions (.-sessions client)]
+      (when s
+        (let [requested (.-id s)]
+          (swap! sessions #(if (identical? s (get % requested)) (assoc % requested done) %))))
+      (when-let [[id owner reservation] release]
+        ;; The opening caller stays joinable after the reader releases its ID.
+        (locking (.-heldEvents client)
+          (when-not (identical? owner (get @sessions id)) (throw (lost-reservation id)))
+          (swap! sessions assoc id reservation done done))))
+    (if s (retire-session! s true) (reverse/drain! (.-reverseOwner client) token))))
 
 (defn- opening-cleanup! [^Throwable primary errors action]
   (teardown/cleanup-preserving!
@@ -642,20 +935,71 @@
     (ex-info "Cannot delete a session ID that can be interpreted as a UUID prefix"
              {:type :ambiguous-delete-id :session-id id})))
 
+(defn- withdraw-delete! [held boundary claim!]
+  (locking held
+    ;; Once a lifecycle notification confirmed this delete, no later reply
+    ;; can revoke anything. Keep a late hook only for an unconfirmed write.
+    (let [phase @boundary]
+      (when (claim! (delay? phase))
+        (when-not (:confirmed phase) (vreset! boundary :withdrawn))
+        true))))
+
+(defn- delete-boundary-opts [held boundary owns-id? opts]
+  (let [ack! (:on-response-inline opts)
+        confirmation (delay (ack! {:success true}) nil)]
+    ;; Arm the release action before writing. Once claimed, the reader and
+    ;; timeout cleanup force the same action outside the held-event lock.
+    (assoc opts
+           :on-write (fn [write!]
+                       (locking held
+                         (cond
+                           (not (and (= :inventory @boundary) (owns-id?))) (write! ownership-changed)
+                           (write!) (do (vreset! boundary confirmation) true)
+                           :else false)))
+           :on-response-inline (fn [response]
+                                 (when-not (:confirmed @boundary)
+                                   (vreset! boundary nil)
+                                   (ack! response)))
+           :on-error-inline (fn [_] (when-not (:confirmed @boundary) (vreset! boundary nil)))
+           :withdraw-written #(withdraw-delete! held boundary %))))
+
+(defn- rollback-release!! [^Client client id reservation token method]
+  (let [sessions (.-sessions client) held (.-heldEvents client)
+        boundary (::delete-boundary reservation)
+        owns-id? #(identical? reservation (get @sessions id))
+        opts (release-opts client token)
+        ack! (:on-response-inline opts)
+        opts (assoc opts :on-response-inline
+                    (fn [response]
+                      (ack! response)
+                      (when (true? (:success response))
+                        (locking held
+                          (when (owns-id?)
+                            (discard-held-events! held id)
+                            (release-reservation! sessions id reservation))))))
+        opts (if boundary (delete-boundary-opts held boundary owns-id? opts) opts)
+        reply (rpc/send-request-with-timeout (.-connection client) method {:session-id id} 10000 opts)]
+    (check-release! method id (rpc/await-bounded-response!! reply))))
+
 (defn- rollback-opening! [^Client client ^Session s token done requested acquired-id config-directory uncertain-open? errors ^Throwable primary]
   (let [sessions (.-sessions client)
-        conn (.-connection client)
         id (or acquired-id requested)
         mismatch? (and requested acquired-id (not= requested acquired-id))
-        reservation (if mismatch? token done)
+        owner (if mismatch? token done)
         restriction (when (and acquired-id (not requested)) (delete-restriction client id config-directory))
         release-method (cond
                          (nil? acquired-id) nil
                          requested "session.detach"
                          (nil? restriction) "session.delete"
                          (not (abbreviated-uuid? id)) "session.detach")
+        reservation (if (and release-method (not restriction))
+                      (cond-> {:done done}
+                        (= release-method "session.delete") (assoc ::delete-boundary (volatile! :inventory))
+                        mismatch? (assoc ::requested-id requested))
+                      owner)
         live-unconfirmed? (volatile! (or uncertain-open? (some? acquired-id)))]
-    (opening-cleanup! primary errors #(fence-opening! client s token done))
+    (opening-cleanup! primary errors #(fence-opening! client s token done
+                                                      (when-not (identical? owner reservation) [id owner reservation])))
     (when restriction
       (let [failure (ex-info "Cloud allocation cannot be deleted safely; this client cannot reuse the ID"
                              {:type :session-cleanup-unconfirmed :session-id id
@@ -666,13 +1010,10 @@
       (opening-cleanup!
        primary errors
        #(do
-          (when-not (identical? reservation (get @sessions id))
-            (throw (lost-reservation id)))
-          (if (= release-method "session.detach")
+          (when-not (identical? reservation (get @sessions id)) (throw (lost-reservation id)))
+          (if restriction
             (detach! client id token)
-            (let [reply (rpc/send-request-with-timeout conn "session.delete" {:session-id id} 10000
-                                                       (release-opts client token))]
-              (check-release! "session.delete" id (rpc/await-bounded-response!! reply))))
+            (rollback-release!! client id reservation token release-method))
           (vreset! live-unconfirmed? false))))
     ;; A confirmed or unanswered open can still need its initialized filesystem.
     ;; Only the exact reverse registration owns cleanup, not the stale handle.
@@ -690,7 +1031,9 @@
         (when (and mismatch? (identical? done (get @sessions requested)))
           (swap! sessions dissoc requested))
         (when (identical? reservation (get @sessions id))
-          (if (or @live-unconfirmed? restriction) (swap! sessions assoc id ::unconfirmed-cleanup) (swap! sessions dissoc id)))
+          (if (or restriction (and @live-unconfirmed? (not (delete-confirmation reservation))))
+            (swap! sessions assoc id ::unconfirmed-cleanup)
+            (swap! sessions dissoc id)))
         (settled! done (if outcome {:error outcome} {}))))))
 
 (defn- open-session* [^Client client method id config params]
@@ -702,7 +1045,8 @@
         acquired-id (volatile! nil)
         interrupted (volatile! nil)
         ownership-errors (volatile! [])
-        register! #(register-opening! client % token config interrupted handle done (when-not id acquired-id))
+        held (.-heldEvents client)
+        register! #(register-opening! client %1 token config interrupted handle done (when-not id acquired-id) %2)
         abandon! (fn [^InterruptedException cause]
                    (locking client
                      (vreset! interrupted cause)
@@ -713,24 +1057,35 @@
       (locking client
         (client-connection client)
         (when id (assert-available! client id))
-        (swap! (.-sessions client) assoc (or id done) done))
+        (swap! (.-sessions client) assoc (or id done) done)
+        (when id (discard-held-events! held id)))
       (let [params (merge (discovery/trace-context!! (.-discovery client)) params)
-            _ (when id (reverse/initialize-fs!! reverse-owner token (register! id) config))
+            _ (when id (initialize-storage! client token (register! id nil) config))
+            params (reverse/open-params token params)
+            window (when-not id (volatile! nil))
+            allocation-settled? (volatile! false)
             inline-error (volatile! nil)
             accept! (fn [{returned :session-id}]
                       (try
-                        (cond (nil? id) (register! returned)
+                        (cond (nil? id) (do (vreset! allocation-settled? (spec/valid? ::specs/session-id returned))
+                                            (register! returned @window))
                               (= id returned) (vreset! acquired-id id)
                               :else (vreset! acquired-id (reserve-mismatch! client id returned token @handle done)))
                         (catch Throwable t (vreset! inline-error t))))
             retired? (:retired? token)
             opts (cond-> {:on-response-inline accept!
-                          :on-error-inline (fn [_] (reverse/retire-generation! reverse-owner id retired?))}
+                          :on-error-inline (fn [_]
+                                             (vreset! allocation-settled? true)
+                                             (reverse/retire-generation! reverse-owner id retired?))}
+                   (nil? id)
+                   (assoc :on-write #(start-event-window! held window %)
+                          :withdraw-written #(withdraw-allocation! held window %))
                    id
                    (assoc :on-late-response (fn [result error]
                                               (when (or error (not= id (get result "sessionId")))
                                                 (reverse/retire-generation! reverse-owner id retired?)))))
-            opened (opening-request!! client @handle method (reverse/open-params token params) opts abandon!)
+            opened (try (opening-request!! client @handle method params opts abandon!)
+                        (finally (when window (end-event-window! held window @allocation-settled?))))
             returned (:session-id opened)]
         (when-not (spec/valid? ::specs/session-id returned)
           (throw (ex-info "Runtime did not return a valid session ID" {:type :missing-session-id :method method})))
@@ -743,7 +1098,7 @@
             (throw failure)))
         (when-let [t @inline-error] (throw t))
         (when-let [cause @interrupted] (throw cause))
-        (when-not id (reverse/initialize-fs!! reverse-owner token @handle config))
+        (when-not id (initialize-storage! client token @handle config))
         (let [s (finish-open! client @handle opened config abandon!)]
           (settled! done {})
           s))
@@ -751,7 +1106,7 @@
         (let [^Throwable primary (or @interrupted t)
               uncertain-open? (and (nil? @acquired-id)
                                    (= method (:method (ex-data t)))
-                                   (or (= :missing-session-id (:type (ex-data t))) (uncertain-response? client t)))]
+                                   (or (= :missing-session-id (:type (ex-data t))) (uncertain-response? t (input-ended? client))))]
           (when-not (identical? primary t) (.addSuppressed primary t))
           (when uncertain-open? (vswap! ownership-errors conj t))
           (rollback-opening! client @handle token done id @acquired-id (:config-directory config)
@@ -802,12 +1157,12 @@
     (.-connection client)))
 
 (defn- admission-queue [^Session s]
-  ;; Registration close also covers failure outside the event router. Dispatch
-  ;; cancellation to avoid taking the client lock from the callback registry.
+  ;; Release can precede observation drain. Dispatch cancellation so the
+  ;; reader and callback registry never have to acquire the client lock.
   (let [state (.-lifecycle s)]
     (or (::admission @state)
         (let [queue (java.util.LinkedHashSet.)]
-          (a/take! (:closed (.-registration s))
+          (a/take! (:admission-closed (.-registration s))
                    (fn [_] (locking (.-client s)
                              (doseq [[_ retired] queue] (a/close! retired))))
                    false)
@@ -843,6 +1198,7 @@
                                   (let [h (when headers (a/<! headers))]
                                     (locking c
                                       (when (.contains queue slot)
+                                        (check-reservation! s)
                                         (vreset! raw (enqueue h)))))
                                   (catch Exception e e)
                                   (finally (locking c (remove!))))]
@@ -867,6 +1223,8 @@
                       (let [ch (rpc/send-request conn method params opts)]
                         {:reply ch :cancel! #(rpc/cancel-request! conn ch)}))))]
     (locking c
+      ;; Turns and forms already entered this generation before building their wire parameters.
+      (when (:request-owner opts) (check-reservation! s))
       (if (and (discovery/trace-provider owner) (or trace? (seq (::admission @(.-lifecycle s)))))
         (do (live-connection s)
             (when-let [check! (:check-admission! opts)] (check!))
@@ -876,9 +1234,9 @@
 (defn- session-request [s method params timeout-ms opts]
   (:reply (submit s method params timeout-ms opts false)))
 
-(defn- submit-turn [^Session s message check-deadline!]
+(defn- submit-turn [^Session s message admission]
   (let [request (submit s "session.sendAndWait" (options/send-params (.-id s) message) nil
-                        {:check-admission! check-deadline!} true)]
+                        (assoc admission :request-owner (:token (.-registration s))) true)]
     (if-let [receipt (callbacks/current-observer-receipt (:token (.-registration s)))]
       (assoc request :observer-delivery receipt)
       request)))
@@ -936,7 +1294,8 @@
                                    nil {:request-owner (:token (.-registration s))
                                         :check-admission! (fn [] (check-host!) (check-form-capacity! (.-client s)))}))
                (fn [result]
-                 (when-not (#{"accept" "cancel" "decline"} (:action result))
+                 (when-not (and (#{"accept" "cancel" "decline"} (:action result))
+                                (or (not (contains? result :_meta)) (spec/valid? ::specs/json-object (:_meta result))))
                    (throw (ex-info "Invalid elicitation result" {:method method})))
                  (update result :action keyword)))))
 
@@ -946,10 +1305,11 @@
                (or message-id (throw (ex-info "Runtime omitted messageId" {}))))))
 
 (defn send-and-wait! [^Session s message]
-  (let [opts (if (string? message) {:prompt message} message)]
-    (turn/send-and-wait! (.-turns s)
-                         #(submit-turn s %1 %2)
-                         opts)))
+  (try
+    (live-connection s)
+    (turn/send-and-wait! (.-turns s) #(submit-turn s %1 %2)
+                         (if (string? message) {:prompt message} message))
+    (catch clojure.lang.ExceptionInfo e (a/go {:error e}))))
 
 (defn abort! [^Session s]
   (operation "session.abort"
@@ -1057,16 +1417,44 @@
       (throw (ex-info "The default session store did not confirm a unique exact session ID"
                       {:type :session-delete-unconfirmed :session-id id})))))
 
-(defn- verify-delete! [conn id done]
+(defn- verify-delete! [^Client client id owner done]
   (try
-    (confirm-saved-id! conn id)
+    (confirm-saved-id! (.-connection client) id)
     (when (.isInterrupted (Thread/currentThread))
       (throw (InterruptedException. "Interrupted before deleting the session")))
     (catch Throwable t
-      ;; No delete was submitted. A concurrent client close still owns the
-      ;; detach of a live handle, not this caller's read-only lookup failure.
+      ;; No delete was submitted. Shutdown owns a live handle's detach;
+      ;; EOF owns its accepted publications even if inventory never replied.
+      (when (and (session? owner) (input-ended? client))
+        (teardown/cleanup-preserving! t #(locking client (close-after-eof! owner))))
       (settled! done {:delete-not-submitted? true})
       (throw t))))
+
+(defn- unregistered-delete-opts [^Client c id reservation]
+  (let [sessions (.-sessions c) held (.-heldEvents c)
+        boundary (::saved-delete reservation)
+        finish! (fn [deleted?]
+                  ;; Only this reader's first confirmation ends the old batch.
+                  ;; A lifecycle notification can already have released the ID.
+                  (when (identical? reservation (get @sessions id))
+                    (when deleted? (discard-held-events! held id))
+                    (release-reservation! sessions id reservation)))]
+    {:on-write (fn [write!]
+                 (locking held
+                   (if-let [refusal (or (when-not (identical? reservation (get @sessions id)) ownership-changed)
+                                        (unresolved-allocation held))]
+                     (write! refusal)
+                     (when (write!) (vreset! boundary :written) true))))
+     :withdraw-written #(withdraw-delete! held boundary %)
+     :on-response-inline #(finish! (true? (:success %)))
+     :on-error-inline (fn [_] (finish! false))}))
+
+(defn- live-delete-opts [^Client c ^Session s done]
+  (let [state (.-lifecycle s)
+        boundary (volatile! :inventory)]
+    (swap! state assoc :status :deleting :done done ::delete-boundary boundary)
+    (delete-boundary-opts (.-heldEvents c) boundary #(identical? s (get @(.-sessions c) (.-id s)))
+                          (release-opts c (:reverse-token @state)))))
 
 (defn delete-session!! [^Client c id]
   (scope/check! (.-connection c) :delete)
@@ -1086,30 +1474,45 @@
             (when (and existing
                        (not (and (session? existing) (= :open (:status @(.-lifecycle ^Session existing))))))
               (throw (ex-info "Session lifecycle operation in progress" {:type :session-busy :session-id id})))
-            (if existing (swap! (.-lifecycle ^Session existing) assoc :status :deleting :done done)
-                (swap! sessions assoc id done))
-            [(or existing done) (when existing (release-opts c (:reverse-token @(.-lifecycle ^Session existing))))]))]
+            (if existing
+              [existing (live-delete-opts c existing done)]
+              (let [reservation {::saved-delete (volatile! :inventory) :done done}
+                    held (.-heldEvents c)]
+                ;; The reader may release the ID before the delete caller can
+                ;; settle. Keep its shutdown join independently, like an anonymous open.
+                (locking held
+                  (when-let [error (unresolved-allocation held)]
+                    (throw (ex-info (:message error) {:method method :error error})))
+                  (swap! sessions assoc id reservation done done))
+                [reservation (unregistered-delete-opts c id reservation)]))))]
     (try
       (let [conn (.-connection c)]
-        (verify-delete! conn id done)
+        (verify-delete! c id owner done)
         (try
-          (let [reply (rpc/send-request-with-timeout conn method {:session-id id} 10000 opts)]
-            (check-release! method id (rpc/await-bounded-response!! reply)))
+          (try
+            (let [reply (rpc/send-request-with-timeout conn method {:session-id id} 10000 opts)]
+              (check-release! method id (rpc/await-bounded-response!! reply)))
+            (catch Throwable t
+              ;; A notification can confirm the delete as the caller wakes on
+              ;; EOF. Select one cleanup path; a second check could skip both.
+              (teardown/cleanup-preserving!
+               t #(if (and (session? owner) (released? owner))
+                    (finish-acknowledged! owner)
+                    (locking c (fence-uncertain! c id owner t))))
+              (throw t)))
           (when (session? owner) (finish-acknowledged! owner))
           (settled! done {})
           (catch Throwable t
-            ;; Shutdown must see the deleting handle or its completed local retirement.
-            (locking c
-              (fence-uncertain! c id owner t)
-              (settled! done {:error t}))
+            (settled! done {:error t})
             (throw t))))
       (finally
         (locking c
-          (when (identical? owner (get @sessions id))
-            (if (session? owner)
-              (when (:open? @(.-closeHost c))
-                (swap! (.-lifecycle ^Session owner) #(-> % (assoc :status :open) (dissoc :done))))
-              (swap! sessions dissoc id))))))
+          (if (session? owner)
+            (let [reopen? (and (:open? @(.-closeHost c)) (identical? owner (get @sessions id)))]
+              ;; The delete caller is done. A retained handle must not keep its release action.
+              (swap! (.-lifecycle ^Session owner)
+                     #(cond-> (dissoc % :done ::delete-boundary) reopen? (assoc :status :open))))
+            (swap! sessions #(cond-> (dissoc % done) (identical? owner (get % id)) (dissoc id)))))))
     (when (.isInterrupted (Thread/currentThread))
       (throw (InterruptedException. "Interrupted while deleting the session")))))
 

@@ -1,7 +1,7 @@
 # Migrate from 1.x
 
 Change the deployment first. In 2.x, the application JVM **is** the runtime
-host. The target is the stable in-process surface of upstream 2.0.1, not
+host. The target is the stable in-process surface of upstream 2.0.3, not
 wire compatibility with a separately installed CLI.
 
 ## Decide whether to migrate
@@ -16,7 +16,8 @@ wire compatibility with a separately installed CLI.
 | Run Clojure code against the Copilot Java SDK | The Clojure library binds the Rust C interface through JNA. Only the platform **runtime** artifact is required in addition to the Clojure SDK and its dependencies. |
 
 In-process is not a sandbox. Tool handlers, approved actions, model requests,
-and native code run with the application's permissions. Enforce your own
+and native code run with the application's permissions. A Rust panic in
+the bundled 2.0.3 runtime terminates the JVM. Enforce your own
 credential, filesystem, network, and tenant boundaries. For the install
 recipe, see [Getting started](../getting-started.md).
 
@@ -78,7 +79,7 @@ See the [provider function signatures](../reference/API.md#session-filesystem)
 before moving session state into your application's storage.
 
 The [pinned 1.x reference](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/01246672fc5fb8e8f2b50437eea6a55145e54934/doc/reference/API.md)
-and [upstream 2.0.1 breaking changes](https://github.com/microsoft/copilot-sdk/blob/3ce61458503b6b27ebd1f674a980f4d9596d9b22/docs/v2-breaking-changes.md)
+and [upstream 2.0.3 breaking changes](https://github.com/microsoft/copilot-sdk/blob/5671812ecd4ce58ee040e9a41d98da2f849c8095/docs/v2-breaking-changes.md)
 are useful for comparison. Use the [Clojure 2.x API reference](../reference/API.md)
 for actual function names, return shapes, and configuration.
 

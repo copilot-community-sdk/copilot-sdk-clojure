@@ -1,6 +1,6 @@
 (ns ^:no-doc github.copilot-sdk.native-fs
-  "SessionFs provider validation and wire operations. Protocol 4, runtime 1.0.114:
-  microsoft/copilot-sdk@3ce61458503b6b27ebd1f674a980f4d9596d9b22,
+  "SessionFs provider validation and wire operations. Protocol 4, runtime 1.0.116:
+  microsoft/copilot-sdk@5671812ecd4ce58ee040e9a41d98da2f849c8095,
   nodejs/src/sessionFsProvider.ts and client.ts. No operation uses host files."
   (:require [clojure.spec.alpha :as s]
             [github.copilot-sdk.specs :as specs]

@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: microsoft/copilot-sdk
-          ref: 3ce61458503b6b27ebd1f674a980f4d9596d9b22
+          ref: 5671812ecd4ce58ee040e9a41d98da2f849c8095
           path: .upstream/copilot-sdk
           persist-credentials: false
           fetch-depth: 0

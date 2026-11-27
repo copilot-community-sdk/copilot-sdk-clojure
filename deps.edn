@@ -14,9 +14,9 @@
                 codox/codox {:mvn/version "0.10.8"}
                 io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}}
   :native-darwin-arm64
-  {:extra-deps {com.microsoft/copilot-sdk-runtime$darwin-arm64 {:mvn/version "2.0.1"}}}
+  {:extra-deps {com.microsoft/copilot-sdk-runtime$darwin-arm64 {:mvn/version "2.0.3"}}}
   :native-linux-x64
-  {:extra-deps {com.microsoft/copilot-sdk-runtime$linux-x64 {:mvn/version "2.0.1"}}}
+  {:extra-deps {com.microsoft/copilot-sdk-runtime$linux-x64 {:mvn/version "2.0.3"}}}
   :build {:deps {io.github.clojure/tools.build
                  {:mvn/version "0.10.11"}}
           :ns-default build}

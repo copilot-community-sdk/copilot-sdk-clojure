@@ -53,6 +53,19 @@
          (catch IllegalArgumentException _ false))))
 
 (s/def ::base64 base64?)
+(s/def ::user-input-image-attachment-constraints
+  (s/and map?
+         #(= (set (keys %)) #{:allowed-mime-types :max-count :max-bytes-per-image})
+         #(and (vector? (:allowed-mime-types %)) (every? string? (:allowed-mime-types %)))
+         #(nat-int? (:max-count %))
+         #(nat-int? (:max-bytes-per-image %))))
+(s/def ::user-input-image-attachment
+  (s/and map?
+         #(every? #{:type :data :mime-type :display-name :description} (keys %))
+         #(= (:type %) :image)
+         #(string? (:mime-type %))
+         #(and (s/valid? ::base64 (:data %)) (seq (:data %)))
+         #(every? string? (vals (select-keys % [:display-name :description])))))
 (s/def ::mcp-call-tool-result
   (s/and map?
          #(vector? (:content %))
@@ -62,6 +75,7 @@
 (s/def ::result-type #{:success :failure :rejected :denied :timeout})
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
+(s/def ::skip-large-output-processing? boolean?)
 (s/def ::error string?)
 (s/def ::tool-telemetry (s/map-of string? ::json-object))
 (s/def ::tool-references (s/coll-of string? :kind vector?))
@@ -75,11 +89,13 @@
 (s/def ::tool-result-object
   (s/and map?
          #(every? (fn [k] (contains? % k)) [:text-result-for-llm :result-type])
+         #(not (or (contains? % "skipLargeOutputProcessing") (contains? % :skipLargeOutputProcessing)))
          ;; s/keys would also consult global application specs for qualified JSON extensions.
          (fn [m]
            (every? (fn [[k spec]] (or (not (contains? m k)) (s/valid? spec (get m k))))
                    {:text-result-for-llm ::text-result-for-llm :result-type ::result-type
                     :binary-results-for-llm ::binary-results-for-llm :session-log ::session-log
+                    :skip-large-output-processing? ::skip-large-output-processing?
                     :error ::error :tool-telemetry ::tool-telemetry :tool-references ::tool-references}))))
 
 (s/def ::initial-cwd ::non-blank-string)

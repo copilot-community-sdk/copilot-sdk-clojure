@@ -31,16 +31,16 @@ This project follows the upstream [Microsoft Copilot SDK](https://github.com/mic
 UPSTREAM_MAJOR.UPSTREAM_MINOR.UPSTREAM_PATCH.CLJ_PATCH
 ```
 
-- The first 3 segments match the upstream copilot-sdk release version (e.g., `2.0.1`)
+- The first 3 segments match the upstream copilot-sdk release version (e.g., `2.0.3`)
 - The 4th segment is a Clojure-specific patch counter (starts at `0`)
-- Example: `2.0.1.0-SNAPSHOT` is the community development version. Its upstream
-  classifier version is `2.0.1`; the native engine reports `1.0.114` and uses SDK protocol `4`.
+- Example: `2.0.3.0-SNAPSHOT` is the community development version. Its upstream
+  classifier version is `2.0.3`; the native engine reports `1.0.116` and uses SDK protocol `4`.
 
 ### Syncing to a new upstream release
 
 ```bash
 # Set version to match upstream release (resets clj-patch to 0)
-clj -T:build sync-version :upstream '"2.0.1"' :snapshot true
+clj -T:build sync-version :upstream '"2.0.3"' :snapshot true
 ```
 
 ### Bumping for Clojure-specific changes
@@ -121,23 +121,23 @@ The `script/release.sh` wrapper dispatches the workflow via `gh` CLI with a frie
 script/release.sh
 
 # Sync to an upstream release (version_strategy=sync-upstream)
-script/release.sh --sync-upstream 2.0.1
+script/release.sh --sync-upstream 2.0.3
 
 # Bump the Clojure patch segment (version_strategy=bump-clj-patch)
 script/release.sh --bump
 
 # Set an explicit version (version_strategy=set-version)
-script/release.sh --set-version 2.0.1.1
+script/release.sh --set-version 2.0.3.1
 
 # Append -SNAPSHOT suffix
-script/release.sh --snapshot --sync-upstream 2.0.1
+script/release.sh --snapshot --sync-upstream 2.0.3
 script/release.sh --snapshot --bump
 
 # Preview the gh command without dispatching
 script/release.sh --dry-run
 
 # Attribute an assistant-dispatched release to Copilot
-script/release.sh --sync-upstream 2.0.1 --copilot-attribution
+script/release.sh --sync-upstream 2.0.3 --copilot-attribution
 ```
 
 Run `script/release.sh --help` for full usage.
@@ -151,8 +151,8 @@ Go to **Actions → Release → Run workflow** and fill in the inputs below.
 | Input | Type | Description |
 |-------|------|-------------|
 | `version_strategy` | choice | `none` (use current), `sync-upstream`, `bump-clj-patch`, or `set-version` |
-| `upstream_version` | string | Required for `sync-upstream`; upstream SDK version, e.g., `2.0.1` |
-| `explicit_version` | string | Required for `set-version`; full community version, e.g., `2.0.1.1` or `2.0.1.1-SNAPSHOT` |
+| `upstream_version` | string | Required for `sync-upstream`; upstream SDK version, e.g., `2.0.3` |
+| `explicit_version` | string | Required for `set-version`; full community version, e.g., `2.0.3.1` or `2.0.3.1-SNAPSHOT` |
 | `snapshot` | boolean | Append `-SNAPSHOT` for `sync-upstream`/`bump-clj-patch` |
 | `copilot_attribution` | boolean | Default `false`; prefix the release PR body and GitHub release notes with Copilot attribution on behalf of the dispatch actor |
 

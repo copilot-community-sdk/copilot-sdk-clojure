@@ -16,7 +16,7 @@
   yield :user-not-available. No decision is labeled automatically.
   :interaction/:commands handlers receive one context; their result is ignored.
   :interaction/:on-elicitation-request takes one context; return {:action
-  :accept/:decline/:cancel} with optional :content and :decision-context.
+  :accept/:decline/:cancel} with optional :content, :_meta and :decision-context.
   :mcp/:on-auth-request takes [request invocation]; return a token, :cancelled
   or :runtime-refresh result. An invalid result cancels the request.
   Application callbacks can return a core.async channel.
@@ -40,9 +40,10 @@
   No other session or connection is closed.
 
   Up to 16 sessions per connection can own a serial :on-event observer.
-  Each buffers 64 events and ignores handler return values (including async
-  results), as Node does. Overflow stops that observer only. Once an active
-  handler returns it receives a terminal {:error ex} instead of more events.
+  Each buffers 64 live events; an initial batch retained before registration
+  takes one slot. Handler return values are ignored. Overflow stops that
+  observer only. After an active handler returns it receives a terminal
+  {:error ex} instead of more events.
   Callback errors and interrupted/lost observations are reported separately
   from programmatic event subscriptions. A handler that ignores interruption
   retains its worker until it exits; new observers cannot exceed the limit.
@@ -61,7 +62,8 @@
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util])
   (:import [java.util.concurrent ArrayBlockingQueue CancellationException ExecutionException FutureTask SynchronousQueue
-            RejectedExecutionException ThreadFactory ThreadPoolExecutor TimeUnit TimeoutException]))
+            RejectedExecutionException ThreadFactory ThreadPoolExecutor TimeUnit TimeoutException]
+           [java.util.concurrent.locks ReentrantReadWriteLock]))
 
 (defn- pool [size queue label]
   (doto (ThreadPoolExecutor.
@@ -85,19 +87,37 @@
 (defn- decision-refusal [{:keys [conn sessions client-open?]} reg]
   ;; A terminal failure belongs to this generation. Physical EOF and release
   ;; also revoke decisions, but do not invalidate observations already accepted.
-  (let [live (get @sessions (:id reg))]
-    (if-not (and live (identical? (:token live) (:token reg)))
-      ::retired
-      (or @(:failure live)
-          (when-not (and (client-open?) (not @(:token live)) (not (ap/closed? (:closed live)))
-                         (connected? conn @(:state-atom conn)))
-            ::retired)))))
+  (or @(:failure reg)
+      (when-not (and (registered? sessions reg) (client-open?) (not @(:token reg))
+                     (not (ap/closed? (:closed reg))) (connected? conn @(:state-atom conn)))
+        ::retired)))
 
 (defn- require-decision! [owner reg]
   (when-let [reason (decision-refusal owner reg)]
     (throw (if (= reason ::retired)
              (ex-info "Session is no longer active" {:type :session-closed})
              reason))))
+
+(defn- admission-timeout [id]
+  (ex-info "Timed out waiting for session decisions" {:type :decision-admission-timeout :session-id id}))
+
+(defn- try-after-decisions! [conn {:keys [decision-fence]} admit!]
+  ;; A receipt closes as soon as the router reconciles that decision. Ordinary
+  ;; observations cannot delay admission, even when their own delivery is slow.
+  (locking (:notification-queue conn)
+    (let [fence @decision-fence]
+      (if (or (nil? fence) (ap/closed? fence)) [(admit!)] [nil fence]))))
+
+(defn- after-decisions!! [conn {:keys [closed failure id] :as reg} admit!]
+  (loop [deadline nil]
+    (let [[value fence] (try-after-decisions! conn reg admit!)]
+      (if-not fence value
+              (let [deadline (or deadline (a/timeout 10000))
+                    [_ port] (a/alts!! [closed deadline fence] :priority true)]
+                (cond
+                  (= port closed) (throw (or @failure (ex-info "Session is no longer active" {:type :session-closed :session-id id})))
+                  (= port deadline) (throw (admission-timeout id))
+                  :else (recur deadline)))))))
 
 (defn- fatal? [t] (and (instance? Error t) (not (instance? AssertionError t))))
 
@@ -118,14 +138,14 @@
       (a/close! queue)
       (while (a/poll! queue)))))
 
-(defn retire-forms! [conn id token]
-  (when-let [forms (rpc/withdraw-requests! conn token)]
-    (let [cause (ex-info "Session closed" {:type :session-closed :session-id id})]
-      (doseq [reply forms] (settle! reply cause)))))
+(defn- retire-requests! [conn id token]
+  (when-let [requests (seq (rpc/withdraw-requests! conn token))]
+    (rpc/settle-withdrawn! conn requests (ex-info "Session closed" {:type :session-closed :session-id id}))))
 
 (defn- cancel-requests! [{:keys [conn id token closed failure] :as reg}]
+  (a/close! (:admission-closed reg))
   (when-not (ap/closed? closed)
-    (when-not @failure (retire-forms! conn id token))
+    (when-not @failure (retire-requests! conn id token))
     (a/close! closed))
   (vswap! (:waiting reg) #(filterv (fn [job] (not (identical? token (:token job)))) %))
   (doseq [job (vals (first (reset-vals! (:jobs reg) {})))]
@@ -135,6 +155,7 @@
   (identical? (Thread/currentThread) @(:worker lane)))
 
 (defn- cancel-observer! [lane cause]
+  (vreset! (:cancelled? lane) true)
   (finish-observer! lane cause)
   (when-not (observer-thread? lane)
     (when-let [interrupt @(:interrupt lane)] (interrupt :cancel))))
@@ -154,16 +175,30 @@
   (when-let [lane (:observer reg)]
     (cancel-observer! lane (ex-info "Session observer closed" {:type :session-closed}))))
 
-(defn- fail-registration! [{:keys [failure on-failure] :as reg} cause]
-  ;; All callers hold the registry. Fence ordinary reverse work before the
-  ;; terminal cause is observable, including from a public handle on another thread.
-  (when-not @failure
-    (let [forms (rpc/withdraw-requests! (:conn reg) (:token reg))]
-      (when on-failure (on-failure cause))
-      (reset! failure cause)
-      (doseq [reply forms] (settle! reply cause))
-      (release! reg)))
-  @failure)
+(defn- claim-failure! [{:keys [conn token closed client-open? failure-claimed?]}]
+  ;; One CAS claims unanswered turns and forms, not replies already received.
+  ;; An empty collection still means this caller won the session failure.
+  (when (and (not @failure-claimed?) (not @token) (not (ap/closed? closed)) (client-open?))
+    (when-let [requests (rpc/withdraw-requests! conn token)]
+      (vreset! failure-claimed? true)
+      requests)))
+
+(defn- finish-failure! [{:keys [conn failure on-failure] :as reg} cause requests]
+  ;; Fence ordinary reverse work before exposing the cause on the public handle.
+  (when on-failure (on-failure cause))
+  (reset! failure cause)
+  (rpc/settle-withdrawn! conn requests cause)
+  (release! reg))
+
+(defn- fail-registration!
+  ([reg cause] (fail-registration! reg cause nil))
+  ([{:keys [conn failure] :as reg} cause eligible?]
+   (let [lock (.readLock ^ReentrantReadWriteLock (:reply-barrier conn))]
+     (.lock lock)
+     (when-let [requests (try (when (or (nil? eligible?) (eligible?)) (claim-failure! reg))
+                              (finally (.unlock lock)))]
+       (finish-failure! reg cause requests)))
+   @failure))
 
 (defn fail!
   "Fail only the captured generation when publication cannot continue."
@@ -171,6 +206,20 @@
   (locking sessions
     (when (registered? sessions registration)
       (fail-registration! (get @sessions (:id registration)) cause))))
+
+(defn- fail-active-decision! [{:keys [sessions] :as owner} reg eligible? cause]
+  ;; A release can leave the registration in place to drain observations.
+  ;; Claim failure under the same barrier as revocation. Teardown may
+  ;; itself revoke reverse replies, so it runs after releasing the barrier.
+  (locking sessions
+    (fail-registration! reg cause #(and (nil? (decision-refusal owner reg)) (eligible?)))))
+
+(defn- after-active-decisions!! [owner reg eligible? admit!]
+  (try (after-decisions!! (:conn owner) reg admit!)
+       (catch clojure.lang.ExceptionInfo e
+         (when (= :decision-admission-timeout (:type (ex-data e)))
+           (fail-active-decision! owner reg eligible? e))
+         (throw e))))
 
 (defn- stop-requests! [{:keys [sessions requests forms]}]
   (locking sessions
@@ -184,7 +233,8 @@
         (vreset! active #{})))))
 
 (defn- drain-observer! [{:keys [sessions draining]} {:keys [token observer]}]
-  (when (and observer (not (.isDone ^FutureTask @(:task observer))))
+  (when (and observer (not= :closed (:self-release (get @draining token)))
+             (not (.isDone ^FutureTask @(:task observer))))
     (vswap! draining assoc token observer)
     (a/close! (:queue observer))
     (a/take! (a/timeout shutdown-ms)
@@ -263,7 +313,9 @@
 
 (defn- observer-lane [handler]
   (when handler {:handler handler :queue (a/chan 64) :pending (atom #{})
-                 :task (atom nil) :worker (volatile! nil) :interrupt (volatile! nil) :terminal (atom nil)}))
+                 :task (atom nil) :worker (volatile! nil) :interrupt (volatile! nil)
+                 ;; Overflow settles receipts but can still notify; cancellation revokes that call.
+                 :terminal (atom nil) :cancelled? (volatile! false)}))
 
 (def ^:private ^:dynamic *observer-delivery* nil)
 
@@ -271,7 +323,7 @@
   (when (identical? token (first *observer-delivery*)) (second *observer-delivery*)))
 
 (defn- start-observer! [{:keys [conn sessions observers draining interrupts]} {:keys [id token observer]}]
-  (when-let [{:keys [handler queue pending terminal task worker]} observer]
+  (when-let [{:keys [handler queue pending terminal cancelled? task worker]} observer]
     (let [notify! (fn [event]
                     (try (handler event) {:ok nil}
                          (catch Throwable t
@@ -282,16 +334,22 @@
                 (vreset! worker (Thread/currentThread))
                 (try
                   (loop []
-                    (if-let [[receipt event] (a/<!! queue)]
+                    (if-let [[receipt item] (a/<!! queue)]
                       (do
                         (when-not @terminal
-                          (let [outcome (binding [*observer-delivery* [token receipt]] (notify! event))]
-                            (locking sessions
-                              (when (contains? @pending receipt)
-                                (swap! pending disj receipt)
-                                (settle! receipt outcome)))))
+                          (if-not receipt
+                            ;; A retained batch predates all live turns and owns one queue slot.
+                            (doseq [event item :while (not @terminal)]
+                              (let [active (a/chan)]
+                                (try (binding [*observer-delivery* [token active]] (notify! event))
+                                     (finally (a/close! active)))))
+                            (let [outcome (binding [*observer-delivery* [token receipt]] (notify! item))]
+                              (locking sessions
+                                (when (contains? @pending receipt)
+                                  (swap! pending disj receipt)
+                                  (settle! receipt outcome))))))
                         (recur))
-                      (when (and (not (.isCancelled ^FutureTask @task))
+                      (when (and (not @cancelled?)
                                  (= :observer-overflow (-> @terminal :error ex-data :type)))
                         (notify! @terminal))))
                   (catch InterruptedException _ nil)
@@ -308,15 +366,49 @@
            (catch RejectedExecutionException _
              (throw (ex-info "No observer workers available" {:type :observer-capacity})))))))
 
+(def ^:private decision-actions
+  {"abort" [:abort]
+   "external_tool.requested" [:request :tool]       "external_tool.completed" [:settle :tool]
+   "permission.requested" [:request :permission]    "permission.completed" [:settle :permission]
+   "command.execute" [:request :command]            "command.completed" [:settle :command]
+   "elicitation.requested" [:request :elicitation]  "elicitation.completed" [:settle :elicitation]
+   "mcp.oauth_required" [:request :oauth]           "mcp.oauth_completed" [:settle :oauth]})
+
+(defn- decision-action [{:keys [type data checkpoint]}]
+  ;; The reader sees wire strings; the router and held-event replay see idiom keywords.
+  (when-let [[action kind :as decision] (get decision-actions (if (keyword? type) (name type) type))]
+    (if (= action :abort)
+      (when-not (true? checkpoint) decision)
+      (let [id (:request-id data)]
+        (when (and (string? id) (not (str/blank? id)))
+          (cond
+            (and (= kind :permission) (:resolved-by-hook data)) [:settle :permission]
+            (or (= action :settle) (not (true? checkpoint))) decision))))))
+
+(defn track-decision! [{:keys [decision-fence]} event]
+  ;; The reader and local storage marker share the notification admission lock.
+  ;; Router order guarantees that the latest receipt covers all earlier ones.
+  (when (decision-action event)
+    (vreset! decision-fence (a/chan))))
+
+(declare ^:private dispatch!)
+
 (defn register!
   "Admit callbacks before session.create/resume. The caller must first validate
   session options with the closed create/resume builder; it rejects unimplemented
-  callback groups. Keep the returned token, not just the session ID."
-  [{:keys [sessions conn waiting] :as owner} id opts & [retired? on-failure]]
+  callback groups. Replay the same normalized held events in order.
+  Keep the returned token, not just the session ID."
+  [{:keys [sessions conn client-open? waiting] :as owner} id opts & [retired? on-failure held-events await-storage?]]
   (let [definitions (get-in opts [:tools :definitions])
         tools (into {} (map (juxt :name tool-handler)) definitions)
-        registration {:id id :token (or retired? (volatile! false)) :closed (a/chan) :failure (atom nil)}
-        reg (assoc registration :conn conn :jobs (atom {}) :claims (atom {}) :tools tools
+        registration {:id id :token (or retired? (volatile! false)) :closed (a/chan) :admission-closed (a/chan)
+                      :failure (atom nil)
+                      :failure-claimed? (volatile! false)
+                      ;; Held requests are reconciled here, before their observations are queued.
+                      :decision-fence (volatile! nil)}
+        reg (assoc registration :conn conn :client-open? client-open? :jobs (atom {}) :claims (atom {}) :tools tools
+                   :root-aborted? (volatile! false)
+                   :awaiting-storage (volatile! (when await-storage? []))
                    :waiting waiting
                    :on-failure on-failure :busy-replies (atom 0)
                    :permission (get-in opts [:permissions :on-request])
@@ -328,6 +420,9 @@
                                  (contains? (:policy opts) :managed-settings)))]
     (when-not (= (count definitions) (count tools))
       (throw (ex-info "Tool names must be unique" {:type :duplicate-tool})))
+    ;; Establish authority in wire order before exposing this registration.
+    ;; No executor submission or application callback is allowed in this pass.
+    (doseq [event held-events] (dispatch! nil reg event))
     (locking sessions
       (when-not (and @sessions (connected? conn @(:state-atom conn)))
         (throw (ex-info "Callback owner is closed" {:type :connection-closed})))
@@ -337,11 +432,21 @@
       (swap! sessions assoc id reg))
     registration))
 
-(defn drain! [{:keys [sessions] :as owner} {:keys [id] :as registration}]
+(defn unroute-released! [{:keys [sessions]} {:keys [id token] :as registration}]
+  ;; Keep observations accepted for this generation, not an ID route that
+  ;; can admit decisions. Its release caller still owns the eventual drain.
   (locking sessions
     (when (registered? sessions registration)
-      (let [{:keys [observer] :as reg} (get @sessions id)]
-        (swap! sessions dissoc id)
+      (swap! sessions #(-> % (assoc token (get % id)) (dissoc id))))))
+
+(defn- publication-key [sessions {:keys [id token] :as registration}]
+  (if (registered? sessions registration) id token))
+
+(defn drain! [{:keys [sessions] :as owner} registration]
+  (locking sessions
+    (let [key (publication-key sessions registration)]
+      (when-let [{:keys [observer] :as reg} (get @sessions key)]
+        (swap! sessions dissoc key)
         (cancel-requests! reg)
         (drain-observer! owner (cond-> reg
                                  (and observer (observer-thread? observer))
@@ -356,21 +461,23 @@
       (vswap! draining dissoc token))
     (cancel-observer! lane (ex-info "Session observer closed" {:type :session-closed}))))
 
-(defn close-retired-observer! [{:keys [sessions draining conn]} {:keys [token]}]
+(defn close-retired-observer! [{:keys [sessions draining conn]} {:keys [token] :as registration}]
   (await-observer-interrupt!
    (locking sessions
-     (when-let [lane (get @draining token)]
+     (when-let [lane (or (get @draining token)
+                         (:observer (get @sessions (publication-key sessions registration))))]
        ;; An ordinary acknowledged detach still owes already accepted events.
        (when (or (:self-release lane) (not (connected? conn @(:state-atom conn))))
          (close-observer! draining token lane)))))
   nil)
 
-(defn unregister! [{:keys [sessions draining]} {:keys [id token] :as registration}]
+(defn unregister! [{:keys [sessions draining]} {:keys [token] :as registration}]
   (await-observer-interrupt!
    (locking sessions
-     (let [reg (when (registered? sessions registration) (get @sessions id))]
+     (let [key (publication-key sessions registration)
+           reg (get @sessions key)]
        (when reg
-         (swap! sessions dissoc id)
+         (swap! sessions dissoc key)
          (cancel-requests! reg))
        (close-observer! draining token (or (:observer reg) (get @draining token))))))
   nil)
@@ -422,19 +529,21 @@
         :else (throw (ex-info "Callback RPC timed out" {:method method}))))
     (finally (rpc/cancel-request! conn ch))))
 
-(defn- send-session-request [{:keys [conn sessions] :as owner} reg method params check!]
+(defn- send-session-request [{:keys [conn sessions] :as owner} reg method params check! & [with-admission]]
   (rpc/send-request conn method (assoc params :session-id (:id reg))
-                    {:callback-registry sessions
-                     :check-admission! #(do (require-decision! owner reg)
-                                            (when check! (check!)))}))
+                    (cond-> {:callback-registry sessions
+                             :check-admission! #(do (require-decision! owner reg) (check!))}
+                      with-admission (assoc :with-admission with-admission))))
 
 (defn- request-rpc!
   "Serialize submission, not response waiting, with unregister. The worker
   owns its pending RPC until response, cancellation or deadline."
-  [{:keys [conn] :as owner} reg cancel method params]
-  (let [ch (send-session-request owner reg method params
-                                 #(when (ap/closed? cancel)
-                                    (throw (ex-info "Callback is no longer active" {:type :callback-cancelled}))))]
+  [{:keys [conn] :as owner} reg cancel method params & [key retry?]]
+  (let [eligible? #(let [status (when key (first (get @(:claims reg) key)))]
+                     (and (not (ap/closed? cancel))
+                          (or (nil? key) (= status :automatic) (and (not retry?) (= status :checkpointed)))))
+        check! #(when-not (eligible?) (throw (ex-info "Callback is no longer active" {:type :callback-cancelled})))
+        ch (send-session-request owner reg method params check! (when key (partial after-active-decisions!! owner reg eligible?)))]
     (await-rpc! conn cancel method ch)))
 
 (defn- await-value [value cancel]
@@ -465,68 +574,81 @@
   (let [terminal (if (= :tool kind)
                    (if (contains? body :error) body {:error "Runtime rejected the tool result"})
                    (terminal-response kind))]
-    (letfn [(deliver! [reply]
+    (letfn [(deliver! [reply retry?]
               (try
                 (let [ack (request-rpc! owner reg cancel (response-method kind)
-                                        (assoc reply :request-id request-id))]
+                                        (assoc reply :request-id request-id) key retry?)]
                   (when (and (not (ap/closed? cancel)) (not (true? (:success ack))))
                     (log/warn "Runtime did not accept callback reply" {:kind kind})))
                 (catch clojure.lang.ExceptionInfo e
                   (cond
                     (not (and terminal (invalid-params? (ex-data e)))) (throw e)
-                    (not= reply terminal) (deliver! terminal)
+                    (not= reply terminal) (deliver! terminal true)
                     (#{:oauth :elicitation} kind)
                     (log/warn "Runtime rejected callback cancellation"
                               {:kind kind :session-id (:id reg) :request-id request-id})
                     (permit-manual! owner reg cancel key)
                     (log/warn "Runtime rejected terminal callback reply; manual response required"
                               {:kind kind :session-id (:id reg) :request-id request-id})))))]
-      (deliver! body))))
+      (deliver! body false))))
+
+(defn- begin-invocation! [owner reg cancel key]
+  (after-active-decisions!!
+   owner reg #(= :queued (first (get @(:claims reg) key)))
+   #(locking (:sessions owner)
+      (let [[status agent] (get @(:claims reg) key)]
+        (when (and (= status :queued) (not (ap/closed? cancel)) (nil? (decision-refusal owner reg)))
+          (swap! (:claims reg) assoc key [:automatic agent])
+          true)))))
 
 (defn- invoke-request! [{:keys [lost client-open?] :as owner} {:keys [token] :as reg} kind event handler cancel]
   (let [{:keys [data agent-id]} event
         {:keys [request-id permission-request arguments tool-name]} data
+        key [kind request-id]
         cancelled? #(or (ap/closed? cancel) (ap/closed? lost) @token (not (client-open?)))
         ctx {:session-id (:id reg) :cancelled? cancelled?}
-        body (try
-               (case kind
-                 :tool
-                 (let [metadata (when (= tool-name "tool_search_tool")
-                                  (try
-                                    (:tools (request-rpc! owner reg cancel "session.tools.getCurrentMetadata" {}))
-                                    (catch Exception _
-                                      (log/warn "Tool search metadata unavailable")
-                                      nil)))
-                       ctx (cond-> (assoc (select-keys data [:tool-call-id :tool-name :traceparent :tracestate])
-                                          :arguments arguments :session-id (:id reg) :request-id request-id
-                                          :cancelled? cancelled?)
-                             agent-id (assoc :agent-id agent-id)
-                             metadata (assoc :available-tools metadata))]
-                   (when-not (cancelled?)
-                     {:result (tool-result (await-value (handler arguments ctx) cancel))}))
-                 :permission
-                 (let [ctx (merge ctx {:managed-settings-enabled? (:managed? reg)}
-                                  (select-keys data [:prompt-request :assisted-approval-assessment :program-tool-call-id]))]
-                   (results/permission-response (await-value (handler permission-request ctx) cancel)))
-                 :elicitation
-                 (results/elicitation-response
-                  (await-value (handler (merge ctx (select-keys data [:message :requested-schema :mode
-                                                                      :elicitation-source :url]))) cancel))
-                 :oauth (results/oauth-response data (await-value (handler data ctx) cancel))
-                 :command
-                 (if handler
-                   (do (await-value (handler (merge ctx (select-keys data [:command-name :command :args]))) cancel)
-                       {})
-                   {:error (str "Unknown command: " (:command-name data))}))
-               (catch Throwable t
-                 (when (fatal? t) (throw t))
-                 (when-not (ap/closed? cancel)
-                   (log/warn "Application callback failed" {:kind kind})
-                   (failed-response kind "failed"))))]
+        metadata (when (and (= kind :tool) (= tool-name "tool_search_tool"))
+                   (try
+                     (:tools (request-rpc! owner reg cancel "session.tools.getCurrentMetadata" {}))
+                     (catch Exception _
+                       (when-not (cancelled?) (log/warn "Tool search metadata unavailable"))
+                       nil)))
+        started? (begin-invocation! owner reg cancel key)
+        body (when started?
+               (try
+                 (case kind
+                   :tool
+                   (let [ctx (cond-> (assoc (select-keys data [:tool-call-id :tool-name :traceparent :tracestate])
+                                            :arguments arguments :session-id (:id reg) :request-id request-id
+                                            :cancelled? cancelled?)
+                               agent-id (assoc :agent-id agent-id)
+                               metadata (assoc :available-tools metadata))]
+                     (when-not (cancelled?)
+                       {:result (tool-result (await-value (handler arguments ctx) cancel))}))
+                   :permission
+                   (let [ctx (merge ctx {:managed-settings-enabled? (:managed? reg)}
+                                    (select-keys data [:request-id :prompt-request :assisted-approval-assessment :program-tool-call-id]))]
+                     (results/permission-response (await-value (handler permission-request ctx) cancel)))
+                   :elicitation
+                   (let [ctx (cond-> (merge ctx (select-keys data [:request-id :message :requested-schema :mode
+                                                                   :elicitation-source :url]))
+                               (contains? data :meta) (assoc :_meta (results/elicitation-metadata (:meta data))))]
+                     (results/elicitation-response ctx (await-value (handler ctx) cancel)))
+                   :oauth (results/oauth-response data (await-value (handler data ctx) cancel))
+                   :command
+                   (if handler
+                     (do (await-value (handler (merge ctx (select-keys data [:command-name :command :args]))) cancel)
+                         {})
+                     {:error (str "Unknown command: " (:command-name data))}))
+                 (catch Throwable t
+                   (when (fatal? t) (throw t))
+                   (when-not (ap/closed? cancel)
+                     (log/warn "Application callback failed" {:kind kind})
+                     (failed-response kind "failed")))))]
     (if body
-      (deliver-response! owner reg cancel [kind request-id] body)
-      (when (= :permission kind)
-        (permit-manual! owner reg cancel [kind request-id])))))
+      (deliver-response! owner reg cancel key body)
+      (when (and started? (= :permission kind))
+        (permit-manual! owner reg cancel key)))))
 
 (declare pump-lane!)
 
@@ -571,13 +693,15 @@
       (start-job! owner lane job)
       (recur owner lane))))
 
+(def ^:private session-waiting-limit 16)
+
 (defn- submit! [{:keys [waiting requests forms] :as owner} {:keys [jobs token] :as reg} k work]
   (let [form? (= :elicitation (first k))
         lane (if form? forms requests)
         active @(:active lane)
         immediate? (and (< (count active) (:limit lane)) (session-slot? active token))]
     (when (or immediate? (and (< (count @waiting) 128)
-                              (< (count (filter #(identical? token (:token %)) @waiting)) 16)))
+                              (< (count (filter #(identical? token (:token %)) @waiting)) session-waiting-limit)))
       (let [cancel (a/chan)
             task (interruption/worker-task
                   (fn []
@@ -598,22 +722,13 @@
           (vswap! waiting conj job))
         true))))
 
-(def ^:private requested
-  {:copilot/external_tool.requested :tool :copilot/permission.requested :permission
-   :copilot/command.execute :command :copilot/elicitation.requested :elicitation
-   :copilot/mcp.oauth_required :oauth})
-
-(def ^:private completed
-  {:copilot/external_tool.completed :tool :copilot/permission.completed :permission
-   :copilot/command.completed :command :copilot/elicitation.completed :elicitation
-   :copilot/mcp.oauth_completed :oauth})
-
 (def ^:private claim-limit 65536)
 
 (defn- fail-session! [reg message cause-type]
   (let [cause (ex-info message {:type cause-type :session-id (:id reg)})]
-    (log/warn message (ex-data cause))
-    (throw (fail-registration! reg cause))))
+    (if-let [failure (fail-registration! reg cause)]
+      (do (log/warn message (ex-data cause)) (throw failure))
+      (throw (ex-info "Session is no longer active" {:type :session-closed :session-id (:id reg)})))))
 
 (defn- claim! [{:keys [claims] :as reg} k status]
   ;; Evicting an old request ID would let a replay invoke a handler twice.
@@ -622,6 +737,12 @@
   (swap! claims assoc k status))
 
 (defn- retire! [reg key]
+  (let [[status _ retired] (get @(:claims reg) key)]
+    ;; Only an unsent refusal returns capacity here. An admitted RPC owns
+    ;; its slot through its own response, closure or deadline.
+    (when (= status :busy)
+      (swap! (:busy-replies reg) dec)
+      (a/close! retired)))
   (claim! reg key [:retired])
   (when-let [job (get @(:jobs reg) key)]
     (let [waiting (:waiting reg)]
@@ -631,39 +752,77 @@
     (cancel! job))
   nil)
 
-(defn- reserve-busy-reply! [{:keys [conn] :as owner} {:keys [busy-replies closed claims] :as reg} [kind request-id :as key]]
-  ;; Reserve under the event registry; prepare and submit after publication
-  ;; releases it, just as for an automatic or manual application decision.
+(defn- reserve-busy-reply! [{:keys [conn sessions] :as owner} {:keys [busy-replies closed claims] :as reg}
+                            [kind request-id :as key] agent]
+  ;; No data or code from an application is needed to refuse an excess
+  ;; request. Park on its decision receipt without blocking the event router.
   (when (>= @busy-replies 16)
     (fail-session! reg "Session callback replies saturated" :callback-overflow))
-  (let [method (response-method kind)
-        params (assoc (failed-response kind "busy") :request-id request-id)]
+  (let [retired (a/chan)
+        reservation [:busy agent retired]
+        offered? (volatile! false)
+        method (response-method kind)
+        params (assoc (failed-response kind "busy") :request-id request-id)
+        submit! (fn []
+                  (let [next-receipt (volatile! nil)
+                        ch (send-session-request
+                            owner reg method params
+                            #(when-not (identical? reservation (get @claims key))
+                               (throw (ex-info "Callback request is no longer pending" {:type :not-pending})))
+                            (fn [offer!]
+                              (let [[failure pending]
+                                    (try-after-decisions! conn reg
+                                                          #(locking sessions
+                                                             (let [failure (offer!)]
+                                                               (when-not failure
+                                                                 (claim! reg key [:automatic agent])
+                                                                 (vreset! offered? true))
+                                                               failure)))]
+                                (vreset! next-receipt pending)
+                                failure)))]
+                    ;; An intervening decision left this attempt unregistered.
+                    (if-let [pending @next-receipt] (do (a/close! ch) [nil pending]) [ch])))]
+    (claim! reg key reservation)
     (swap! busy-replies inc)
     (fn []
-      (when-let [ch (try
-                      (send-session-request owner reg method params
-                                            #(when-not (= :automatic (first (get @claims key)))
-                                               (throw (ex-info "Callback request is no longer pending" {:type :not-pending}))))
-                      (catch Throwable t
-                        (swap! busy-replies dec)
-                        ;; A retired decision is not a publication error. A
-                        ;; failed callback owner, however, retains its cause.
-                        (when-not (= :session-closed (:type (ex-data t)))
-                          (throw t))))]
-        (a/go
-          (try
-            (let [[response port] (a/alts! [ch closed (a/timeout 10000)] :priority true)]
-              (when (and (= port ch) (#{:permission :tool} kind) (invalid-params? response))
-                (permit-manual! owner reg closed key))
-              (when (and (not= port closed) (not (true? (get-in response [:result :success]))))
-                (log/warn "Runtime did not accept busy callback reply" {:kind kind :session-id (:id reg)})))
-            (finally (rpc/cancel-request! conn ch) (swap! busy-replies dec))))))))
+      (a/go
+        (try
+          (let [deadline (a/timeout 10000)]
+            (loop []
+              (let [[ch receipt] (submit!)]
+                (if receipt
+                  (let [[_ port] (a/alts! [closed retired deadline receipt] :priority true)]
+                    (cond
+                      (= port receipt) (recur)
+                      (= port deadline) (fail-active-decision! owner reg #(identical? reservation (get @claims key))
+                                                               (admission-timeout (:id reg)))))
+                  (try
+                    (let [[response port] (a/alts! [ch closed (a/timeout 10000)] :priority true)]
+                      (when (and (= port ch) (#{:permission :tool} kind) (invalid-params? response))
+                        (permit-manual! owner reg closed key))
+                      (when (and (not= port closed) (not (true? (get-in response [:result :success]))))
+                        (log/warn "Runtime did not accept busy callback reply" {:kind kind :session-id (:id reg)})))
+                    (finally (rpc/cancel-request! conn ch)))))))
+          (catch Exception e
+            (when-not (#{:session-closed :not-pending} (:type (ex-data e)))
+              (fail-active-decision! owner reg #(identical? reservation (get @claims key)) e)))
+          (finally
+            (locking sessions
+              (if @offered?
+                (swap! busy-replies dec)
+                (when (identical? reservation (get @claims key))
+                  (retire! reg key))))))))))
+
+(defn- start-request! [owner reg kind event key handler]
+  (let [agent (:agent-id event)]
+    (claim! reg key [:queued agent])
+    (when-not (submit! owner reg key #(invoke-request! owner reg kind event handler %))
+      (reserve-busy-reply! owner reg key agent))))
 
 (defn- admit! [owner reg kind event key]
   (let [{:keys [agent-id data]} event
-        {:keys [tool-name tool-call-id command-name permission-request resolved-by-hook]} data]
+        {:keys [tool-name tool-call-id command-name permission-request]} data]
     (cond
-      (and (= kind :permission) resolved-by-hook) (retire! reg key)
       (contains? @(:claims reg) key) nil
       (and (= kind :tool) (or (not (string? tool-call-id))
                               (and (contains? data :session-id) (not= (:id reg) (:session-id data))))) nil
@@ -672,29 +831,30 @@
       (let [handler (case kind
                       :tool (when-not (false? (:has-handler data)) (get (:tools reg) tool-name))
                       :command (get (:commands reg) command-name)
-                      (get reg kind))]
-        (if (or handler (= kind :command))
-          (do (claim! reg key [:automatic agent-id])
-              (when-not (submit! owner reg key #(invoke-request! owner reg kind event handler %))
-                (reserve-busy-reply! owner reg key)))
-          (when (#{:tool :permission} kind)
-            (claim! reg key [:manual agent-id])
-            nil))))))
+                      (get reg kind))
+            automatic? (or handler (= kind :command))]
+        (cond
+          (and owner automatic?) (start-request! owner reg kind event key handler)
+          automatic? (do (claim! reg key [:held agent-id event handler]) nil)
+          (#{:tool :permission} kind) (do (claim! reg key [:manual agent-id]) nil))))))
 
-(defn- dispatch! [owner reg {:keys [type data agent-id] :as event}]
-  (let [request-id (:request-id data)]
-    (cond
-      ;; A replay checkpoint is observable but cannot claim live work.
-      (true? (:checkpoint event)) nil
-      (= type :copilot/abort)
-      (doseq [[key [status agent]] @(:claims reg)
-              :when (and (not= :retired status) (or (str/blank? agent-id) (= agent agent-id)))]
-        (retire! reg key))
-      (and (string? request-id) (not (str/blank? request-id)))
-      (if-let [kind (completed type)]
-        (retire! reg [kind request-id])
-        (when-let [kind (requested type)]
-          (admit! owner reg kind event [kind request-id]))))))
+(defn- dispatch! [owner reg {:keys [data agent-id checkpoint] :as event}]
+  (when-let [[action kind] (decision-action event)]
+    (case action
+      :abort (let [root? (str/blank? agent-id)]
+               (when root? (vreset! (:root-aborted? reg) true))
+               (doseq [[key [status agent]] @(:claims reg)
+                       :when (and (not= :retired status) (or root? (= agent agent-id)))]
+                 (retire! reg key)))
+      :request (admit! owner reg kind event [kind (:request-id data)])
+      :settle (let [key [kind (:request-id data)]
+                    [status agent] (get @(:claims reg) key)]
+                ;; A checkpoint preserves an invocation in progress, not its right to retry.
+                (cond
+                  (not (true? checkpoint)) (retire! reg key)
+                  (= status :checkpointed) nil
+                  (#{:automatic :responding} status) (do (claim! reg key [:checkpointed agent]) nil)
+                  :else (retire! reg key))))))
 
 (defn- manual-body [kind opts]
   (let [{:keys [result error request-id]} opts
@@ -720,25 +880,27 @@
   "Return a native result channel for a pending :tool or :permission decision
   by ID. Restored pending requests need not have been re-emitted.
   Reject locally known automatic, duplicate and completed decisions."
-  [{:keys [sessions conn] :as owner} registration kind opts]
+  [{:keys [sessions conn] :as owner} {:keys [closed] :as registration} kind opts]
   (try
-    (let [body (manual-body kind opts)
-          id (:id registration)
+    (let [id (:id registration)
           key [kind (:request-id opts)]
           method (response-method kind)
-          [{:keys [closed claims] :as reg} attempt]
-          (locking sessions
-            (require-decision! owner registration)
-            (let [{:keys [claims] :as reg} (get @sessions id)
-                  [status agent-id] (get @claims key)
-                  attempt [:responding agent-id]]
-              (when-not (or (nil? status) (= :manual status))
-                (throw (ex-info "Callback request is not pending" {:type :not-pending})))
-              (claim! reg key attempt)
-              [reg attempt]))
-          ch (send-session-request owner reg method (assoc body :request-id (:request-id opts))
-                                   #(when-not (identical? attempt (get @claims key))
-                                      (throw (ex-info "Callback request is no longer pending" {:type :not-pending}))))]
+          reg (locking sessions (require-decision! owner registration) (get @sessions id))
+          claims (:claims reg)
+          body (manual-body kind opts)
+          ch (rpc/send-request conn method (assoc body :request-id (:request-id opts) :session-id id)
+                               {:with-admission
+                                (fn [offer!]
+                                  (after-decisions!!
+                                   conn registration
+                                   #(locking sessions
+                                      (require-decision! owner registration)
+                                      (let [[status agent] (get @claims key)]
+                                        (when-not (or (= :manual status) (and (nil? status) (not @(:root-aborted? reg))))
+                                          (throw (ex-info "Callback request is not pending" {:type :not-pending})))
+                                        (claim! reg key [:responding agent])
+                                        (offer!)))))
+                                :callback-registry sessions :check-admission! #(require-decision! owner registration)})]
       (a/go
         (let [outcome (try
                         (let [[response port] (a/alts! [ch closed (a/timeout 10000)] :priority true)]
@@ -748,7 +910,7 @@
                                             (throw (ex-info "Runtime did not accept the pending request response"
                                                             {:type :request-not-handled :method method})))
                                           {:ok ack})
-                            (= port closed) {:error (or @(:failure reg)
+                            (= port closed) {:error (or @(:failure registration)
                                                         (ex-info "Session is no longer active" {:type :session-closed}))}
                             :else {:error (ex-info "Callback RPC timed out" {:method method})}))
                         (catch Exception e {:error e})
@@ -756,10 +918,11 @@
           ;; A completion or abort can retire this attempt before its reply arrives.
           ;; A replacement session has a different claims atom.
           (swap! claims (fn [state]
-                          (if (identical? attempt (get state key))
-                            (assoc state key (if (invalid-params? (ex-data (:error outcome)))
-                                               [:manual (second attempt)] [:retired]))
-                            state)))
+                          (let [[status agent] (get state key)]
+                            (if (= :responding status)
+                              (assoc state key (if (invalid-params? (ex-data (:error outcome)))
+                                                 [:manual agent] [:retired]))
+                              state))))
           outcome)))
     (catch Exception e (a/go {:error e}))))
 
@@ -775,20 +938,85 @@
           (finish-observer! lane cause)))
       receipt)))
 
+(defn- request-kind [event]
+  (let [[action kind] (decision-action event)]
+    (when (= action :request) kind)))
+
+(defn- start-held! [owner reg event]
+  ;; Its aborts, completions and manual claims have already taken effect.
+  ;; Only the original request may consume a surviving deferred start.
+  (when-let [kind (request-kind event)]
+    (let [key [kind (get-in event [:data :request-id])]
+          [status _ original handler] (get @(:claims reg) key)]
+      (when (and (= status :held) (identical? original event))
+        (start-request! owner reg kind event key handler)))))
+
+(defn- hold-until-storage! [reg event]
+  (when-let [kind (request-kind event)]
+    (let [key [kind (get-in event [:data :request-id])]
+          [status _ original] (get @(:claims reg) key)
+          waiting (:awaiting-storage reg)]
+      (when (and (= status :held) (identical? original event))
+        ;; Retired claims no longer retain their events. Compact their keys
+        ;; before applying the queue limit to requests that still need work.
+        (when (>= (count @waiting) session-waiting-limit)
+          (vswap! waiting #(filterv (fn [k] (= :held (first (get @(:claims reg) k)))) %))
+          (when (>= (count @waiting) session-waiting-limit)
+            (fail-session! reg "Too many pending decisions during storage setup" :callback-overflow)))
+        (vswap! waiting conj key))))
+  nil)
+
+(defn- dispatch-observed! [owner reg event held?]
+  (let [reason (decision-refusal owner reg)]
+    (cond (nil? reason)
+          (try (cond (some? @(:awaiting-storage reg)) (do (when-not held? (dispatch! nil reg event))
+                                                          (hold-until-storage! reg event))
+                     held? (start-held! owner reg event)
+                     :else (dispatch! owner reg event))
+               (catch clojure.lang.ExceptionInfo e
+                 ;; Release can win during claim accounting. Stop the decision,
+                 ;; not publication of the event the reader already accepted.
+                 (when-not (= :session-closed (:type (ex-data e))) (throw e))))
+          (not= reason ::retired) (throw reason))))
+
+(defn storage-ready! [{:keys [sessions] :as owner} registration]
+  (let [busy (locking sessions
+               (when (registered? sessions registration)
+                 (let [reg (get @sessions (:id registration))
+                       waiting (:awaiting-storage reg)
+                       keys @waiting]
+                   (vreset! waiting nil)
+                   (when-not (decision-refusal owner reg)
+                     (into [] (keep (fn [[kind :as key]]
+                                      (let [[status _ event handler] (get @(:claims reg) key)]
+                                        (when (= :held status) (start-request! owner reg kind event key handler)))))
+                           keys)))))]
+    (doseq [send-busy! busy] (send-busy!))))
+
+(defn publish-held!
+  "Publish one pre-registration batch. Later subscriptions and turn waiters
+  did not exist when these events arrived. Only the open-time observer gets it."
+  [{:keys [sessions] :as owner} registration events]
+  (doseq [event events]
+    (when-let [busy! (locking sessions
+                       (when (registered? sessions registration)
+                         (dispatch-observed! owner (get @sessions (:id registration)) event true)))]
+      (busy!)))
+  (locking sessions
+    (when-let [lane (:observer (get @sessions (publication-key sessions registration)))]
+      (when-not (or @(:terminal lane) (a/offer! (:queue lane) [nil events]))
+        (throw (ex-info "Cannot deliver initial session observations" {:type :observer-overflow}))))))
+
 (defn publish!
-  "Admit a normalized live event and return its optional observer receipt.
-  A receipt delivers {:ok nil} after the synchronous observer returns, or
-  {:error cause} on overflow, failure or teardown. Pass it to turn/publish!;
-  never wait here. Observer overflow does not close event subscriptions.
-  A session callback failure closes only its registered turn state."
+  "Return [observer-receipt] for an admitted live event, or nil if its owner
+  stopped publication. A nil receipt means there is no observer. Otherwise
+  it settles after the handler returns, or on overflow, failure or teardown."
   [{:keys [sessions client-open?] :as owner} registration event]
-  (let [[send-busy! receipt]
-        (locking sessions
-          (when (and (client-open?) (registered? sessions registration))
-            (let [reg (get @sessions (:id registration))]
-              [(let [reason (decision-refusal owner reg)]
-                 (cond (nil? reason) (dispatch! owner reg event)
-                       (not= reason ::retired) (throw reason)))
-               (when-let [lane (:observer reg)] (observe! reg lane event))])))]
+  (when-let [[send-busy! receipt]
+             (locking sessions
+               (when (client-open?)
+                 (when-let [reg (get @sessions (publication-key sessions registration))]
+                   [(dispatch-observed! owner reg event false)
+                    (when-let [lane (:observer reg)] (observe! reg lane event))])))]
     (when send-busy! (send-busy!))
-    receipt))
+    [receipt]))

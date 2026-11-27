@@ -46,7 +46,7 @@ src/github/copilot_sdk/generated/event_specs.clj
 ```
 
 1. `.copilot-schema-version` records the Copilot CLI release used as the schema
-   provenance pin (`1.0.114` for SDK 2.0.1). Native library selection uses
+   provenance pin (`1.0.116` for SDK 2.0.3). Native library selection uses
    the pinned platform classifier and its digest, not a CLI executable.
 2. `bb schemas:fetch` downloads and validates the release checksum manifest
    before transferring the archive, restricts network transfers and redirects

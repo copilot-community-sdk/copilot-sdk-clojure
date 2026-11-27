@@ -14,8 +14,21 @@
 (def ^:private capacity 64)
 (def ^:private method-name "session.sendAndWait")
 
-(defn new-state []
-  (atom {:waiters {} :subscriptions #{}}))
+(defn new-state
+  ([] (new-state false))
+  ([observer?] (atom {:cursor 0 :waiters {} :subscriptions {} :observer? observer?})))
+
+(defn admission-cursor [state]
+  (:cursor @state))
+
+(defn- register! [state registry channel entry]
+  ;; Advance the cursor in the same swap that installs the consumer. The
+  ;; reader needs only this number, not the set of subscriptions or waiters.
+  (swap! state (fn [{:keys [cursor] :as s}]
+                 (let [next-cursor (inc cursor)]
+                   (-> s
+                       (assoc :cursor next-cursor)
+                       (assoc-in [registry channel] (entry next-cursor)))))))
 
 (defn normalize-event
   "Convert a protocol-decoded event to the SDK event shape. Use for live events
@@ -52,17 +65,19 @@
     (locking state
       (if-let [closed (:closed @state)]
         (finish! source closed)
-        (swap! state update :subscriptions conj source)))
+        (register! state :subscriptions source identity)))
     (channels/read-channel source #(locking state
-                                     (swap! state update :subscriptions disj source)
+                                     (swap! state update :subscriptions dissoc source)
                                      (a/close! source)))))
 
 (defn- root-event? [{:keys [agent-id]}]
   (or (nil? agent-id) (= "" agent-id)))
 
-(defn- observe! [state signal {:keys [id seen]} published receipt]
+(defn- waits-closed [{:keys [released closed]}] (or released closed))
+
+(defn- observe! [state signal {:keys [id seen] :as waiter} published receipt]
   (cond
-    (= id published) (do (swap! state assoc-in [:waiters signal] {})
+    (= id published) (do (swap! state assoc-in [:waiters signal] (dissoc waiter :id))
                          (a/offer! signal {:receipt receipt}))
     (nil? seen) nil
     (contains? seen published) nil
@@ -77,20 +92,37 @@
   "Publish one normalized event. Only root completion IDs are tracked, and
    only while a request can still name them in its native response. An ordinary
    observer supplies a promise channel with {:ok nil} or {:error ExceptionInfo}
-   after delivery. Without an observer, omit the receipt or pass nil."
+   after delivery. Without an observer, omit the receipt or pass nil. For
+   queued session events, pass the admission cursor captured by the reader."
   ([state event] (publish! state event nil))
-  ([state event receipt]
+  ([state event receipt] (publish! state event receipt (admission-cursor state)))
+  ([state event receipt cursor]
    (locking state
-     (doseq [ch (:subscriptions @state)]
+     (doseq [[ch registered] (:subscriptions @state) :when (<= registered cursor)]
        (when-not (a/offer! ch event)
-         (swap! state update :subscriptions disj ch)
+         (swap! state update :subscriptions dissoc ch)
          (finish! ch {:error (ex-info "Session event subscription overflow"
                                       {:type :subscription-overflow :event event})})))
      (when (and (:id event) (root-event? event)
                 (#{:copilot/session.idle :copilot/session.error
                    :copilot/session.autopilot_stopped} (:type event)))
-       (doseq [[signal waiter] (:waiters @state)]
+       (doseq [[signal waiter] (:waiters @state) :when (<= (:cursor waiter) cursor)]
          (observe! state signal waiter (:id event) receipt))))))
+
+(defn release-waits!
+  "Seal turn admission at release. A timely release drains pre-ACK replies
+   and events when there is no observer; the runtime reply is withdrawn at
+   the ACK if still unanswered. Never wait for an application callback."
+  [state cause timely?]
+  (locking state
+    (when-not (waits-closed @state)
+      (let [outcome (failure cause)
+            draining (if (and timely? (not (:observer? @state)))
+                       (into {} (filter (fn [[_ waiter]] @(:submitted? waiter))) (:waiters @state))
+                       {})
+            [before _] (swap-vals! state assoc :released outcome :waiters draining)]
+        (doseq [ch (keys (:waiters before)) :when (not (contains? draining ch))]
+          (finish! ch outcome))))))
 
 (defn close!
   "Stop admitting operations and close subscriptions. At EOF the protocol
@@ -100,11 +132,12 @@
   ([state cause eof?]
    (locking state
      (when-not (:closed @state)
-       (let [{:keys [waiters subscriptions]} @state
-             outcome (failure cause)]
-         (reset! state {:closed outcome :waiters (if eof? waiters {}) :subscriptions #{}})
-         (doseq [ch subscriptions] (finish! ch outcome))
-         (doseq [[ch {:keys [id]}] waiters :when (or (not eof?) id)] (finish! ch outcome)))))))
+       (let [{:keys [waiters subscriptions released]} @state
+             outcome (or released (failure cause))
+             drain? (or eof? released)]
+         (swap! state assoc :closed outcome :waiters (if drain? waiters {}) :subscriptions {})
+         (doseq [ch (keys subscriptions)] (finish! ch outcome))
+         (doseq [[ch {:keys [id]}] waiters :when (or (not drain?) id)] (finish! ch outcome)))))))
 
 (defn- response-outcome [{:keys [result error]} structured?]
   (if error
@@ -125,12 +158,12 @@
 
 (defn- match-completion! [state signal id]
   (locking state
-    (if-let [{:keys [seen]} (get-in @state [:waiters signal])]
+    (if-let [{:keys [seen] :as waiter} (get-in @state [:waiters signal])]
       (if (and (string? id) (seq id) (not (contains? seen id)))
-        (or (:closed @state) (do (swap! state assoc-in [:waiters signal] {:id id}) nil))
-        (do (swap! state assoc-in [:waiters signal] {})
+        (or (:closed @state) (do (swap! state assoc-in [:waiters signal] (assoc (dissoc waiter :seen) :id id)) nil))
+        (do (swap! state assoc-in [:waiters signal] (dissoc waiter :seen))
             {:receipt (get seen id)}))
-      (or (:closed @state) (a/poll! signal)))))
+      (or (waits-closed @state) (a/poll! signal)))))
 
 (defn- timeout-error [timeout-ms]
   (ex-info "Timeout waiting for native turn completion" {:type :turn-timeout :timeout-ms timeout-ms}))
@@ -147,47 +180,59 @@
         timer (.schedule deadline-worker ^Runnable #(a/close! ch) (long timeout-ms) TimeUnit/MILLISECONDS)]
     [ch #(.cancel timer false)]))
 
+(defn- settle-wait! [state signal outcome]
+  (locking state
+    (let [[before _] (swap-vals! state update :waiters dissoc signal)]
+      ;; EOF keeps reader-owned replies; explicit release takes unfinished waits.
+      (if (contains? (:waiters before) signal) outcome (or (waits-closed before) outcome)))))
+
 (defn- await-response [state signal {:keys [reply cancel! observer-delivery]} deadline timeout-ms structured?]
   (a/go
-    (try
-      (teardown/with-cleanup cancel!
-        (let [[response port] (a/alts! [signal deadline reply] :priority true)]
-          (when (= port signal) (throw (:error response)))
-          (when (= port deadline) (throw (timeout-error timeout-ms)))
-          (when (instance? Throwable response) (throw response))
-          (let [id (if (:error response)
-                     ;; Protocol error data retains its original JSON member names.
-                     (get-in response [:error :data :completionEventId])
-                     (get-in response [:result :completion-event-id]))
-                publication (or (match-completion! state signal id)
-                                (let [[v port] (a/alts! [signal deadline] :priority true)]
-                                  (when (= port deadline) (throw (timeout-error timeout-ms)))
-                                  v))]
-            (when-let [e (:error publication)] (throw e))
-            ;; An active observer cannot finish the event queued behind its own
-            ;; callback. If it already returned, the normal delivery fence applies.
-            (when-not (and observer-delivery (not (p/closed? observer-delivery)))
-              (when-let [receipt (:receipt publication)]
-                (let [[v port] (a/alts! [signal deadline receipt] :priority true)]
-                  (cond
-                    (= port signal) (throw (:error v))
-                    (= port deadline) (throw (timeout-error timeout-ms))
-                    (nil? v) (throw (ex-info "Observer closed without a receipt"
-                                             {:type :missing-observer-receipt}))))))
-            (response-outcome response structured?))))
-      (catch Exception e (failure e))
-      (finally
-        (locking state (swap! state update :waiters dissoc signal))))))
+    (settle-wait!
+     state signal
+     (try
+       (teardown/with-cleanup cancel!
+         (let [[response port] (a/alts! [signal deadline reply] :priority true)]
+           (when (= port signal) (throw (:error response)))
+           (when (= port deadline) (throw (timeout-error timeout-ms)))
+           (when (instance? Throwable response) (throw response))
+           (let [id (if (:error response)
+                      ;; Protocol error data retains its original JSON member names.
+                      (get-in response [:error :data :completionEventId])
+                      (get-in response [:result :completion-event-id]))
+                 publication (or (match-completion! state signal id)
+                                 (let [[v port] (a/alts! [signal deadline] :priority true)]
+                                   (when (= port deadline) (throw (timeout-error timeout-ms)))
+                                   v))]
+             (when-let [e (:error publication)] (throw e))
+             ;; An active observer cannot finish the event queued behind its own
+             ;; callback. If it already returned, the normal delivery fence applies.
+             (when-not (and observer-delivery (not (p/closed? observer-delivery)))
+               (when-let [receipt (:receipt publication)]
+                 (let [[v port] (a/alts! [signal deadline receipt] :priority true)]
+                   (cond
+                     (= port signal) (throw (:error v))
+                     (= port deadline) (throw (timeout-error timeout-ms))
+                     ;; A stopped observer can discard the completion. Handler
+                     ;; exceptions and observer queue overflow remain local.
+                     (#{:session-closed :observer-drain-timeout :observer-stopped}
+                      (some-> v :error ex-data :type)) (throw (:error v))
+                     (nil? v) (throw (ex-info "Observer closed without a receipt"
+                                              {:type :missing-observer-receipt}))))))
+             (response-outcome response structured?))))
+       (catch Exception e (failure e))
+       (catch Error e (settle-wait! state signal nil) (throw e))))))
 
 (defn- completed [outcome]
   (doto (a/chan 1) (finish! outcome)))
 
 (defn send-and-wait!
   "Return a channel with exactly one {:ok root-assistant-event-or-nil} or
-   {:error ExceptionInfo}. (send-fn message check-deadline!) submits or reserves
+   {:error ExceptionInfo}. (send-fn message admission-options) submits or reserves
    one native RPC on the caller and returns {:reply channel :cancel! fn}.
-   It must check the deadline under the client lock when registering the
-   prepared RPC as pending, including after a queued trace lookup. cancel!
+   Pass :check-admission! and :on-submitted from admission-options to the RPC,
+   including after a queued trace lookup. A local reservation is not a
+   submitted turn. cancel!
    releases only this reservation or pending RPC. The message excludes :timeout-ms.
    The budget (1..2147483647 ms, default 60000) starts after registration and
    covers preparation, admission, the RPC, publication and its observer receipt.
@@ -199,15 +244,16 @@
   [state send-fn options]
   (let [timeout-ms (get options :timeout-ms 60000)
         signal (a/chan 1)
+        submitted? (volatile! false)
         rejected (locking state
-                   (cond
-                     (:closed @state) (:closed @state)
-                     (not (and (pos-int? timeout-ms) (<= timeout-ms Integer/MAX_VALUE)))
-                     {:error (ex-info "Expected :timeout-ms between 1 and 2147483647"
-                                      {:type :invalid-timeout :timeout-ms timeout-ms})}
-                     (>= (count (:waiters @state)) capacity)
-                     {:error (ex-info "Too many pending turns" {:type :turn-capacity})}
-                     :else (do (swap! state assoc-in [:waiters signal] {:seen {}}) nil)))]
+                   (or (waits-closed @state)
+                       (cond
+                         (not (and (pos-int? timeout-ms) (<= timeout-ms Integer/MAX_VALUE)))
+                         {:error (ex-info "Expected :timeout-ms between 1 and 2147483647"
+                                          {:type :invalid-timeout :timeout-ms timeout-ms})}
+                         (>= (count (:waiters @state)) capacity)
+                         {:error (ex-info "Too many pending turns" {:type :turn-capacity})}
+                         :else (do (register! state :waiters signal (fn [cursor] {:cursor cursor :seen {} :submitted? submitted?})) nil))))]
     (if rejected
       (completed rejected)
       (try
@@ -219,7 +265,8 @@
               check-deadline! #(when (or (p/closed? deadline)
                                          (>= (unchecked-subtract (System/nanoTime) start) budget-ns))
                                  (throw (timeout-error timeout-ms)))
-              rpc (try (send-fn (dissoc options :timeout-ms) check-deadline!)
+              rpc (try (send-fn (dissoc options :timeout-ms) {:check-admission! check-deadline!
+                                                              :on-submitted #(vreset! submitted? true)})
                        (catch Throwable t (stop-timer!) (throw t)))
               cleanup (delay (stop-timer!) ((:cancel! rpc)))
               result (await-response state signal (assoc rpc :cancel! #(force cleanup))
@@ -235,5 +282,6 @@
                  (finish! signal {:error (ex-info "Turn wait abandoned" {:type :turn-abandoned})})))
              (force cleanup))))
         (catch Throwable e
-          (locking state (swap! state update :waiters dissoc signal))
-          (if (instance? Exception e) (completed (failure e)) (throw e)))))))
+          (if (instance? Exception e)
+            (completed (settle-wait! state signal (failure e)))
+            (do (settle-wait! state signal nil) (throw e))))))))

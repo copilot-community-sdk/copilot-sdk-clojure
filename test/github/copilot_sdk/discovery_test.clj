@@ -19,6 +19,15 @@
     (when-not (= port ch) (throw (ex-info "Test timed out" {})))
     v))
 
+(defn- after-provider-release [request]
+  ;; A cancellation latch fires before the worker returns to the executor.
+  (let [deadline (+ (System/nanoTime) 3000000000)]
+    (loop []
+      (let [result (outcome (request))]
+        (if (and (= :provider-capacity (:type (ex-data (:error result)))) (< (System/nanoTime) deadline))
+          (recur)
+          result)))))
+
 (defn- with-owner [opts f]
   (let [{:keys [conn ->client <-client]} (peer/open-connection {})
         owner (discovery/open! conn opts)]
@@ -169,15 +178,7 @@
             (doseq [thread threads] (.interrupt ^Thread (deref thread 3000 nil)))
             (is (= (mapv #(deref % 3000 ::timeout) lookups) [true true true true]))
             (is (.await interrupted 3 TimeUnit/SECONDS))
-            ;; Interrupt delivery precedes the worker's return to the executor.
-            (let [deadline (+ (System/nanoTime) 3000000000)]
-              (is (= (loop []
-                       (let [result (outcome (discovery/models owner))]
-                         (if (and (= :provider-capacity (:type (ex-data (:error result))))
-                                  (< (System/nanoTime) deadline))
-                           (recur)
-                           result)))
-                     {:ok []})))
+            (is (= (after-provider-release #(discovery/models owner)) {:ok []}))
             (finally (deliver release {}))))))))
 
 (deftest mutable-callback-result-is-not-cached
@@ -594,7 +595,7 @@
             (is (.await exited 2 TimeUnit/SECONDS)))
           ;; Turn timeouts do not read the abandoned reply. Verify its own go
           ;; block terminates without waiting for the head, not just its accounting.
-          (let [{:keys [cancel! reply]} (#'client/submit-turn s "abandoned" (fn []))]
+          (let [{:keys [cancel! reply]} (#'client/submit-turn s "abandoned" {})]
             (cancel!)
             (is (nil? (outcome reply)))))
         (let [abort (client/abort! s)
@@ -636,7 +637,7 @@
             (is (= (mapv #(-> % outcome :error ex-data :type) turns)
                    (repeat 4 (if (= retire :deadline) :turn-timeout :session-closed))))
             (is (.await exited 2 TimeUnit/SECONDS))
-            (is (= (some-> (outcome (client/list-models c)) :ok) []))
+            (is (= (after-provider-release #(client/list-models c)) {:ok []}))
             (is (= (outcome (binding [*parent* "healthy"] (client/send! healthy "healthy"))) {:ok "healthy"}))
             (is (= (get-in (last @frames) [:params :traceparent]) "healthy"))
             (is (not (a/offer! hold {:traceparent "late"})))

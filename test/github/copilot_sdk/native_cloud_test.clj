@@ -1,5 +1,6 @@
 (ns github.copilot-sdk.native-cloud-test
   (:require [clojure.core.async :as a]
+            [clojure.data.json :as json]
             [clojure.test :refer [deftest is]]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.framed-peer :as peer]
@@ -9,6 +10,8 @@
             [github.copilot-sdk.native-host :as host]
             [github.copilot-sdk.native-offline-fixture :as offline]
             [github.copilot-sdk.protocol :as rpc]
+            [github.copilot-sdk.reverse :as reverse]
+            [github.copilot-sdk.session-options :as options]
             [github.copilot-sdk.turn :as turn]
             [github.copilot-sdk.util :as util])
   (:import [java.io PipedInputStream PipedOutputStream]
@@ -94,12 +97,1737 @@
 (defn- try-open [c options]
   (future (try (sdk/open-session!! c options) (catch Exception e e))))
 
+(deftest cloud-create-reconciles-early-decisions-before-ordered-delivery
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [observed (atom [])
+            delivered (promise)
+            called (atom [])
+            admitted (promise)
+            answer (a/promise-chan)
+            open (try-open c {:cloud {}
+                              :permissions {:on-request (fn [request ctx]
+                                                          (swap! called conj (:path request))
+                                                          (deliver admitted (:cancelled? ctx))
+                                                          answer)}
+                              :events {:on-event (fn [{:keys [id]}]
+                                                   (swap! observed conj id)
+                                                   (when (= id "live") (deliver delivered true)))}})
+            create (next!)
+            emit! (fn [session id type data]
+                    (send! {:method "session.event" :params {:sessionId session :event {:type type :id id :data data}}}))
+            request! #(emit! "cloud" % "permission.requested" {:requestId % :permissionRequest {:kind "read" :path %}})]
+        ;; Stop the router, not the reader. Even a manual response immediately
+        ;; after registration must see the completion parsed before the reply.
+        (locking (.-lifecycle c)
+          (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "created"}})
+          (request! "answered")
+          (emit! "cloud" "complete" "permission.completed" {:requestId "answered"})
+          (request! "pending")
+          (emit! "other" "unrelated" "permission.completed" {:requestId "pending"})
+          (reply! create {:sessionId "cloud"})
+          (let [s (bounded open)]
+            (is (= :not-pending
+                   (bounded (future (try (sdk/respond!! s :permission {:request-id "answered" :result {:kind :reject}})
+                                         (catch Exception e (:type (ex-data e))))))))))
+        ;; A completion received after the worker started is ordinary live
+        ;; cancellation, not part of the pre-registration reconciliation.
+        (let [cancelled? (bounded admitted)]
+          (is (false? (cancelled?)))
+          (emit! "cloud" "live-complete" "permission.completed" {:requestId "pending"})
+          (emit! "cloud" "live" "session.info" {})
+          (bounded delivered)
+          (is (true? (cancelled?)))
+          (is (= @observed ["answered" "complete" "pending" "live-complete" "live"]))
+          (is (= @called ["pending"])))))))
+
+(deftest held-claims-precede-manual-responses-and-respect-abort-scope
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [calls (atom []) observations (atom []) observed (promise) abstained (promise)
+            opening (try-open c {:cloud {}
+                                 :permissions {:on-request (fn [_ {:keys [request-id]}]
+                                                             (swap! calls conj request-id)
+                                                             {:kind :no-result})}
+                                 :events {:on-event (fn [{:keys [id]}]
+                                                      (swap! observations conj id)
+                                                      (when (= id "end") (deliver observed true)))}})
+            create (next!)
+            ids ["root" "child" "abort-all" "a" "auto-only" "b" "abort-a" "hook" "hook-copy" "history" "checkpoint" "end"]
+            emit! (fn [event] (send! {:method "session.event" :params {:sessionId "cloud" :event event}}))
+            request! (fn [id agent hook?]
+                       (emit! {:id id :agentId agent :type "permission.requested"
+                               :data {:requestId id :permissionRequest {:kind "read"} :resolvedByHook hook?}}))
+            answer {:result {:kind :reject}}
+            s (locking (.-lifecycle c)
+                (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "created"}})
+                (request! "root" nil false)
+                (request! "child" "a" false)
+                (emit! {:id "abort-all" :type "abort"})
+                (request! "a" "a" false)
+                (request! "auto-only" "a" false)
+                (request! "b" "b" false)
+                (emit! {:id "abort-a" :type "abort" :agentId "a"})
+                (request! "hook" "a" true)
+                (emit! {:id "hook-copy" :type "permission.requested" :agentId "a" :checkpoint true
+                        :data {:requestId "hook-copy" :permissionRequest {:kind "read"} :resolvedByHook true}})
+                (request! "history" nil false)
+                (emit! {:id "checkpoint" :type "permission.completed" :checkpoint true :data {:requestId "history"}})
+                (reply! create {:sessionId "cloud"})
+                (let [s (bounded opening)
+                      claims (:claims (get @(:sessions (.-callbacks c)) "cloud"))]
+                  (add-watch claims abstained (fn [_ _ _ state]
+                                                (when (= :manual (first (get state [:permission "b"])))
+                                                  (deliver abstained true))))
+                  (doseq [id ["root" "child" "a" "hook" "hook-copy" "b" "history"]]
+                    (is (= :not-pending
+                           (bounded (future (try (sdk/respond!! s :permission (assoc answer :request-id id))
+                                                 (catch Exception e (:type (ex-data e)))))))
+                        id))
+                  s))]
+        (try
+          (emit! {:type "session.info" :id "end"})
+          (bounded observed)
+          (is (= @observations ids))
+          (bounded abstained)
+          (is (= @calls ["b"]))
+          (let [manual (future (sdk/respond!! s :permission (assoc answer :request-id "b")))
+                frame (next!)]
+            (is (= (get-in frame [:params :requestId]) "b"))
+            (reply! frame {:success true})
+            (is (= (bounded manual) {:success true})))
+          (finally (remove-watch (:claims (get @(:sessions (.-callbacks c)) "cloud")) abstained)))))))
+
+(deftest held-event-capacity-evicts-the-oldest-id-not-the-connection
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [emit! #(send! {:method "session.event" :params {:sessionId %1 :event {:id %2 :type "session.info"}}})
+            observe (fn []
+                      (let [seen (atom []) done (promise)]
+                        [{:on-event (fn [{:keys [id]}]
+                                      (swap! seen conj id)
+                                      (when (= id "end") (deliver done @seen)))}
+                         done]))
+            [live-events live-seen] (observe)
+            live (try-open c {:session-id "live" :events live-events})
+            _ (reply! (next!) {:sessionId "live"})
+            _ (bounded live)
+            [noisy-events noisy-seen] (observe)
+            noisy (try-open c {:cloud {} :events noisy-events}) noisy-request (next!)
+            [other-events other-seen] (observe)
+            other (try-open c {:cloud {} :events other-events}) other-request (next!)]
+        (emit! "noisy" "first")
+        (emit! "other" "kept")
+        (dotimes [_ 8190] (emit! "noisy" "drop"))
+        (emit! "noisy" "tail")
+        (emit! "live" "end")
+        (is (= (bounded live-seen) ["end"]))
+        (reply! other-request {:sessionId "other"})
+        (emit! "other" "end")
+        (reply! noisy-request {:sessionId "noisy"})
+        (emit! "noisy" "end")
+        (is (= (bounded other-seen) ["kept" "end"]))
+        (is (= (bounded noisy-seen) ["tail" "end"]))
+        (is (= (mapv #(sdk/session-id (bounded %)) [noisy other]) ["noisy" "other"]))))))
+
+(deftest held-wire-byte-budget-is-shared-across-creates
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (with-redefs-fn
+        {#'client/held-byte-limit 1600}
+        (fn []
+          (let [observe (fn []
+                          (let [seen (atom []) done (promise)
+                                opening (try-open c {:cloud {} :events {:on-event (fn [{:keys [id]}]
+                                                                                    (swap! seen conj id)
+                                                                                    (when (= "end" id) (deliver done @seen)))}})]
+                            [(next!) opening done]))
+                [first-create first-open first-seen] (observe)
+                [second-create second-open second-seen] (observe)
+                [large-create large-open large-seen] (observe)
+                event! (fn [session id n]
+                         (send! {:method "session.event" :params {:sessionId session
+                                                                  :event {:id id :type "session.info" :data {:message (.repeat "x" n)}}}}))]
+            (event! "a" "oldest" 500)
+            (event! "b" "kept" 500)
+            (event! "a" "evicts-oldest" 500)
+            (event! "oversized-only" "prior" 0)
+            (event! "oversized-only" "oversized" 1601)
+            (event! "a" "new" 0)
+            (reply! second-create {:sessionId "b"})
+            (event! "b" "end" 0)
+            (reply! first-create {:sessionId "a"})
+            (event! "a" "end" 0)
+            (reply! large-create {:sessionId "oversized-only"})
+            (event! "oversized-only" "end" 0)
+            (is (= (bounded second-seen) ["kept" "end"]))
+            (is (= (bounded first-seen) ["evicts-oldest" "new" "end"]))
+            (is (= (bounded large-seen) ["end"]))
+            (is (= (mapv #(sdk/session-id (bounded %)) [first-open second-open large-open]) ["a" "b" "oversized-only"]))
+            (is (zero? (:bytes @(.-heldEvents c))))))))))
+
+(deftest eof-drains-claimed-events-without-starting-held-decisions
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [calls (atom []) seen (promise)
+            opts {:cloud {} :permissions {:on-request (fn [req _] (swap! calls conj req) {:kind :reject})}
+                  :events {:on-event #(deliver seen (:id %))}}
+            claimed (try-open c opts) create (next!)
+            unanswered (try-open c opts)
+            _ (next!)
+            lost (sdk/lifecycle-events c)]
+        (try
+          ;; Park publication of the first frame, not the independent reader.
+          (locking (.-lifecycle c)
+            (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "created"}})
+            (doseq [id ["never-owned" "owned"]]
+              (send! {:method "session.event"
+                      :params {:sessionId id :event {:id id :type "permission.requested"
+                                                     :data {:requestId id :permissionRequest {:kind "read"}}}}}))
+            (reply! create {:sessionId "owned"})
+            (is (= (sdk/session-id (bounded claimed)) "owned"))
+            (send!)
+            (is (= (ex-message (bounded unanswered)) "Connection closed by remote")))
+          (is (= (bounded seen) "owned"))
+          (is (= (-> (bounded (future (a/<!! (a/into [] lost)))) last :error ex-data :type)
+                 :connection-closed))
+          (is (empty? @calls))
+          (finally (a/close! lost)))))))
+
+(deftest release-during-held-decision-overflow-preserves-the-whole-observer-batch
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [seen (atom []) hold (a/chan) full (promise) resume (promise)
+            ids (mapv str (range 35))
+            opening (try-open c {:cloud {} :permissions {:on-request (fn [_ _] hold)}
+                                 :events {:on-event #(swap! seen conj (:id %))}})
+            create (next!) emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+            fail @#'callbacks/fail-session! admit @#'callbacks/try-after-decisions!]
+        (try
+          ;; Park workers and busy senders before they take the reader lock.
+          ;; The 35th request exceeds two workers, 16 queued requests and 16 refusals.
+          (with-redefs [callbacks/try-after-decisions! (fn [& args] (bounded resume) (apply admit args))
+                        callbacks/fail-session! (fn [& args] (deliver full true) (bounded resume) (apply fail args))]
+            (let [[s form observer]
+                  (locking (.-lifecycle c)
+                    (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+                    (emit! {:id "first" :type "session.info"})
+                    (doseq [id ids] (emit! {:id id :type "permission.requested"
+                                            :data {:requestId id :permissionRequest {:kind "read"}}}))
+                    (emit! {:id "last" :type "session.info"})
+                    (reply! create {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+                    (let [s (bounded opening) form (sdk/elicit! s {:message "m" :requested-schema {:type "object"}})]
+                      (is (= (:method (next!)) "session.ui.elicitation"))
+                      [s form @(get-in @(:sessions (.-callbacks c)) ["s" :observer :task])]))]
+              (bounded full)
+              (let [closing (future (sdk/close!! s)) detach (next!)]
+                (is (= (:method detach) "session.detach"))
+                (reply! detach {:success true})
+                (is (= (-> (bounded (future (a/<!! form))) :error ex-data :type) :session-closed))
+                (deliver resume true)
+                (bounded closing)
+                (.get ^java.util.concurrent.Future observer 5 java.util.concurrent.TimeUnit/SECONDS)
+                (is (= @seen (into ["first"] (conj ids "last")))))))
+          (finally (deliver resume true) (a/close! hold)))))))
+
+(deftest pre-open-events-belong-to-the-configured-observer-not-a-later-subscriber
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [release (promise) seen (atom []) done (promise)
+            observe (fn [{:keys [id error]}]
+                      (if error (deliver done error)
+                          (do (when (= "0" id) (bounded release))
+                              (swap! seen conj id)
+                              (when (= "live" id) (deliver done @seen)))))
+            opening (try-open c {:cloud {} :events {:on-event observe}})
+            create (next!)
+            emit! #(send! {:method "session.event" :params {:sessionId "cloud" :event {:id % :type "session.info"}}})
+            sub (locking (.-lifecycle c)
+                  (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "session.updated"}})
+                  (dotimes [i 80] (emit! (str i)))
+                  (reply! create {:sessionId "cloud"})
+                  (sdk/subscribe (bounded opening)))]
+        (try
+          (emit! "live")
+          (let [[event port] (a/alts!! [sub (a/timeout 5000)])]
+            (is (identical? sub port))
+            (is (= (:id event) "live")))
+          (deliver release true)
+          (is (= (bounded done) (conj (mapv str (range 80)) "live")))
+          (finally (deliver release true) (a/close! sub)))))))
+
+(deftest storage-setup-gates-cloud-decisions-but-not-observations
+  (with-runtime fs-options
+    (fn [c send! next! reply!]
+      (doseq [fail? [true false]]
+        (let [id (if fail? "failed" "working")
+              entered (promise) release (promise) observed (promise) requests (atom [])
+              opts {:cloud {}
+                    :state {:create-session-fs-provider
+                            (fn [_]
+                              (deliver entered true) (bounded release)
+                              (if fail? (throw (ex-info "Storage unavailable" {}))
+                                  (memory-fs/provider (atom {}))))}
+                    :permissions {:on-request (fn [_ ctx]
+                                                (swap! requests conj (:request-id ctx))
+                                                {:kind :reject})}
+                    :events {:on-event #(when (= "fence" (:id %)) (deliver observed true))}}
+              opening (try-open c opts) create (next!)
+              emit! (fn [event] (send! {:method "session.event" :params {:sessionId id :event event}}))
+              request! (fn [r] (emit! {:id r :type "permission.requested"
+                                       :data {:requestId r :permissionRequest {:kind "read"}}}))]
+          (try
+            (request! "held")
+            (reply! create {:sessionId id})
+            (bounded entered)
+            (emit! {:type "permission.completed" :data {:requestId "held"}})
+            (request! "pending")
+            (emit! {:id "fence" :type "session.info"})
+            (bounded observed)
+            (deliver release true)
+            (let [frame (next!)]
+              (reply! frame {:success true})
+              (if fail?
+                (do (is (= (:method frame) "session.detach"))
+                    (is (= (ex-message (bounded opening)) "Storage unavailable"))
+                    (is (empty? @requests)))
+                (do (is (= [(:method frame) (get-in frame [:params :requestId])]
+                           ["session.permissions.handlePendingPermissionRequest" "pending"]))
+                    (is (= (sdk/session-id (bounded opening)) id))
+                    (is (= @requests ["pending"])))))
+            (finally (deliver release true))))))))
+
+(deftest cloud-create-fails-when-its-held-batch-cannot-be-queued
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [queue (:notification-queue (.-connection c))
+            opening (try-open c {:cloud {}}) create (next!)
+            marker {:method "session.lifecycle" :params {:sessionId "barrier" :type "session.updated"}}]
+        (locking (.-lifecycle c)
+          (send! marker)
+          (send! {:method "session.event" :params {:sessionId "s" :event {:id "early" :type "session.info"}}})
+          ;; Do not overflow while filling: the create reply must be the first failed offer.
+          (loop []
+            (when (pos? (.remainingCapacity queue))
+              (dotimes [_ (min 1024 (.remainingCapacity queue))] (send! marker))
+              (send! {:id "fence" :method "unknown" :params {}})
+              (is (= (:id (next!)) "fence"))
+              (recur)))
+          (reply! create {:sessionId "s"})
+          (is (= (:type (ex-data (bounded opening))) :connection-closed)))))))
+
+(deftest storage-readiness-cannot-overtake-an-admitted-tool-completion
+  (with-runtime fs-options
+    (fn [c send! next! reply!]
+      (let [ready (promise) held (promise) completed (promise) calls (atom [])
+            emit! (fn [type data] (send! {:method "session.event" :params {:sessionId "s" :event {:type type :data data}}}))
+            opening (try-open c {:cloud {}
+                                 :state {:create-session-fs-provider (fn [_] (bounded ready) (memory-fs/provider (atom {})))}
+                                 :tools {:definitions [{:name "count" :handler (fn [_ ctx] (swap! calls conj (:request-id ctx)) "ok")}]}
+                                 :events {:on-event (fn [{:keys [type]}]
+                                                      (case type
+                                                        :copilot/external_tool.requested (deliver held true)
+                                                        :copilot/external_tool.completed (deliver completed true)
+                                                        nil))}})
+            create (next!)]
+        (try
+          (emit! "external_tool.requested" {:requestId "old" :sessionId "s" :toolName "count" :toolCallId "call" :arguments {}})
+          (reply! create {:sessionId "s"})
+          (bounded held)
+          (locking (.-lifecycle c)
+            (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "session.updated"}})
+            (emit! "external_tool.completed" {:requestId "old"})
+            (send! {:id "read" :method "unknown" :params {}})
+            (is (= (:id (next!)) "read"))
+            (deliver ready true)
+            (is (= (sdk/session-id (bounded opening)) "s")))
+          (bounded completed)
+          (is (empty? @calls))
+          (finally (deliver ready true)))))))
+
+(deftest storage-activation-is-ordered-after-a-notification-being-decoded
+  (with-runtime fs-options
+    (fn [c send! next! reply!]
+      (let [ready (promise) first-seen (promise) decoding (promise) finish-decode (promise)
+            opener (promise) called (promise) calls (atom []) completed (promise) parse json/read-str
+            opening (try-open c {:cloud {}
+                                 :state {:create-session-fs-provider (fn [_] (bounded ready) (memory-fs/provider (atom {})))}
+                                 :tools {:definitions [{:name "count" :handler (fn [_ ctx]
+                                                                                 (swap! calls conj (:request-id ctx))
+                                                                                 (deliver called true) "ok")}]}
+                                 :events {:on-event (fn [{:keys [type]}]
+                                                      (case type
+                                                        :copilot/external_tool.requested (deliver first-seen true)
+                                                        :copilot/external_tool.completed (deliver completed true)
+                                                        nil))}})
+            create (next!)
+            emit! #(send! {:method "session.event" :params {:sessionId "s" :event {:type %1 :data %2}}})
+            offer! rpc/offer-notification!]
+        (try
+          (emit! "external_tool.requested" {:requestId "old" :sessionId "s" :toolName "count" :toolCallId "call" :arguments {}})
+          (reply! create {:sessionId "s"})
+          (bounded first-seen)
+          (with-redefs [json/read-str (fn [& args]
+                                        (let [msg (apply parse args)]
+                                          (when (= "external_tool.completed" (get-in msg ["params" "event" "type"]))
+                                            (deliver decoding true) (bounded finish-decode))
+                                          msg))
+                        rpc/offer-notification! (fn [conn msg & opts]
+                                                  (when (= ::client/storage-ready (:method msg))
+                                                    (deliver opener (Thread/currentThread)))
+                                                  (apply offer! conn msg opts))]
+            (emit! "external_tool.completed" {:requestId "old"})
+            (bounded decoding)
+            (deliver ready true)
+            (let [thread (bounded opener) until (+ (System/nanoTime) 3000000000)]
+              (loop []
+                (when-not (or (= Thread$State/BLOCKED (.getState ^Thread thread)) (realized? called))
+                  (when (> (System/nanoTime) until) (throw (ex-info "Neither readiness nor handler reached the boundary" {})))
+                  (Thread/yield)
+                  (recur))))
+            (deliver finish-decode true)
+            (is (= (sdk/session-id (bounded opening)) "s"))
+            (bounded completed)
+            (is (empty? @calls)))
+          (finally (deliver ready true) (deliver finish-decode true)))))))
+
+(deftest reverse-interactions-reject-while-session-storage-is-unavailable
+  (with-runtime fs-options
+    (fn [c send! next! reply!]
+      (doseq [fail? [false true]]
+        (let [id (if fail? "broken-fs" "ready-fs")
+              entered (promise) ready (promise) calls (atom [])
+              opening (try-open c {:cloud {}
+                                   :state {:create-session-fs-provider
+                                           (fn [_] (deliver entered true) (bounded ready)
+                                             (if fail? (throw (ex-info "Storage unavailable" {}))
+                                                 (memory-fs/provider (atom {}))))}
+                                   :interaction {:on-user-input-request
+                                                 (fn [_ _] (swap! calls conj :input) {:answer "ok" :was-freeform? true})}
+                                   :hooks {:handlers {:on-pre-tool-use
+                                                      (fn [_ _] (swap! calls conj :hook) {:permission-decision :deny})}}})
+              create (next!)
+              ask! (fn []
+                     (send! {:id "input" :method "userInput.request" :params {:sessionId id :question "Continue?"}})
+                     (send! {:id "hook" :method "hooks.invoke"
+                             :params {:sessionId id :hookType "preToolUse" :input {:toolName "test"}}})
+                     (into {} (map (juxt :id identity)) [(next!) (next!)]))]
+          (try
+            (reply! create {:sessionId id})
+            (bounded entered)
+            (is (= (update-vals (ask!) #(get-in % [:error :code])) {"input" -32001 "hook" -32001}))
+            (is (empty? @calls))
+            (deliver ready true)
+            (if fail?
+              (let [detach (next!)]
+                (is (= (:method detach) "session.detach"))
+                (reply! detach {:success true})
+                (is (= (ex-message (bounded opening)) "Storage unavailable")))
+              (do (is (= (sdk/session-id (bounded opening)) id))
+                  (is (= (update-vals (ask!) :result)
+                         {"input" {:answer "ok" :wasFreeform true} "hook" {:output {:permissionDecision "deny"}}}))
+                  (is (= (frequencies @calls) {:input 1 :hook 1}))))
+            (finally (deliver ready true))))))))
+
+(deftest manual-permission-replies-wait-for-storage-event-reconciliation
+  (with-runtime fs-options
+    (fn [c send! next! reply!]
+      (let [ready (promise) observed (promise) waiting (promise)
+            opening (try-open c {:cloud {}
+                                 :state {:create-session-fs-provider (fn [_] (bounded ready) (memory-fs/provider (atom {})))}
+                                 :events {:on-event #(when (= "old" (:id %)) (deliver observed true))}})
+            create (next!) alts!! a/alts!!
+            emit! (fn [type data]
+                    (send! {:method "session.event" :params {:sessionId "s" :event {:type type :id "old" :data data}}}))]
+        (try
+          (emit! "permission.requested" {:requestId "old" :permissionRequest {:kind "read"}})
+          (reply! create {:sessionId "s"}) (bounded observed)
+          (let [[s answer]
+                (locking (.-lifecycle c)
+                  (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "session.updated"}})
+                  (emit! "permission.completed" {:requestId "old"})
+                  (send! {:id "fence" :method "unknown" :params {}})
+                  (is (= (:id (next!)) "fence"))
+                  (deliver ready true)
+                  (let [s (bounded opening)
+                        result (future
+                                 (with-redefs [a/alts!! (fn [& args] (deliver waiting true) (apply alts!! args))]
+                                   (try (sdk/respond!! s :permission {:request-id "old" :result {:kind :reject}})
+                                        (catch Exception e (:type (ex-data e))))))]
+                    (bounded waiting)
+                    [s result]))]
+            (is (= (bounded answer) :not-pending))
+            ;; Restored work can have an authoritative ID with no repeated request event.
+            (let [live (future (sdk/respond!! s :permission {:request-id "restored" :result {:kind :reject}}))
+                  frame (next!)]
+              (is (= (get-in frame [:params :requestId]) "restored"))
+              (reply! frame {:success true})
+              (is (= (bounded live) {:success true}))))
+          (finally (deliver ready true)))))))
+
+(deftest saturation-replies-do-not-pass-received-decision-events
+  (doseq [settlement [:completion :abort :observation]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [held (a/chan) entered (java.util.concurrent.CountDownLatch. 2) calls (atom []) queued (promise)
+              opening (try-open c {:session-id "s" :permissions {:on-request (fn [_ {:keys [request-id]}]
+                                                                               (swap! calls conj request-id)
+                                                                               (.countDown entered) held)}
+                                   :events {:on-event #(when (= "queued-15" (:id %)) (deliver queued true))}})
+              _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+              emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+              req! #(emit! {:type "permission.requested" :id % :data {:requestId % :permissionRequest {:kind "read"}}})
+              busy (:busy-replies (get @(:sessions (.-callbacks c)) "s")) finished (promise)
+              attempted (promise) publish turn/publish! sender rpc/send-request]
+          (try
+            (req! "a") (req! "b")
+            (is (.await entered 3 java.util.concurrent.TimeUnit/SECONDS))
+            (dotimes [i 16] (req! (str "queued-" i))) (bounded queued)
+            (add-watch busy finished (fn [_ _ before after] (when (and (pos? before) (zero? after)) (deliver finished true))))
+            (with-redefs [turn/publish! (fn [turns event & args]
+                                          (when (and (identical? turns (.-turns s)) (= "excess" (:id event)))
+                                            (bounded attempted))
+                                          (apply publish turns event args))
+                          rpc/send-request (fn [conn method params & opts]
+                                             (if-not (= "excess" (:request-id params))
+                                               (apply sender conn method params opts)
+                                               (let [ch (apply sender conn method params opts)]
+                                                 (deliver attempted true) ch)))]
+              (let [life (sdk/lifecycle-events c)]
+                (try
+                  (locking (.-lifecycle c)
+                    (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "park"}})
+                    (req! "excess")
+                    (emit! (case settlement :completion {:type "permission.completed" :data {:requestId "excess"}}
+                                 :abort {:type "abort"} :observation {:type "session.info"}))
+                    (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "routed"}})
+                    (send! {:id "seen" :method "unknown" :params {}})
+                    (is (= (:id (next!)) "seen")))
+                  (is (= (mapv :session-id (repeatedly 2 #(bounded (future (a/<!! life))))) ["park" "routed"]))
+                  (finally (a/close! life)))))
+            (let [ping (future (bounded finished) (sdk/await!! (sdk/ping c "done")))
+                  replies (loop [sent []]
+                            (let [frame (next!)]
+                              (if (= (:method frame) "ping")
+                                (do (reply! frame {:message "done"}) sent)
+                                (do (reply! frame {:success true})
+                                    (recur (conj sent [(get-in frame [:params :requestId]) (get-in frame [:params :result :kind])]))))))]
+              (is (= replies (if (= settlement :observation) [["excess" "user-not-available"]] [])) settlement)
+              (is (= (bounded ping) {:message "done"}))
+              (is (= (set @calls) #{"a" "b"})))
+            (finally (remove-watch busy finished) (a/close! held))))))))
+
+(deftest settled-unsent-busy-replies-free-capacity-before-the-router-continues
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [entered (java.util.concurrent.CountDownLatch. 2) hold (a/chan)
+            opening (try-open c {:session-id "s" :permissions {:on-request (fn [_ _] (.countDown entered) hold)}})
+            _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+            emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+            req! #(emit! {:type "permission.requested" :data {:requestId % :permissionRequest {:kind "read"}}})
+            life (sdk/lifecycle-events c) mark! #(send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId %}})
+            events (sdk/subscribe s)]
+        (try
+          (req! "a") (req! "b") (is (.await entered 3 java.util.concurrent.TimeUnit/SECONDS))
+          (dotimes [i 16] (req! (str "queued-" i)))
+          (mark! "ready") (is (= (:session-id (bounded (future (a/<!! life)))) "ready"))
+          (locking (.-lifecycle c)
+            (mark! "park")
+            (dotimes [i 17]
+              (let [id (str "busy-" i)]
+                (req! id)
+                (emit! {:type "permission.completed" :id id :data {:requestId id}})))
+            (mark! "drained")
+            (send! {:id "reader" :method "unknown" :params {}})
+            (is (= (:id (next!)) "reader")))
+          (is (= (mapv :session-id (repeatedly 2 #(bounded (future (a/<!! life))))) ["park" "drained"]))
+          (let [seen (loop [n 0]
+                       (if-let [event (a/poll! events)]
+                         (if (:error event) (:type (ex-data (:error event)))
+                             (recur (if (= (:type event) :copilot/permission.completed) (inc n) n)))
+                         n))]
+            (is (= seen 17)))
+          (finally (a/close! life) (a/close! events) (a/close! hold)))))))
+
+(deftest settled-busy-request-cannot-fail-on-an-unrelated-decision-receipt
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [entered (java.util.concurrent.CountDownLatch. 2) hold (a/chan) seen (promise)
+            expiry (a/chan) armed (promise)
+            opening (try-open c {:session-id "s" :permissions {:on-request (fn [_ _] (.countDown entered) hold)}
+                                 :events {:on-event #(when (= "completed" (:id %)) (deliver seen true))}})
+            _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+            emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+            req! #(emit! {:type "permission.requested" :data {:requestId % :permissionRequest {:kind "read"}}})
+            timer a/timeout]
+        (try
+          (req! "a") (req! "b") (is (.await entered 3 java.util.concurrent.TimeUnit/SECONDS))
+          (dotimes [i 16] (req! (str "queued-" i)))
+          (let [blocked (promise) unblock (promise) attempted (promise) worker (promise)
+                publish turn/publish! reserve @#'callbacks/reserve-busy-reply! sender rpc/send-request]
+            (try
+              (with-redefs [callbacks/reserve-busy-reply! (fn [& args]
+                                                            (let [start (apply reserve args)]
+                                                              #(let [result (start)] (deliver worker result) result)))
+                            rpc/send-request (fn [conn method params & opts]
+                                               (let [ch (apply sender conn method params opts)]
+                                                 (when (= "excess" (:request-id params)) (deliver attempted true))
+                                                 ch))
+                            a/timeout (fn [^long ms] (if (and (= ms 10000) (not (realized? armed)))
+                                                       (do (deliver armed true) expiry)
+                                                       (timer ms)))
+                            turn/publish! (fn [state event & args]
+                                            (when (= "hold-sender" (:session-id event)) (bounded attempted))
+                                            (when (= "hold-router" (:session-id event))
+                                              (deliver blocked true) (bounded unblock))
+                                            (apply publish state event args))]
+                (locking (.-lifecycle c)
+                  (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "park"}})
+                  (req! "excess")
+                  (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "hold-sender"}})
+                  (emit! {:type "permission.completed" :id "completed" :data {:requestId "excess"}})
+                  (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "hold-router"}})
+                  (emit! {:type "permission.completed" :data {:requestId "unrelated"}})
+                  (send! {:id "seen" :method "unknown" :params {}}) (is (= (:id (next!)) "seen")))
+                (bounded seen) (bounded blocked) (a/close! expiry)
+                (bounded (future (a/<!! (bounded worker))))
+                (is (nil? @(:failure (.-registration s)))))
+              (finally (deliver unblock true))))
+          (finally (a/close! hold) (a/close! expiry)))))))
+
+(deftest a-released-generation-cannot-fail-accepted-observations-on-a-decision-timeout
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [started (promise) release-result (promise) observer (promise)
+            opening (try-open c {:session-id "s" :tools {:definitions [{:name "record" :handler
+                                                                        (fn [_ _] (deliver started true) (bounded release-result) "ok")}]}
+                                 :events {:on-event #(when (= (:id %) "completed") (deliver observer (:id %)))}})
+            _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+            events (sdk/subscribe s) emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+            jobs (:jobs (get @(:sessions (.-callbacks c)) "s")) exited (promise)
+            waiting (promise) deadline (a/chan) timer a/timeout]
+        (try
+          (emit! {:type "external_tool.requested" :id "request" :data {:requestId "r" :toolName "record" :toolCallId "c" :arguments {}}})
+          (bounded started)
+          (is (= (:id (bounded (future (a/<!! events)))) "request"))
+          (add-watch jobs exited (fn [_ _ before after] (when (and (seq before) (empty? after)) (deliver exited true))))
+          (let [closing
+                (locking (.-lifecycle c)
+                  (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "park"}})
+                  (emit! {:type "external_tool.completed" :id "completed" :data {:requestId "r"}})
+                  (send! {:id "seen" :method "unknown" :params {}}) (is (= (:id (next!)) "seen"))
+                  (with-redefs [a/timeout (fn [^long ms]
+                                            (if (and (= ms 10000) (= "copilot-native-request" (.getName (Thread/currentThread))))
+                                              (do (deliver waiting true) deadline)
+                                              (timer ms)))]
+                    (deliver release-result true) (bounded waiting)
+                    (let [closing (future (sdk/close!! s))]
+                      (reply! (next!) {:success true})
+                      (send! {:id "released" :method "unknown" :params {}}) (is (= (:id (next!)) "released"))
+                      (a/close! deadline)
+                      (bounded exited)
+                      closing)))]
+            (bounded closing)
+            (let [terminal (bounded (future (a/<!! (a/into [] events))))]
+              (is (= (mapv :id (butlast terminal)) ["completed"]))
+              (is (= (some-> terminal peek :error ex-data :type) :session-closed))
+              (when (= (:id (first terminal)) "completed") (is (= (bounded observer) "completed")))))
+          (finally (a/close! deadline) (deliver release-result true) (remove-watch jobs exited)))))))
+
+(deftest a-winning-decision-failure-owns-pending-forms-before-detach
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "s"})
+            _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+            s (bounded opening) events (sdk/subscribe s)
+            turn (sdk/send-and-wait! s "pending") request (next!)
+            form (sdk/elicit! s {:message "Continue?" :requested-schema {:type "object"}})
+            _ (is (= (:method (next!)) "session.ui.elicitation"))
+            _ (send! {:method "session.event" :params {:sessionId "s" :event {:type "session.idle" :id "idle"}}})
+            _ (is (= (:id (bounded (future (a/<!! events)))) "idle"))
+            closing (future (sdk/close!! s)) detach (next!)
+            owner (.-callbacks c) reg (get @(:sessions owner) "s")
+            failure (ex-info "Decision timed out" {:type :decision-admission-timeout})
+            claimed (promise) resume (promise) finish @#'callbacks/finish-failure!]
+        (is (= (mapv :method [request detach]) ["session.sendAndWait" "session.detach"]))
+        (with-redefs-fn {#'callbacks/finish-failure! (fn [& args] (deliver claimed true) (bounded resume)
+                                                       (apply finish args))}
+          (fn []
+            (let [failing (future (#'callbacks/fail-active-decision! owner reg (constantly true) failure))]
+              (try
+                (bounded claimed)
+                (reply! request {:messageId "late" :aborted false :completionEventId "idle"})
+                (reply! detach {:success true})
+                (send! {:id "released" :method "unknown" :params {}})
+                (is (= (:id (next!)) "released"))
+                (deliver resume true)
+                (bounded failing)
+                (bounded closing)
+                (let [{:keys [method params]} (next!)]
+                  (is (= [method params] ["$/cancelRequest" {:id (:id request)}])))
+                (doseq [[kind ch] [[:turn turn] [:subscription events] [:form form]]]
+                  (is (identical? (:error (bounded (future (a/<!! ch)))) failure) kind))
+                (finally (deliver resume true) (a/close! events))))))))))
+
+(deftest a-release-before-claim-overflow-still-drains-the-event
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [observed (promise) at-claim (promise) resume (promise) fail @#'callbacks/fail-session!
+            open (try-open c {:session-id "s" :events {:on-event #(deliver observed (:id %))}})
+            _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+            s (bounded open) stream (sdk/subscribe s) pending (sdk/send-and-wait! s "pending") _ (next!)
+            form (sdk/elicit! s {:message "m" :requested-schema {:type "object"}}) _ (next!)]
+        (try
+          (with-redefs [callbacks/claim-limit 0
+                        callbacks/fail-session! (fn [& args] (deliver at-claim true) (bounded resume) (apply fail args))]
+            (send! {:method "session.event" :params {:sessionId "s" :event {:type "permission.requested" :id "request"
+                                                                            :data {:requestId "r" :permissionRequest {:kind "read"}}}}})
+            (bounded at-claim)
+            (let [closing (future (sdk/close!! s))]
+              (reply! (next!) {:success true})
+              (is (= (-> (bounded (future (a/<!! form))) :error ex-data :type) :session-closed))
+              (deliver resume true)
+              (bounded closing)
+              (let [items (bounded (future (a/<!! (a/into [] stream))))]
+                (is (= (mapv #(or (:id %) (-> % :error ex-data :type)) items) ["request" :session-closed]))
+                (when (= "request" (:id (first items))) (is (= (bounded observed) "request"))))
+              (is (= (-> (bounded (future (a/<!! pending))) :error ex-data :type) :session-closed))))
+          (finally (deliver resume true) (a/close! stream)))))))
+
+(deftest a-reserved-form-observes-failure-before-an-unacknowledged-detach
+  (let [trace (atom (constantly nil)) started (promise) headers (a/promise-chan)]
+    (with-runtime {:observability {:on-get-trace-context #(@trace)}}
+      (fn [c _ next! reply!]
+        (let [open (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+              s (bounded open) events (sdk/subscribe s) cause (ex-info "Timed out" {:type :decision-admission-timeout})]
+          (reset! trace #(do (deliver started true) headers))
+          (try
+            (let [turn (sdk/send-and-wait! s "traced") _ (bounded started)
+                  form (sdk/elicit! s {:message "Continue?" :requested-schema {:type "object"}})
+                  close (future (sdk/close!! s)) detach (next!)]
+              (is (= (:method detach) "session.detach"))
+              (let [finishing (promise) resume (promise) advancing (promise)
+                    finish @#'callbacks/finish-failure! check! @#'client/check-reservation!]
+                (with-redefs [callbacks/finish-failure! (fn [& args] (deliver finishing true) (bounded resume) (apply finish args))
+                              client/check-reservation! (fn [session] (deliver advancing true) (check! session))]
+                  (let [failing (future (callbacks/fail! (.-callbacks c) (.-registration s) cause))]
+                    (try (bounded finishing)
+                         (a/close! headers)
+                         (bounded advancing)
+                         (finally (deliver resume true)))
+                    (bounded failing))))
+              (doseq [ch [turn events form]]
+                (is (identical? (:error (bounded (future (a/<!! ch)))) cause)))
+              (reply! detach {:success true})
+              (bounded close))
+            (finally (a/close! headers) (a/close! events))))))))
+
+(deftest a-positive-release-withdraws-an-unanswered-turn-before-publications-drain
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+            stream (sdk/subscribe s) turn (sdk/send-and-wait! s "go") request (next!)
+            emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})]
+        (emit! {:id "idle" :type "session.idle"})
+        (is (= (:id (bounded (future (a/<!! stream)))) "idle"))
+        (let [closing
+              (locking (.-lifecycle c)
+                (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+                (emit! {:id "queued" :type "session.info"})
+                (let [closing (future (sdk/close!! s)) detach (next!)]
+                  (is (= (:method detach) "session.detach"))
+                  (reply! detach {:success true})
+                  (reply! request {:messageId "late" :aborted false :completionEventId "idle"})
+                  (is (= (-> (bounded (future (a/<!! turn))) :error ex-data :type) :session-closed))
+                  closing))]
+          (bounded closing)
+          (is (= (mapv #(or (:id %) (-> % :error ex-data :type)) (bounded (future (a/<!! (a/into [] stream)))))
+                 ["queued" :session-closed])))))))
+
+(deftest release-drains-an-already-answered-turn-without-an-observer
+  (doseq [order [:event-first :reply-first :runtime-error :late-event]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"})
+              s (bounded opening) events (sdk/subscribe s)
+              turn (sdk/send-and-wait! s "go") request (next!)
+              idle! #(send! {:method "session.event" :params {:sessionId "s" :event {:id "idle" :type "session.idle"}}})
+              closing
+              (locking (.-lifecycle c)
+                (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+                (when (= order :event-first) (idle!))
+                (if (= order :runtime-error)
+                  (send! {:id (:id request) :error {:code -32001 :message "Rejected" :data {:completionEventId "idle"}}})
+                  (reply! request {:aborted false :messageId "m" :completionEventId "idle"
+                                   :response {:type "assistant.message" :data {:content "done"}}}))
+                (when (#{:reply-first :runtime-error} order) (idle!))
+                (let [close (future (sdk/close!! s)) detach (next!)]
+                  (is (= (:method detach) "session.detach"))
+                  (reply! detach {:success true})
+                  (when (= order :late-event) (idle!))
+                  (send! {:id "read" :method "unknown" :params {}})
+                  (is (= (:id (next!)) "read"))
+                  close))]
+          (bounded closing)
+          (let [{:keys [ok error]} (bounded (future (a/<!! turn)))
+                published (bounded (future (a/<!! (a/into [] events))))]
+            (is (= (mapv :id (butlast published)) (if (= order :late-event) [] ["idle"])))
+            (case order
+              :late-event (is (= (-> error ex-data :type) :session-closed))
+              :runtime-error (is (= (ex-message error) "Rejected"))
+              (is (= (get-in ok [:data :content]) "done")))))))))
+
+(deftest acknowledged-release-ends-observer-bound-turns-before-draining-other-publications
+  (doseq [eof? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [entered (promise) resume (promise) events (atom [])
+              open (try-open c {:session-id "s" :events {:on-event (fn [{:keys [id]}]
+                                                                     (swap! events conj id)
+                                                                     (when (= id "idle") (deliver entered true) (bounded resume)))}})
+              _ (reply! (next!) {:sessionId "s"}) s (bounded open) stream (sdk/subscribe s)
+              turn (sdk/send-and-wait! s "pending") request (next!)
+              emit! (fn [id type] (send! {:method "session.event" :params {:sessionId "s" :event {:id id :type type}}}))]
+          (try
+            (emit! "idle" "session.idle")
+            (reply! request {:messageId "m" :aborted false :completionEventId "idle"})
+            (bounded entered)
+            (let [closing (locking (.-lifecycle c)
+                            (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+                            (emit! "queued" "session.info")
+                            (let [closing (future (sdk/close!! s)) detach (next!)]
+                              (is (= (:method detach) "session.detach"))
+                              (reply! detach {:success true})
+                              (send! {:id "acknowledged" :method "unknown" :params {}})
+                              (is (= (:id (next!)) "acknowledged"))
+                              (when eof? (send!))
+                              (deliver resume true)
+                              (is (= (-> (bounded (future (a/<!! turn))) :error ex-data :type) :session-closed))
+                              closing))]
+              (bounded closing)
+              (let [observations (bounded (future (a/<!! (a/into [] stream))))]
+                (is (= (mapv :id (butlast observations)) ["idle" "queued"]))))
+            (finally (deliver resume true) (a/close! stream))))))))
+
+(deftest eof-that-claims-pending-requests-does-not-also-fail-the-registration
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+            s (bounded opening) events (sdk/subscribe s) form (sdk/elicit! s {:message "m" :requested-schema {:type "object"}})
+            _ (next!) entered (promise) resume (promise) withdraw rpc/withdraw-requests!]
+        (try
+          (with-redefs [callbacks/claim-limit 0
+                        rpc/withdraw-requests! (fn [& args] (deliver entered true) (bounded resume) (apply withdraw args))]
+            (send! {:method "session.event" :params {:sessionId "s" :event {:id "seen" :type "permission.requested"
+                                                                            :data {:requestId "r" :permissionRequest {:kind "read"}}}}})
+            (bounded entered)
+            (send!)
+            (is (= (ex-message (:error (bounded (future (a/<!! form))))) "Connection closed by remote"))
+            (deliver resume true)
+            (is (= (mapv #(or (:id %) (-> % :error ex-data :type)) (bounded (future (a/<!! (a/into [] events)))))
+                   ["seen" :connection-closed])))
+          (finally (deliver resume true) (a/close! events)))))))
+
+(deftest connection-end-during-release-has-one-public-cause
+  (with-runtime {}
+    (fn [c _ next! reply!]
+      (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+            s (bounded opening) events (sdk/subscribe s)
+            form (sdk/elicit! s {:message "m" :requested-schema {:type "object"}}) _ (next!)
+            at-release (promise) claim (promise) retire reverse/retire-generation!]
+        (try
+          (with-redefs [reverse/retire-generation! (fn [& args] (apply retire args) (deliver at-release true) (bounded claim))]
+            (let [closing (future (sdk/close!! s)) detach (next!)]
+              (reply! detach {:success true})
+              (bounded at-release)
+              (rpc/end-input! (.-connection c) {:code -32000 :message "Runtime ended"})
+              (is (= (ex-message (:error (bounded (future (a/<!! form))))) "Runtime ended"))
+              (deliver claim true)
+              (bounded closing)
+              (let [cause (:error (bounded (future (a/<!! events))))]
+                (is (= [(:type (ex-data cause)) (ex-message cause)] [:connection-closed "Runtime ended"])))))
+          (finally (deliver claim true) (a/close! events)))))))
+
+(deftest connection-end-after-release-claims-its-requests-cannot-preserve-an-observer-bound-turn
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [entered (promise) resume-observer (promise) claimed (promise) finish-release (promise)
+            writing (promise) fail-write (promise) eof-thread (promise) eof-closed (promise)
+            opening (try-open c {:session-id "s" :events {:on-event (fn [_] (deliver entered true) (bounded resume-observer))}})
+            _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+            s (bounded opening) events (sdk/subscribe s) turns (.-turns s)
+            form (sdk/elicit! s {:message "pending" :requested-schema {:type "object"}}) _ (next!)
+            turn (sdk/send-and-wait! s "go") request (next!)
+            withdraw rpc/withdraw-requests! write! @#'rpc/write-message! close-turns turn/close!]
+        (try
+          (send! {:method "session.event" :params {:sessionId "s" :event {:id "idle" :type "session.idle"}}})
+          (reply! request {:messageId "m" :aborted false :completionEventId "idle"})
+          (bounded entered)
+          (is (= "idle" (:id (bounded (future (a/<!! events))))))
+          (with-redefs [rpc/write-message! (fn [ch msg]
+                                             (if (= "ping" (:method msg))
+                                               (do (deliver writing true) (bounded fail-write) (throw (java.io.IOException. "test writer failure")))
+                                               (write! ch msg)))
+                        rpc/withdraw-requests! (fn [& args]
+                                                 (let [owned (apply withdraw args)]
+                                                   (when (seq owned) (deliver claimed true) (bounded finish-release))
+                                                   owned))
+                        turn/close! (fn [state cause & args]
+                                      (if (and (identical? state turns) (= :connection-closed (:type (ex-data cause))))
+                                        (do (deliver eof-thread (Thread/currentThread))
+                                            (try (apply close-turns state cause args)
+                                                 (finally (deliver eof-closed true))))
+                                        (apply close-turns state cause args)))]
+            (let [closing (future (sdk/close!! s)) detach (next!) ping (sdk/ping c)]
+              (bounded writing)
+              (reply! detach {:success true})
+              (bounded claimed)
+              (deliver fail-write true)
+              ;; Let EOF either finish or reach the turn monitor held by release.
+              (let [^Thread thread (bounded eof-thread) deadline (+ (System/nanoTime) 3000000000)]
+                (loop []
+                  (when-not (or (realized? eof-closed) (= Thread$State/BLOCKED (.getState thread)))
+                    (when (> (System/nanoTime) deadline) (throw (ex-info "EOF did not reach turn retirement" {})))
+                    (Thread/yield)
+                    (recur))))
+              (deliver finish-release true)
+              (bounded closing)
+              (deliver resume-observer true)
+              (doseq [ch [events form turn]]
+                (is (= (-> (bounded (future (a/<!! ch))) :error ex-data :type) :session-closed)))
+              (is (= (get-in (ex-data (:error (bounded (future (a/<!! ping))))) [:error :data :code]) "write_failed"))))
+          (finally (deliver finish-release true) (deliver resume-observer true) (deliver fail-write true) (a/close! events)))))))
+
+(deftest confirmed-deletion-retires-unsent-trace-reservations-before-its-rpc-reply
+  (let [trace (atom (constantly nil)) entered (promise) stopped (promise) headers (promise)]
+    (with-runtime {:observability {:on-get-trace-context #(@trace)}}
+      (fn [c send! next! reply!]
+        (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"})
+              s (bounded opening) deadline (a/chan)]
+          (reset! trace #(do (deliver entered true) (try @headers (catch InterruptedException _ (deliver stopped true) {}))))
+          (try
+            (let [turn (with-redefs [turn/start-deadline (fn [_] [deadline (constantly nil)])]
+                         (sdk/send-and-wait! s "not submitted"))
+                  _ (bounded entered) read (sdk/history s)
+                  deleting (future (sdk/delete-session!! c "s")) listing (next!)
+                  _ (reply! listing {:sessions [{:sessionId "s"}]}) request (next!)]
+              (is (= (mapv :method [listing request]) ["session.list" "session.delete"]))
+              (send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId "s"}})
+              (send! {:id "read" :method "unknown" :params {}})
+              (is (= (:id (next!)) "read"))
+              (a/close! deadline)
+              (is (= (-> (bounded (future (a/<!! turn))) :error ex-data :type) :session-closed))
+              (is (= (-> (bounded (future (a/<!! read))) :error ex-data :type) :session-closed))
+              (is (true? (bounded stopped)))
+              (reply! request {:success true})
+              (bounded deleting))
+            (finally (deliver headers {}) (a/close! deadline))))))))
+
+(deftest wire-preparation-preserves-the-first-session-or-connection-failure
+  (doseq [failure-first? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+              s (bounded opening) events (sdk/subscribe s)
+              form #(sdk/elicit! s {:message % :requested-schema {:type "object"}})
+              submitted (form "submitted") _ (next!) probe (sdk/ping c "EOF fence") _ (next!)
+              preparing (promise) resume (promise) convert util/clj->wire]
+          (try
+            (with-redefs [callbacks/claim-limit 0
+                          util/clj->wire (fn [v] (when (= "preparing" (get v "message"))
+                                                   (deliver preparing true) (bounded resume))
+                                           (convert v))]
+              (let [unsent (future (form "preparing"))]
+                (bounded preparing)
+                (when failure-first?
+                  (send! {:method "session.event" :params {:sessionId "s" :event {:type "permission.requested"
+                                                                                  :data {:requestId "r" :permissionRequest {:kind "read"}}}}}))
+                (let [failure (when failure-first? (:error (bounded (future (a/<!! events)))))]
+                  (send!)
+                  (is (= (ex-message (:error (bounded (future (a/<!! probe))))) "Connection closed by remote"))
+                  (deliver resume true)
+                  (doseq [ch [submitted (bounded unsent)]]
+                    (let [e (:error (bounded (future (a/<!! ch))))]
+                      (if failure-first? (is (identical? e failure))
+                          (is (= (ex-message e) "Connection closed by remote"))))))))
+            (finally (deliver resume true) (a/close! events))))))))
+
+(deftest retiring-a-session-at-eof-preserves-the-cause-for-its-reservations
+  (doseq [close-before-publication? [false true]
+          :let [trace (atom (constantly nil)) entered (promise) headers (a/chan)]]
+    (with-runtime {:observability {:on-get-trace-context #(@trace)}}
+      (fn [c send! next! reply!]
+        (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+              s (bounded opening) stream (sdk/subscribe s)]
+          (reset! trace #(do (deliver entered true) headers))
+          (try
+            (let [turn (sdk/send-and-wait! s "traced") _ (bounded entered)
+                  form (sdk/elicit! s {:message "queued" :requested-schema {:type "object"}})
+                  failures (locking (.-lifecycle c)
+                             (when close-before-publication?
+                               (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+                               (send! {:method "session.event" :params {:sessionId "s" :event {:type "session.info" :id "last"}}}))
+                             (locking c
+                               (send!)
+                               (.join ^Thread (:read-thread (.-connection c)) 3000)
+                               (is (not (.isAlive ^Thread (:read-thread (.-connection c)))))
+                               (if close-before-publication? (sdk/close!! s) (#'client/finish-input! c)))
+                             (mapv #(:error (bounded (future (a/<!! %)))) [turn form]))
+                  events (bounded (future (a/<!! (a/into [] stream))))
+                  closed (:error (last events))]
+              (is (= (mapv :id (butlast events)) (if close-before-publication? ["last"] [])))
+              (is (= (-> closed ex-data :type) :connection-closed))
+              (doseq [e failures]
+                (if close-before-publication?
+                  (is (= [(ex-data e) (ex-message e)] [(ex-data closed) (ex-message closed)]))
+                  (is (identical? e closed))))
+              (is (= (-> (bounded (future (a/<!! (sdk/send-and-wait! s "new")))) :error ex-data :type) :session-closed))
+              (is (= (try (sdk/subscribe s) (catch Exception e (-> e ex-data :type))) :session-closed)))
+            (finally (a/close! headers) (a/close! stream))))))))
+
+(deftest preparation-after-the-first-handle-check-keeps-the-selected-session-failure
+  (doseq [kind [:form :turn]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
+              s (bounded opening) life (sdk/lifecycle-events c) events (sdk/subscribe s)
+              preparing (promise) resume (promise)
+              helper (if (= kind :form) #'util/opaque-json->wire #'options/send-params)
+              original @helper]
+          (try
+            (with-redefs-fn {helper (fn [& args] (deliver preparing true) (bounded resume) (apply original args))}
+              (fn []
+                (let [calling (future (if (= kind :form)
+                                        (sdk/elicit! s {:message "m" :requested-schema {:type "object"}})
+                                        (sdk/send-and-wait! s "t")))]
+                  (bounded preparing)
+                  (let [cause (ex-info "Callback failure" {:type :callback-overflow})]
+                    (callbacks/fail! (.-callbacks c) (.-registration s) cause)
+                    (is (identical? (:error (bounded (future (a/<!! events)))) cause))
+                    (send!)
+                    (is (= (-> (bounded (future (a/<!! life))) :error ex-data :type) :connection-closed))
+                    (deliver resume true)
+                    (is (identical? (:error (bounded (future (a/<!! (bounded calling))))) cause))))))
+            (finally (deliver resume true) (a/close! events) (a/close! life))))))))
+
+(deftest a-session-abort-retires-manual-recovery-even-when-no-request-was-replayed
+  (doseq [[label event expected] [[:root {:type "abort"} :not-pending]
+                                  [:child {:type "abort" :agentId "child"} {:success true}]
+                                  [:history {:type "abort" :checkpoint true} {:success true}]]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [seen (promise) opening (future (sdk/resume-session!! c "s" {:continue-pending-work? true
+                                                                          :events {:on-event #(deliver seen (:type %))}}))
+              _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+              preparing (promise) resume (promise) convert util/clj->wire]
+          (with-redefs [util/clj->wire (fn [v]
+                                         (when (= "restored" (:request-id v)) (deliver preparing true) (bounded resume))
+                                         (convert v))]
+            (try
+              (let [result (future (let [out (try (sdk/respond!! s :permission {:request-id "restored" :result {:kind :reject}})
+                                                  (catch Exception e (:type (ex-data e))))]
+                                     [out (sdk/ping c "done")]))]
+                (bounded preparing)
+                (send! {:method "session.event" :params {:sessionId "s" :event event}})
+                (is (= (bounded seen) :copilot/abort))
+                (deliver resume true)
+                (let [frame (next!) manual? (= (:method frame) "session.permissions.handlePendingPermissionRequest")
+                      ping (if manual? (do (reply! frame {:success true}) (next!)) frame)]
+                  (is (= manual? (not= label :root)) label)
+                  (reply! ping {:message "done"})
+                  (let [[out pong] (bounded result)]
+                    (is (= out expected) label)
+                    (is (= (sdk/await!! pong) {:message "done"}))))
+                (when (= label :root)
+                  (let [events (sdk/subscribe s)]
+                    (send! {:method "session.event" :params {:sessionId "s" :event {:type "permission.requested"
+                                                                                    :data {:requestId "new" :permissionRequest {:kind "read"}}}}})
+                    (bounded (future (a/<!! events))) (a/close! events)
+                    (let [new (future (sdk/respond!! s :permission {:request-id "new" :result {:kind :reject}}))
+                          frame (next!)]
+                      (is (= (get-in frame [:params :requestId]) "new"))
+                      (reply! frame {:success true})
+                      (is (= (bounded new) {:success true}))))))
+              (finally (deliver resume true)))))))))
+
+(deftest a-running-tool-submits-its-first-result-only-if-still-live
+  (doseq [checkpoint? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [started (promise) release (promise) boundary (promise)
+              opening (try-open c {:cloud {} :tools {:definitions [{:name "record" :handler (fn [_ _]
+                                                                                              (deliver started true)
+                                                                                              (bounded release) "ok")}]}})
+              create (next!)
+              emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+              _ (emit! {:type "external_tool.requested" :data {:requestId "r" :toolCallId "call" :toolName "record" :arguments {}}})
+              _ (reply! create {:sessionId "s"})
+              s (bounded opening) _ (bounded started)
+              jobs (:jobs (get @(:sessions (.-callbacks c)) "s")) drained (promise) alts!! a/alts!!]
+          (add-watch jobs drained (fn [_ _ _ current] (when (empty? current) (deliver drained true))))
+          (try
+            (let [wire (locking (.-lifecycle c)
+                         (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+                         (emit! {:type "external_tool.completed" :checkpoint checkpoint? :data {:requestId "r"}})
+                         (send! {:id "read" :method "unknown" :params {}}) (is (= (:id (next!)) "read"))
+                         (let [wire (future (let [frame (next!)] (deliver boundary :sent) frame))]
+                           (with-redefs [a/alts!! (fn [ports & args]
+                                                    (when (identical? (first ports) (:closed (.-registration s)))
+                                                      (deliver boundary :waiting))
+                                                    (apply alts!! ports args))]
+                             (deliver release true)
+                             (is (= (bounded boundary) :waiting)))
+                           wire))
+                  ping (future (bounded drained) (sdk/await!! (sdk/ping c "done")))
+                  frame (bounded wire)]
+              (is (= (:method frame) (if checkpoint? "session.tools.handlePendingToolCall" "ping")))
+              (if (= (:method frame) "ping")
+                (reply! frame {:message "done"})
+                (do (is (= (get-in frame [:params :result]) "ok"))
+                    (reply! frame {:success true})
+                    (reply! (next!) {:message "done"})))
+              (is (= (bounded ping) {:message "done"})))
+            (finally (deliver release true) (remove-watch jobs drained))))))))
+
+(deftest queued-tool-and-fallback-cannot-pass-a-received-checkpoint
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [calls (atom []) queued (promise) done (promise) start-boundary (promise) retry-boundary (promise)
+            opening (try-open c {:session-id "s" :tools {:definitions [{:name "record"
+                                                                        :handler (fn [_ ctx]
+                                                                                   (let [id (:request-id ctx)]
+                                                                                     (swap! calls conj id)
+                                                                                     (when (= id "queued") (deliver start-boundary :started))
+                                                                                     "ok"))}]}
+                                 :events {:on-event #(case (:id %) "queued" (deliver queued true)
+                                                           "done" (deliver done true) nil)}})
+            _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+            emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+            request! #(emit! {:type "external_tool.requested" :id %
+                              :data {:requestId % :toolCallId % :toolName "record" :arguments {}}})
+            settle! #(emit! {:type "external_tool.completed" :checkpoint true :data {:requestId %}})
+            reader! #(do (send! {:id "seen" :method "unknown" :params {}}) (is (= (:id (next!)) "seen")))
+            alts!! a/alts!! offer! a/offer!
+            signal-wait (fn [ports & args]
+                          (when (identical? (:closed (.-registration s)) (first ports))
+                            (if (realized? start-boundary) (deliver retry-boundary :waiting) (deliver start-boundary :waiting)))
+                          (apply alts!! ports args))
+            outbound (fn [ch frame]
+                       (when (and (identical? ch (:outgoing-ch (.-connection c))) (= "fallback" (get-in frame [:params :requestId]))
+                                  (get-in frame [:params :error]))
+                         (deliver retry-boundary :sent))
+                       (offer! ch frame))
+            _ (request! "fallback") original (next!)
+            _ (request! "release") release (next!)]
+        (request! "queued") (bounded queued)
+        (locking (.-lifecycle c)
+          (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+          (settle! "queued") (settle! "fallback") (reader!)
+          (with-redefs [a/alts!! signal-wait a/offer! outbound]
+            (reply! release {:success true}) (is (= (bounded start-boundary) :waiting))
+            (send! {:id (:id original) :error {:code -32602 :message "invalid result"}})
+            (is (= (bounded retry-boundary) :waiting))))
+        (emit! {:type "session.info" :id "done"}) (bounded done)
+        (let [jobs (:jobs (get @(:sessions (.-callbacks c)) "s")) empty-jobs (promise)]
+          (add-watch jobs empty-jobs (fn [_ _ _ jobs] (when (empty? jobs) (deliver empty-jobs true))))
+          (try
+            (let [drained (future (when (seq @jobs) (bounded empty-jobs)) (sdk/await!! (sdk/ping c "done")))
+                  sent (loop [extra []]
+                         (let [frame (next!)]
+                           (if (= "ping" (:method frame))
+                             (do (reply! frame {:message "done"}) extra)
+                             (do (reply! frame {:success true}) (recur (conj extra (get-in frame [:params :requestId])))))))]
+              (is (= (bounded drained) {:message "done"}))
+              (is (empty? sent))
+              (is (= @calls ["fallback" "release"])))
+            (finally (remove-watch jobs empty-jobs))))))))
+
+(deftest a-routed-decision-and-queued-observations-do-not-delay-the-next-decision
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"})
+            s (bounded opening) life (sdk/lifecycle-events c) boundary (promise) alts!! a/alts!!
+            emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})
+            mark! #(send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId %}})]
+        (try
+          (emit! {:type "permission.completed" :data {:requestId "other"}})
+          (mark! "caught-up")
+          (is (= (:session-id (bounded (future (a/<!! life)))) "caught-up"))
+          (let [[wire answer]
+                (locking (.-lifecycle c)
+                  (mark! "park")
+                  (emit! {:type "session.info" :id "unrelated"})
+                  (emit! {:type "permission.requested" :checkpoint true
+                          :data {:requestId "history" :permissionRequest {:kind "read"}}})
+                  (emit! {:type "abort" :checkpoint true})
+                  (send! {:id "read" :method "unknown" :params {}})
+                  (is (= (:id (next!)) "read"))
+                  (let [wire (future (let [frame (next!)] (deliver boundary (:method frame)) frame))
+                        answer (future
+                                 (with-redefs [a/alts!! (fn [ports & args]
+                                                          (when (identical? (first ports) (:closed (.-registration s)))
+                                                            (deliver boundary :waiting))
+                                                          (apply alts!! ports args))]
+                                   (sdk/respond!! s :permission {:request-id "restored" :result {:kind :reject}})))]
+                    (is (= (bounded boundary) "session.permissions.handlePendingPermissionRequest"))
+                    [wire answer]))]
+            (reply! (bounded wire) {:success true})
+            (is (= (bounded answer) {:success true})))
+          (finally (a/close! life)))))))
+
+(deftest a-manual-reply-cannot-preempt-an-already-received-automatic-request
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [s-call (future (sdk/resume-session!! c "s"
+                                                 {:continue-pending-work? true
+                                                  :permissions {:on-request (fn [_ _] {:kind :reject :feedback "automatic"})}}))
+            _ (reply! (next!) {:sessionId "s"})
+            s (bounded s-call) waiting (promise)
+            signal-wait (fn [f] (fn [& args] (deliver waiting true) (apply f args)))
+            request {:type "permission.requested" :data {:requestId "p" :permissionRequest {:kind "read"}}}
+            manual (locking (.-lifecycle c)
+                     (send! {:method "session.lifecycle" :params {:sessionId "fence" :type "session.updated"}})
+                     (send! {:method "session.event" :params {:sessionId "s" :event request}})
+                     (let [history (sdk/history s)]
+                       (reply! (next!) {:events [request]})
+                       (let [id (get-in (first (sdk/await!! history)) [:data :request-id])
+                             answer (future (with-redefs [a/alts!! (signal-wait a/alts!!)
+                                                          rpc/await-bounded-response!! (signal-wait rpc/await-bounded-response!!)]
+                                              (try (sdk/respond!! s :permission {:request-id id :result {:kind :reject}})
+                                                   (catch Exception e (:type (ex-data e))))))]
+                         (bounded waiting) answer)))]
+        (let [frame (next!)]
+          (reply! frame {:success true})
+          (is (= (get-in frame [:params :result]) {:kind "reject" :feedback "automatic"})))
+        (is (= (bounded manual) :not-pending))))))
+
 (defn- next-release! [next! reply! method id]
   (when (= method "session.delete")
     (let [listing (next!)]
       (is (= (:method listing) "session.list"))
       (reply! listing {:sessions [{:sessionId id}]})))
   (next!))
+
+(deftest cloud-create-cannot-replay-across-failure-or-reuse
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [emit! #(send! {:method "session.event" :params {:sessionId %1 :event {:id %2 :type "session.info"}}})
+            fence! #(do (send! {:id "reader-fence" :method "unknown" :params {}})
+                        (is (= (:id (next!)) "reader-fence")))
+            failed (try-open c {:cloud {}}) failed-request (next!)
+            seen (atom []) done (promise)
+            observer (fn [{:keys [id]}] (swap! seen conj id) (when (= id "end") (deliver done @seen)))]
+        (emit! "next" "before-second-create")
+        (fence!)
+        (let [later-first (promise)
+              later (try-open c {:cloud {} :events {:on-event #(deliver later-first (:id %))}})
+              later-request (next!)
+              opening (try-open c {:cloud {} :events {:on-event observer}})
+              request (next!)]
+          (send! {:id (:id failed-request) :error {:code -32000 :message "Create refused"}})
+          (is (= (ex-message (bounded failed)) "Create refused"))
+          (reply! later-request {:sessionId "next"})
+          (emit! "next" "live")
+          (is (= (bounded later-first) "live"))
+          (is (= (sdk/session-id (bounded later)) "next"))
+          (emit! "reused" "early")
+          (reply! request {:sessionId "reused"})
+          (emit! "reused" "end")
+          (is (= (bounded done) ["early" "end"]))
+          (let [s (bounded opening) closing (future (sdk/close!! s))]
+            (reply! (next!) {:success true})
+            (bounded closing))
+          (emit! "reused" "detached")
+          (fence!)
+          (let [fresh (promise)
+                reopened (try-open c {:cloud {} :events {:on-event #(deliver fresh (:id %))}})]
+            (reply! (next!) {:sessionId "reused"})
+            (emit! "reused" "replacement")
+            (is (= (bounded fresh) "replacement"))
+            (is (= (sdk/session-id (bounded reopened)) "reused"))))))))
+
+(deftest anonymous-create-only-claims-events-after-its-outbound-offer
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [first-open (try-open c {:cloud {}}) first-create (next!)
+            preparing (promise) resume (promise) observed (promise)
+            offer! a/offer!
+            emit! #(send! {:method "session.event" :params {:sessionId "assigned" :event {:type "session.info" :id %}}})]
+        (try
+          (with-redefs [a/offer! (fn [ch msg]
+                                   (when (and (identical? ch (:outgoing-ch (.-connection c)))
+                                              (= "new-open" (get-in msg [:params "clientName"])))
+                                     (deliver preparing true) (bounded resume))
+                                   (offer! ch msg))]
+            (let [opening (try-open c {:cloud {} :client-name "new-open" :events {:on-event #(deliver observed (:id %))}})]
+              (bounded preparing)
+              (emit! "before-offer")
+              (send! {:id "fence" :method "unknown" :params {}})
+              (is (= (:id (next!)) "fence"))
+              (deliver resume true)
+              (let [create (next!)]
+                (emit! "after-offer")
+                (reply! create {:sessionId "assigned"})
+                (is (= (sdk/session-id (bounded opening)) "assigned"))
+                (is (= (bounded observed) "after-offer")))))
+          (finally (deliver resume true) (reply! first-create {:sessionId "other"}) (bounded first-open)))))))
+
+(deftest a-rejected-cloud-registration-cannot-consume-another-openers-batch
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [existing (try-open c {:session-id "Alias"}) _ (reply! (next!) {:sessionId "Alias"}) s (bounded existing)
+            colliding (try-open c {:cloud {}}) first-create (next!)
+            seen (promise)
+            eligible (try-open c {:cloud {} :events {:on-event #(deliver seen (:id %))}}) second-create (next!)
+            emit! #(send! {:method "session.event" :params {:sessionId "alias" :event {:id % :type "session.info"}}})]
+        (emit! "early")
+        (reply! first-create {:sessionId "alias"})
+        (is (= (:type (ex-data (bounded colliding))) :session-id-case-conflict))
+        (let [closing (future (sdk/close!! s))]
+          (reply! (next!) {:success true})
+          (bounded closing))
+        (reply! second-create {:sessionId "alias"})
+        (emit! "live")
+        (is (= (sdk/session-id (bounded eligible)) "alias"))
+        (is (= (bounded seen) "early"))))))
+
+(deftest explicit-reservation-cuts-an-in-progress-held-event-before-id-reuse
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [seen (promise) anonymous (try-open c {:cloud {} :events {:on-event #(deliver seen (:id %))}})
+            create (next!) ^Thread reader (:read-thread (.-connection c))
+            hold @#'client/make-room discard @#'client/discard-held-events!
+            entered (promise) opener (promise) discarded (promise)
+            emit! #(send! {:method "session.event" :params {:sessionId "reuse" :event {:id % :type "session.info"}}})]
+        (with-redefs-fn
+          {#'client/make-room
+           (fn [state bytes]
+             ;; Freeze the insert after its ownership check until the explicit
+             ;; opener either finishes its cut or waits for this reader's monitor.
+             (when (identical? reader (Thread/currentThread))
+               (deliver entered true)
+               (let [^Thread t (bounded opener)
+                     mx (java.lang.management.ManagementFactory/getThreadMXBean)
+                     until (+ (System/nanoTime) 5000000000)]
+                 (loop []
+                   (when-not (or (realized? discarded)
+                                 (= (.getId reader) (.getLockOwnerId (.getThreadInfo mx (.getId t)))))
+                     (when (> (System/nanoTime) until) (throw (ex-info "Explicit opener did not reach its cut" {})))
+                     (Thread/yield) (recur)))))
+             (hold state bytes))
+           #'client/discard-held-events!
+           (fn [held id]
+             (deliver opener (Thread/currentThread))
+             (let [result (discard held id)] (deliver discarded true) result))}
+          (fn []
+            (emit! "prior")
+            (bounded entered)
+            (let [opening (try-open c {:session-id "reuse"})]
+              (reply! (next!) {:sessionId "reuse"})
+              (let [s (bounded opening) closing (future (sdk/close!! s))]
+                (reply! (next!) {:success true})
+                (bounded closing)))))
+        (reply! create {:sessionId "reuse"})
+        (emit! "live")
+        (is (= (sdk/session-id (bounded anonymous)) "reuse"))
+        (is (= (bounded seen) "live"))))))
+
+(deftest unregistered-delete-cuts-held-events-at-the-first-confirmation
+  (doseq [boundary [:external :refused :ack :lifecycle-then-ack]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [seen (atom []) delivered (promise)
+              deleting (when-not (= :external boundary)
+                         (future (try (sdk/delete-session!! c "id") (catch Exception e e))))
+              delete (when deleting (next-release! next! reply! "session.delete" "id"))
+              opening (try-open c {:cloud {} :events {:on-event (fn [{:keys [id]}]
+                                                                  (swap! seen conj id)
+                                                                  (when (= "end" id) (deliver delivered @seen)))}})
+              create (next!)
+              event! #(send! {:method "session.event" :params {:sessionId "id" :event {:type "session.info" :id %}}})
+              deleted! #(send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId "id"}})
+              received (promise) resume (promise) result! rpc/response-result!]
+          (try
+            (with-redefs [rpc/response-result! (fn [method response]
+                                                 (when (= method "session.delete") (deliver received true) (bounded resume))
+                                                 (result! method response))]
+              (event! "old")
+              (event! "during")
+              (when (#{:external :lifecycle-then-ack} boundary) (deleted!))
+              (when (= :lifecycle-then-ack boundary) (event! "replacement"))
+              (when delete
+                (reply! delete {:success (not= boundary :refused)})
+                (bounded received)
+                (reply! delete {:success true}))
+              (event! "after")
+              (reply! create {:sessionId "id"})
+              (event! "end")
+              (let [result (bounded opening)]
+                (is (client/session? result) boundary)
+                (when (client/session? result)
+                  (is (= (bounded delivered)
+                         (case boundary :refused ["old" "during" "after" "end"]
+                               :lifecycle-then-ack ["replacement" "after" "end"]
+                               ["after" "end"])) boundary)))
+              (deliver resume true)
+              (when deleting (is (= (instance? Throwable (bounded deleting)) (= :refused boundary)))))
+            (finally (deliver resume true))))))))
+
+(deftest written-delete-timeout-and-lifecycle-confirmation-have-one-winner
+  (doseq [open? [false true] first-confirmed? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [id "saved" expired (a/chan) timer a/timeout withdrawn (promise)
+              state (:state-atom (.-connection c)) events (sdk/lifecycle-events c)
+              notify! (fn [] (send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId id}})
+                        (is (= (:session-id (bounded (future (a/<!! events)))) id)))]
+          (when open?
+            (let [opening (try-open c {:session-id id})]
+              (reply! (next!) {:sessionId id}) (bounded opening)))
+          (let [[deleting request]
+                (with-redefs [a/timeout (fn [^long ms] (if (= ms 10000) expired (timer ms)))]
+                  (let [d (future (try (sdk/delete-session!! c id) (catch Exception e e)))]
+                    [d (next-release! next! reply! "session.delete" id)]))
+                pending [:connection :pending-requests (:id request)]]
+            (add-watch state withdrawn (fn [_ _ old new]
+                                         (when (and (get-in old pending) (not (get-in new pending))) (deliver withdrawn true))))
+            (try
+              (when first-confirmed? (notify!))
+              (locking c
+                (a/close! expired)
+                (bounded withdrawn)
+                (when-not first-confirmed? (notify!)))
+              (is (= (ex-message (bounded deleting)) "Request timeout"))
+              (is (= (boolean (get-in @state [:connection :late-responses (:id request)]))
+                     (and open? (not first-confirmed?))))
+              (let [opening (try-open c {:session-id id})
+                    ping (future (bounded opening) (sdk/await!! (sdk/ping c "fence")))
+                    first-frame (next!)
+                    fence (if (= (:method first-frame) "session.create")
+                            (do (reply! first-frame {:sessionId id}) (next!)) first-frame)
+                    result (bounded opening)]
+                (is (= (:method fence) "ping"))
+                (reply! fence {:message "done"}) (bounded ping)
+                (is (= (if (client/session? result) :opened (-> result ex-data :type))
+                       (if first-confirmed? :opened :session-cleanup-unconfirmed))))
+              (finally (a/close! events) (remove-watch state withdrawn)))))))))
+
+(deftest a-delete-dequeued-before-its-ownership-check-is-still-unwritten
+  (doseq [open? [false true]]
+    (with-runtime {}
+      (fn [c _ next! reply!]
+        (let [id "saved" checked (promise) resume (promise)
+              expired (a/chan) clock a/timeout send-request rpc/send-request
+              s (when open? (let [opening (try-open c {:session-id id})]
+                              (reply! (next!) {:sessionId id}) (bounded opening)))]
+          (try
+            (with-redefs [rpc/send-request
+                          (fn [conn method params & [opts]]
+                            (send-request conn method params
+                                          (if (= method "session.delete")
+                                            (update opts :on-write (fn [check!] (fn [& args] (deliver checked true)
+                                                                                  (bounded resume) (apply check! args))))
+                                            opts)))
+                          a/timeout (fn [^long ms] (if (and (= ms 10000) (not (realized? resume))) expired (clock ms)))]
+              (let [deleting (future (try (sdk/delete-session!! c id) (catch Exception e e)))]
+                (reply! (next!) {:sessions [{:sessionId id}]})
+                (bounded checked)
+                (a/close! expired)
+                (let [failure (bounded deleting)]
+                  (is (= (ex-message failure) "Request timeout"))
+                  (is (true? (::rpc/unwritten (meta (:error (ex-data failure)))))))
+                (deliver resume true)
+                (let [ping (sdk/ping c "done") frame (next!)
+                      fence (if (= (:method frame) "session.delete") (do (reply! frame {:success true}) (next!)) frame)]
+                  (is (= (:method frame) "ping"))
+                  (reply! fence {:message "done"}) (sdk/await!! ping))
+                (is (if s (= :open (:status @(.-lifecycle s))) (not (contains? @(.-sessions c) id))))))
+            (finally (deliver resume true) (a/close! expired))))))))
+
+(deftest a-claimed-deletion-cannot-be-fenced-while-its-callbacks-retire
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [id "saved" credential (fn [_] {:kind :cancelled})
+            opening (try-open c {:session-id id :github {:token-provider credential}})
+            _ (reply! (next!) {:sessionId id}) s (bounded opening)
+            expired (a/chan) timer a/timeout taken (promise) resume (promise) withdrawn (promise)
+            state (:state-atom (.-connection c)) retire reverse/retire-generation!
+            matching (promise) publish-result (promise) match! @#'turn/match-completion!
+            deleter (promise) ^Thread reader (:read-thread (.-connection c))]
+        (try
+          (with-redefs [turn/match-completion! (fn [& args] (deliver matching true) (bounded publish-result) (apply match! args))
+                        reverse/retire-generation! (fn [& args] (deliver taken true) (bounded resume) (apply retire args))]
+            (let [result (sdk/send-and-wait! s "confirmed") send-rpc (next!)
+                  _ (send! {:method "session.event" :params {:sessionId id :event {:id "idle" :type "session.idle"}}})
+                  _ (reply! send-rpc {:messageId "m" :aborted false :completionEventId "idle"
+                                      :response {:type "assistant.message" :data {:content "done"}}})
+                  _ (bounded matching)
+                  [deleting request] (with-redefs [a/timeout (fn [^long ms] (if (= ms 10000) expired (timer ms)))]
+                                       (let [d (future (deliver deleter (Thread/currentThread))
+                                                       (try (sdk/delete-session!! c id) (catch Exception e e)))]
+                                         [d (next-release! next! reply! "session.delete" id)]))
+                  pending [:connection :pending-requests (:id request)]]
+              (add-watch state withdrawn (fn [_ _ old new]
+                                           (when (and (get-in old pending) (not (get-in new pending))) (deliver withdrawn true))))
+              (send! {:method "session.lifecycle" :params {:sessionId id :type "session.deleted"}})
+              (bounded taken)
+              (a/close! expired)
+              (bounded withdrawn)
+              (let [^Thread worker (bounded deleter) mx (java.lang.management.ManagementFactory/getThreadMXBean)
+                    until (+ (System/nanoTime) 3000000000)]
+                ;; Let the caller either finish cleanup or join the reader's claimed confirmation.
+                (loop []
+                  (when-not (or (realized? deleting) (= (.getId reader) (some-> (.getThreadInfo mx (.getId worker)) .getLockOwnerId)))
+                    (when (> (System/nanoTime) until) (throw (ex-info "Delete caller did not reach cleanup" {})))
+                    (Thread/yield) (recur))))
+              (deliver resume true)
+              (is (= (ex-message (bounded deleting)) "Request timeout"))
+              (send! {:id "confirmed" :method "unknown" :params {}})
+              (is (= (:id (next!)) "confirmed"))
+              (is (= :closed (:status @(.-lifecycle s))))
+              (is (not (contains? @(.-lifecycle s) ::client/delete-boundary)))
+              (deliver publish-result true)
+              (is (= "done" (get-in (bounded (future (a/<!! result))) [:ok :data :content])))
+              (let [reopening (try-open c {:session-id id})
+                    ping (future (bounded reopening) (sdk/await!! (sdk/ping c)))
+                    frame (next!)
+                    fence (if (= (:method frame) "session.create") (do (reply! frame {:sessionId id}) (next!)) frame)]
+                (is (= (:method fence) "ping"))
+                (reply! fence {:message "done"}) (bounded ping)
+                (is (client/session? (bounded reopening))))))
+          (finally (deliver resume true) (deliver publish-result true) (remove-watch state withdrawn)))))))
+
+(deftest connection-failure-cannot-reopen-a-concurrently-confirmed-delete
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [id "saved" opening (try-open c {:session-id id}) _ (reply! (next!) {:sessionId id}) s (bounded opening)
+            deleting (future (try (sdk/delete-session!! c id) (catch Exception e e)))
+            _ (next-release! next! reply! "session.delete" id)
+            conn (.-connection c) checked (promise) confirmed (promise)
+            released? @#'client/released? retire reverse/retire-generation!
+            deleted! @#'client/deleted! reading (promise)]
+        (with-redefs [client/released? (fn [session]
+                                         (let [answer (released? session)]
+                                           (when-not answer
+                                             (deliver checked true) (bounded confirmed))
+                                           answer))
+                      reverse/retire-generation! (fn [& args] (apply retire args) (deliver confirmed true))
+                      client/deleted! (fn [& args] (deliver reading true) (bounded checked) (apply deleted! args))]
+          (locking (.-lifecycle c)
+                ;; Keep EOF retirement behind the router; the delete caller owns
+                ;; the handle's cleanup even if the connection ends first.
+            (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "park"}})
+            (send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId id}})
+            (bounded reading)
+            (rpc/end-input! conn {:code -32000 :message "Runtime ended"})
+            (is (= (ex-message (bounded deleting)) "Runtime ended"))
+            (is (= (:status @(.-lifecycle s)) :closed))
+            (is (not (identical? s (get @(.-sessions c) id))))
+            (is (some? (:closed @(.-turns s))))))))))
+
+(deftest a-queued-delete-cannot-write-after-the-id-was-reassigned
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [deleting (future (try (sdk/delete-session!! c "id") (catch Exception e e)))
+            list-rpc (next!)
+            opening (try-open c {:cloud {}}) create (next!)
+            blocked (promise) release (promise) queued (promise)
+            write! @#'rpc/write-message! offer! a/offer!]
+        (try
+          (with-redefs-fn
+            {#'rpc/write-message! (fn [ch msg]
+                                    (when (= (:method msg) "ping") (deliver blocked true) (bounded release))
+                                    (write! ch msg))
+             #'a/offer! (fn [ch msg]
+                          (let [ok (offer! ch msg)]
+                            (when (and ok (= (:method msg) "session.delete")) (deliver queued true))
+                            ok))}
+            (fn []
+              (let [ping (sdk/ping c)]
+                (bounded blocked)
+                (reply! list-rpc {:sessions [{:sessionId "id"}]})
+                (bounded queued)
+                (send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId "id"}})
+                (reply! create {:sessionId "id"})
+                (is (= (sdk/session-id (bounded opening)) "id"))
+                (deliver release true)
+                (reply! (next!) {:message "ready"})
+                (sdk/await!! ping)
+                (let [fence (sdk/ping c)
+                      frame (next!)
+                      last-ping (if (= "session.delete" (:method frame)) (do (reply! frame {:success true}) (next!)) frame)]
+                  (is (= (:method frame) "ping"))
+                  (reply! last-ping {:message "done"})
+                  (sdk/await!! fence)
+                  (is (= (get-in (ex-data (bounded deleting)) [:error :data :code])
+                         "session_ownership_changed"))))))
+          (finally (deliver release true)))))))
+
+(deftest unregistered-delete-cannot-overtake-an-unidentified-create
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [id (str (random-uuid))
+            live (try-open c {:session-id "known"}) _ (reply! (next!) {:sessionId "known"}) _ (bounded live)
+            opening (try-open c {:cloud {}}) create (next!)
+            lifecycle (sdk/lifecycle-events c)]
+        (try
+          ;; A prior anonymous allocation does not block a known live owner.
+          (let [deleting (future (sdk/delete-session!! c "known")) delete (next-release! next! reply! "session.delete" "known")]
+            (is (= "known" (get-in delete [:params :sessionId])))
+            (reply! delete {:success true}) (bounded deleting))
+          (send! {:method "session.lifecycle" :params {:sessionId id :type "session.created"}})
+          (is (= id (:session-id (bounded (future (a/<!! lifecycle))))))
+          (let [failure (bounded (future (try (sdk/delete-session!! c id) (catch Exception e e))))]
+            (is (= (get-in (ex-data failure) [:error :data :code]) "session_allocation_unresolved")))
+          ;; Neither an inventory lookup nor an ID reservation precedes refusal.
+          (let [ping (sdk/ping c) frame (next!)]
+            (is (= "ping" (:method frame)))
+            (reply! frame {:message "alive"})
+            (sdk/await!! ping))
+          (reply! create {:sessionId id})
+          (is (= (sdk/session-id (bounded opening)) id))
+          ;; A confirmed allocation lifts the restriction on other saved IDs.
+          (let [retry (future (sdk/delete-session!! c "other")) delete (next-release! next! reply! "session.delete" "other")]
+            (is (= "other" (get-in delete [:params :sessionId])))
+            (reply! delete {:success true}) (is (nil? (bounded retry))))
+          (finally (a/close! lifecycle)))))))
+
+(deftest an-unwritten-delete-cannot-displace-an-acknowledged-cloud-create
+  (doseq [phase [:listed :case-variant :unlisted :refused :failed-open]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [id "edcb4321-9876-4123-abcd-fedcba987654"
+              assigned (if (= phase :case-variant) (.toUpperCase id java.util.Locale/ROOT) id)
+              seen (promise) events (sdk/lifecycle-events c)
+              deleting (future (try (sdk/delete-session!! c id) (catch Exception e e)))
+              listing (next!) opening (try-open c {:cloud {} :events {:on-event #(deliver seen (:id %))}})
+              create (next!) refused (promise) finish (promise) result! rpc/response-result!]
+          (try
+            (send! {:method "session.lifecycle" :params {:type "session.created" :sessionId assigned}})
+            (is (= assigned (:session-id (bounded (future (a/<!! events))))))
+            (send! {:method "session.event" :params {:sessionId assigned :event {:type "session.info" :id "early"}}})
+            (with-redefs [rpc/response-result! (fn [method response]
+                                                 (when (and (= phase :refused) (= method "session.delete"))
+                                                   (deliver refused true) (bounded finish))
+                                                 (result! method response))]
+              (when (= phase :refused)
+                (reply! listing {:sessions [{:sessionId id}]})
+                (bounded refused))
+              (if (= :failed-open phase)
+                (do (send! {:id (:id create) :error {:code -32000 :message "Create refused"}})
+                    (is (= (ex-message (bounded opening)) "Create refused")))
+                (do (reply! create {:sessionId assigned})
+                    (let [s (bounded opening)]
+                      (is (client/session? s) phase)
+                      (when (client/session? s) (is (= (bounded seen) "early"))))))
+              (deliver finish true)
+              (when-not (= phase :refused)
+                (reply! listing {:sessions (if (= phase :unlisted) [] [{:sessionId id}])}))
+              ;; Fence the outcome even on the broken implementation, which
+              ;; sends a delete after rejecting the acknowledged allocation.
+              (let [ping (future @deleting (sdk/await!! (sdk/ping c)))
+                    frame (next!)
+                    fence (if (= "session.delete" (:method frame))
+                            (do (reply! frame {:success true}) (next!)) frame)]
+                (is (= (:method frame) (if (= phase :failed-open) "session.delete" "ping")) phase)
+                (reply! fence {:message "done"})
+                (bounded ping)
+                (is (= (instance? Throwable (bounded deleting)) (not= phase :failed-open)) phase)))
+            (finally (a/close! events) (deliver finish true))))))))
+
+(deftest graceful-close-joins-delete-after-the-id-is-free
+  (doseq [release [:lifecycle :ack :refusal]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [opening (try-open c {:session-id "other"}) _ (reply! (next!) {:sessionId "other"}) _ (bounded opening)
+              deleting (future (try (sdk/delete-session!! c "saved") (catch Exception e e)))
+              delete (next-release! next! reply! "session.delete" "saved")
+              parked (promise) finish (promise) result! rpc/response-result!]
+          (try
+            (with-redefs [rpc/response-result! (fn [method response]
+                                                 (when (= "session.delete" method) (deliver parked true) (bounded finish))
+                                                 (result! method response))]
+              (if (= release :lifecycle)
+                (do (send! {:method "session.lifecycle" :params {:sessionId "saved" :type "session.deleted"}})
+                    (send! {:id "read" :method "unknown" :params {}})
+                    (is (= (:id (next!)) "read")))
+                (do (reply! delete {:success (= release :ack) :error "refused"}) (bounded parked)))
+              (let [closing (future (try (sdk/close!! c) (catch Exception e e)))
+                    detach (next!)]
+                (is (= [(:method detach) (get-in detach [:params :sessionId])] ["session.detach" "other"]))
+                (reply! detach {:success true})
+                (when (= release :lifecycle) (reply! delete {:success false :error "refused"}))
+                (deliver finish true)
+                (let [shutdown (next!)]
+                  (is (= (:method shutdown) "runtime.shutdown"))
+                  (reply! shutdown {}))
+                (let [delete-error (bounded deleting) close-error (bounded closing)]
+                  (if (= :ack release)
+                    (is (= [delete-error close-error] [nil nil]))
+                    (is (= (mapv (comp :reason ex-data) [delete-error close-error]) ["refused" "refused"]))))))
+            (finally (deliver finish true))))))))
+
+(deftest timeout-withdraws-an-unwritten-create-or-delete
+  (doseq [kind [:create :named :resume :detach :saved-delete :live-delete]]
+    (with-runtime {}
+      (fn [c _ next! reply!]
+        (let [delete? (#{:saved-delete :live-delete} kind)
+              method (case kind (:create :named) "session.create" :resume "session.resume"
+                           :detach "session.detach" "session.delete")
+              s (when (#{:detach :live-delete} kind)
+                  (let [opening (try-open c {:session-id "saved"})]
+                    (reply! (next!) {:sessionId "saved"}) (bounded opening)))
+              deleting (when delete? (future (try (sdk/delete-session!! c "saved") (catch Exception e e))))
+              listing (when deleting (next!))
+              blocked (promise) write-now (promise) queued (promise) popped (promise) finish (promise)
+              expire (a/chan) timer a/timeout offer! a/offer! write! @#'rpc/write-message! cancel! rpc/cancel-request!]
+          (try
+            (with-redefs-fn
+              {#'rpc/write-message! (fn [ch msg]
+                                      (when (= "ping" (:method msg)) (deliver blocked true) (bounded write-now))
+                                      (write! ch msg))
+               #'a/offer! (fn [ch msg]
+                            (let [ok (offer! ch msg)]
+                              (when (and ok (= method (:method msg))) (deliver queued true)) ok))
+               #'rpc/cancel-request! (fn [conn reply]
+                                       (let [removed (cancel! conn reply)]
+                                         (when removed (deliver popped true) (bounded finish)) removed))}
+              (fn []
+                (let [ping (sdk/ping c)
+                      _ (bounded blocked)
+                      operation (with-redefs [a/timeout (fn [^long ms] (if (= ms (if (or delete? s) 10000 60000)) expire (timer ms)))]
+                                  (let [op (case kind
+                                             :create (try-open c {:cloud {}})
+                                             :named (try-open c {:session-id "saved"})
+                                             :resume (future (try (sdk/resume-session!! c "saved" {}) (catch Exception e e)))
+                                             :detach (future (try (sdk/close!! s) (catch Exception e e)))
+                                             (do (reply! listing {:sessions [{:sessionId "saved"}]}) deleting))]
+                                    (bounded queued)
+                                    (a/close! expire)
+                                    (bounded popped)
+                                    op))]
+                  ;; The owner cannot finish timeout cleanup until after the wire fence.
+                  (deliver write-now true)
+                  (reply! (next!) {:message "ready"})
+                  (sdk/await!! ping)
+                  (let [fence (sdk/ping c) frame (next!)
+                        last-ping (if (= method (:method frame)) (do (reply! frame {}) (next!)) frame)]
+                    (is (= (:method frame) "ping") method)
+                    (reply! last-ping {:message "fence"})
+                    (sdk/await!! fence))
+                  (deliver finish true)
+                  (is (= (ex-message (bounded operation)) "Request timeout"))
+                  (is (identical? s (get @(.-sessions c) "saved")))
+                  (when (= kind :create)
+                    (let [retry (try-open c {:cloud {}})]
+                      (reply! (next!) {:sessionId "retry"})
+                      (is (= (sdk/session-id (bounded retry)) "retry"))))
+                  (when s
+                    (let [abort (sdk/abort! s) request (next!)]
+                      (is (= [(:method request) (:params request)] ["session.abort" {:sessionId "saved"}]))
+                      (reply! request {:success true})
+                      (is (nil? (sdk/await!! abort))))))))
+            (finally (deliver write-now true) (deliver finish true) (a/close! expire))))))))
 
 (deftest interactive-form-waits-for-an-answer-or-its-session
   (with-runtime {}
@@ -547,6 +2275,203 @@
                 (is (= (bounded stopped) :interrupted))))
             (finally (deliver resume true) (deliver release :not-interrupted) (a/close! deadline))))))))
 
+(deftest post-ack-events-can-belong-to-a-new-open-while-old-publications-drain
+  (doseq [[method boundary] [["session.detach" :ack] ["session.delete" :ack]
+                             ["session.delete" :deleted-first] ["session.delete" :deleted-then-refused]]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [old-seen (promise) decisions (atom []) answered (promise) after-reply (promise)
+              decide (fn [generation]
+                       (fn [_ ctx] (swap! decisions conj [generation (:request-id ctx)])
+                         (deliver (if (= "new-late" (:request-id ctx)) after-reply answered) true)
+                         {:kind :no-result}))
+              opening (try-open c {:session-id "reuse" :events {:on-event #(deliver old-seen (:id %))}
+                                   :permissions {:on-request (decide :old)}})
+              _ (reply! (next!) {:sessionId "reuse"})
+              s (bounded opening) old-events (sdk/subscribe s)
+              releasing (future (try (if (= method "session.delete") (sdk/delete-session!! c "reuse") (sdk/close!! s))
+                                     (catch Exception e e)))
+              release (next-release! next! reply! method "reuse")
+              emit! #(send! {:method "session.event" :params {:sessionId "reuse" :event {:type "session.info" :id %}}})
+              request! #(send! {:method "session.event" :params {:sessionId "reuse"
+                                                                 :event {:type "permission.requested" :id %
+                                                                         :data {:requestId % :permissionRequest {:kind "read"}}}}})
+              fence! #(do (send! {:id "read" :method "unknown" :params {}}) (is (= (:id (next!)) "read")))
+              seen (atom []) done (promise)
+              observer (fn [{:keys [id]}] (swap! seen conj id) (when (= id "live") (deliver done @seen)))
+              [replacement second-close]
+              (locking (.-lifecycle c)
+                (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "session.updated"}})
+                (request! "old")
+                (if (= boundary :ack)
+                  (reply! release {:success true})
+                  (send! {:method "session.lifecycle" :params {:sessionId "reuse" :type "session.deleted"}}))
+                (fence!)
+                (emit! "before-new-open")
+                (fence!)
+                (let [replacement (try-open c {:cloud {} :events {:on-event observer} :permissions {:on-request (decide :new)}})
+                      create (next!)]
+                  (send! {:method "session.lifecycle" :params {:sessionId "reuse" :type "session.created"}})
+                  (request! "new-early")
+                  (reply! create {:sessionId "reuse"})
+                  (fence!)
+                  (let [replacement (bounded replacement)
+                        done (:done @(.-lifecycle s)) entered (promise) alts!! a/alts!!
+                        closing (future
+                                  (with-redefs [a/alts!! (fn [ports & args]
+                                                           (when (identical? done (first ports)) (deliver entered :joined))
+                                                           (apply alts!! ports args))]
+                                    (let [result (try (sdk/close!! s) (catch Exception e (:type (ex-data e))))]
+                                      (deliver entered result)
+                                      result)))]
+                    (is (= (bounded entered) (if (= method "session.detach") :joined :session-busy)))
+                    [replacement closing])))]
+          (when-not (= boundary :ack)
+            (reply! release {:success (= boundary :deleted-first) :error "delete refused"}))
+          (let [outcome (bounded releasing)]
+            (if (= boundary :deleted-then-refused)
+              (is (= (:reason (ex-data outcome)) "delete refused"))
+              (is (nil? outcome))))
+          (is (= (bounded second-close) (when (= method "session.delete") :session-busy)))
+          (is (= (bounded old-seen) "old"))
+          (is (= (-> (bounded (future (a/<!! old-events))) :id) "old"))
+          (is (= (-> (bounded (future (a/<!! old-events))) :error ex-data :type) :session-closed))
+          (when (not= boundary :ack) (request! "new-late"))
+          (emit! "live")
+          (is (client/session? replacement))
+          (when (client/session? replacement)
+            (is (= (sdk/session-id replacement) "reuse"))
+            (is (= (bounded done) (if (= boundary :ack) ["new-early" "live"] ["new-early" "new-late" "live"])))
+            (bounded answered)
+            (when (not= boundary :ack) (bounded after-reply))
+            (is (= (set @decisions) (cond-> #{[:new "new-early"]} (not= boundary :ack) (conj [:new "new-late"]))))))))))
+
+(deftest graceful-close-joins-a-displaced-live-deleter-and-detaches-only-the-replacement
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "saved"}) _ (reply! (next!) {:sessionId "saved"}) _ (bounded opening)
+            deleting (future (try (sdk/delete-session!! c "saved") (catch Exception e e)))
+            delete (next-release! next! reply! "session.delete" "saved")
+            replacement (try-open c {:cloud {}}) create (next!)]
+        (send! {:method "session.lifecycle" :params {:sessionId "saved" :type "session.deleted"}})
+        (reply! create {:sessionId "saved"})
+        (is (= (sdk/session-id (bounded replacement)) "saved"))
+        (let [closing (future (try (sdk/close!! c) (catch Exception e e))) detach (next!)]
+          (is (= [(:method detach) (get-in detach [:params :sessionId])] ["session.detach" "saved"]))
+          (reply! detach {:success true})
+          (reply! delete {:success false :error "old delete refused"})
+          (let [shutdown (next!)]
+            (is (= (:method shutdown) "runtime.shutdown"))
+            (reply! shutdown {}))
+          (is (= (mapv (comp :reason ex-data bounded) [deleting closing]) ["old delete refused" "old delete refused"])))))))
+
+(deftest a-deletion-notification-before-live-delete-admission-cannot-authorize-the-write
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "saved"}) _ (reply! (next!) {:sessionId "saved"})
+            s (bounded opening) events (sdk/subscribe s)
+            deleted! #(send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId %}})
+            info! #(send! {:method "session.event" :params {:sessionId "saved" :event {:type "session.info" :id %}}})
+            take-id! #(:id (bounded (future (a/<!! events))))]
+        (deleted! "saved")
+        (info! "external")
+        (is (= (take-id!) "external"))
+        (let [deleting (future (try (sdk/delete-session!! c "saved") (catch Exception e e)))
+              listing (next!)]
+          (deleted! "saved")
+          (reply! listing {:sessions [{:sessionId "saved"}]})
+          (is (= (get-in (ex-data (bounded deleting)) [:error :data :code]) "session_ownership_changed")))
+        (let [deleting (future (try (sdk/delete-session!! c "saved") (catch Exception e e)))
+              delete (next-release! next! reply! "session.delete" "saved")]
+          (deleted! "other")
+          (info! "different-id")
+          (is (= (take-id!) "different-id"))
+          (reply! delete {:success false :error "refused"})
+          (is (= (:reason (ex-data (bounded deleting))) "refused"))
+          (deleted! "saved")
+          (info! "after-refusal")
+          (is (= (take-id!) "after-refusal")))))))
+
+(deftest graceful-close-preserves-a-joined-deletes-ownership-check
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "saved"}) _ (reply! (next!) {:sessionId "saved"})
+            events (sdk/subscribe (bounded opening))
+            outcome (fn [f] (try (f) (catch Exception e (get-in (ex-data e) [:error :data :code]))))
+            deleting (future (outcome #(sdk/delete-session!! c "saved"))) listing (next!)
+            closing (future (outcome #(sdk/close!! c)))]
+        (is (= (-> (bounded (future (a/<!! events))) :error ex-data :type) :session-closed))
+        (send! {:method "session.lifecycle" :params {:type "session.deleted" :sessionId "saved"}})
+        (reply! listing {:sessions [{:sessionId "saved"}]})
+        (let [frame (next!)
+              shutdown (if (= (:method frame) "session.delete") (do (reply! frame {:success false}) (next!)) frame)]
+          (is (= "runtime.shutdown" (:method frame)))
+          (reply! shutdown {}))
+        (is (= (mapv bounded [deleting closing]) ["session_ownership_changed" "session_ownership_changed"]))))))
+
+(deftest post-ack-events-still-belong-to-a-pending-create-during-final-unregister
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "reuse"}) _ (reply! (next!) {:sessionId "reuse"})
+            old (bounded opening) lifecycle (.-lifecycle old) at-cleanup (promise) release (promise)
+            seen (promise) emit! #(send! {:method "session.event" :params {:sessionId "reuse" :event {:type "session.info" :id %}}})]
+        (add-watch lifecycle ::drain (fn [_ _ _ new]
+                                       (when (= :closed (:status new)) (deliver at-cleanup true) (bounded release))))
+        (try
+          (let [closing (future (sdk/close!! old)) detach (next!)
+                replacement (try-open c {:cloud {} :events {:on-event #(deliver seen (:id %))}}) create (next!)]
+            (reply! detach {:success true})
+            (bounded at-cleanup)
+            (emit! "after-ack")
+            (send! {:id "read" :method "unknown" :params {}})
+            (is (= "read" (:id (next!))))
+            (deliver release true)
+            (bounded closing)
+            (reply! create {:sessionId "reuse"})
+            (emit! "live")
+            (is (= (sdk/session-id (bounded replacement)) "reuse"))
+            (is (= (bounded seen) "after-ack")))
+          (finally (deliver release true) (remove-watch lifecycle ::drain)))))))
+
+(deftest force-close-retires-both-generations-during-publication-handoff
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [entered (promise) stopped (promise) unblock (promise) fresh-calls (atom 0)
+            original (try-open c {:session-id "reuse"
+                                  :events {:on-event (fn [_]
+                                                       (deliver entered true)
+                                                       (try (bounded unblock)
+                                                            (catch InterruptedException _ (deliver stopped true))))}})
+            _ (reply! (next!) {:sessionId "reuse"})
+            s (bounded original) old-stream (sdk/subscribe s)
+            emit! #(send! {:method "session.event" :params {:sessionId "reuse" :event {:type "session.info" :id %}}})]
+        (try
+          (emit! "entered")
+          (bounded entered)
+          (is (= (:id (bounded (future (a/<!! old-stream)))) "entered"))
+          (let [closing (future (sdk/close!! s)) detach (next!)
+                forced
+                (locking (.-lifecycle c)
+                  (send! {:method "session.lifecycle" :params {:sessionId "barrier" :type "session.updated"}})
+                  (emit! "old")
+                  (reply! detach {:success true})
+                  (let [new (try-open c {:cloud {} :events {:on-event (fn [_] (swap! fresh-calls inc))}})
+                        create (next!)]
+                    (emit! "early")
+                    (reply! create {:sessionId "reuse"})
+                    (let [new-stream (sdk/subscribe (bounded new))
+                          forced (future (sdk/force-close!! c))]
+                      (is (true? (bounded stopped)))
+                      (is (= (-> (bounded (future (a/<!! new-stream))) :error ex-data :type) :session-closed))
+                  ;; Release the router before the force-close owner finishes
+                  ;; closing the client lifecycle channel.
+                      forced)))]
+            (is (nil? (bounded forced)))
+            (is (nil? (bounded closing)))
+            (is (zero? @fresh-calls))
+            (is (empty? @(.-sessions c))))
+          (finally (deliver unblock true)))))))
+
 (deftest direct-release-preserves-observations-before-but-not-after-the-ack
   (doseq [method ["session.detach" "session.delete"]]
     (with-runtime {}
@@ -593,8 +2518,85 @@
             (is (= (set (repeatedly 3 #(take! observed))) #{[:old "close"] [:old "before"] [:fresh "new"]}))
             (is (empty? @decisions))))))))
 
+(deftest lifecycle-subscribers-start-at-frame-arrival
+  (with-runtime {}
+    (fn [c send! next! _]
+      (let [earlier (sdk/lifecycle-events c)
+            emit! #(send! {:method "session.lifecycle" :params {:sessionId % :type "session.updated"}})
+            later (locking (.-lifecycle c)
+                    (dotimes [i 67] (emit! (str i)))
+                    (send! {:id "reader-fence" :method "unknown" :params {}})
+                    (is (= (:id (next!)) "reader-fence"))
+                    (sdk/lifecycle-events c))]
+        (emit! "new")
+        (is (= (bounded (future (a/<!! later))) {:type :session.updated :session-id "new"}))
+        (is (= (:session-id (bounded (future (a/<!! earlier)))) "0"))
+        (a/close! earlier)
+        (a/close! later)))))
+
+(deftest live-backlog-does-not-reach-later-subscriptions-or-turns
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "live"})
+            _ (reply! (next!) {:sessionId "live"})
+            s (bounded opening)
+            earlier (sdk/subscribe s)
+            lifecycle (sdk/lifecycle-events c)
+            marker! #(send! {:method "session.lifecycle" :params {:sessionId % :type "session.updated"}})
+            idle! #(send! {:method "session.event" :params {:sessionId "live" :event {:type "session.idle" :id %}}})
+            [stream turn request]
+            (locking (.-lifecycle c)
+              (marker! "park")
+              (dotimes [i 65] (idle! (str "prior-" i)))
+              (send! {:id "reader-fence" :method "unknown" :params {}})
+              (is (= (:id (next!)) "reader-fence"))
+              (let [stream (sdk/subscribe s)
+                    turn (sdk/send-and-wait! s "next")
+                    request (next!)]
+                (idle! "current")
+                (marker! "drained")
+                [stream turn request]))]
+        (is (= (mapv :session-id (repeatedly 2 #(bounded (future (a/<!! lifecycle))))) ["park" "drained"]))
+        (is (= (:id (a/poll! earlier)) "prior-0"))
+        (a/close! earlier)
+        (reply! request {:aborted false :messageId "m" :completionEventId "current"})
+        (let [result (bounded (future (a/<!! turn)))]
+          (is (= (or (some-> result :error ex-data :type) result) {:ok nil})))
+        (a/close! stream)
+        (let [events (bounded (future (a/<!! (a/into [] stream))))]
+          (is (= (mapv #(or (:id %) (-> % :error ex-data :type)) events) ["current"])))
+        (a/close! lifecycle)))))
+
+(deftest shutdown-cannot-confirm-a-turn-from-a-skipped-publication
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [seen (atom []) open (try-open c {:session-id "s" :events {:on-event #(swap! seen conj (:id %))}})
+            _ (reply! (next!) {:sessionId "s"}) s (bounded open)
+            turn (sdk/send-and-wait! s "pending") request (next!)
+            lifecycle (sdk/lifecycle-events c) retired (promise) resume (promise) retire @#'client/retire-session!]
+        (try
+          (with-redefs [client/retire-session! (fn [& args] (deliver retired true) (bounded resume) (apply retire args))]
+            (let [closing
+                  (locking (.-lifecycle c)
+                    (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "park"}})
+                    (send! {:method "session.event" :params {:sessionId "s" :event {:type "session.idle" :id "idle"}}})
+                    (reply! request {:messageId "m" :aborted false :completionEventId "idle"})
+                    (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "routed"}})
+                    (send! {:id "read" :method "unknown" :params {}})
+                    (is (= (:id (next!)) "read"))
+                    (let [close (future (sdk/close!! c))] (bounded retired) close))]
+              (is (= (mapv :session-id (repeatedly 2 #(bounded (future (a/<!! lifecycle))))) ["park" "routed"]))
+              (deliver resume true)
+              (doseq [method ["session.detach" "runtime.shutdown"]]
+                (let [frame (next!)]
+                  (is (= (:method frame) method))
+                  (reply! frame {:success true})))
+              (bounded closing)
+              (is (= [(-> (bounded (future (a/<!! turn))) :error ex-data :type) @seen] [:session-closed []]))))
+          (finally (deliver resume true) (a/close! lifecycle)))))))
+
 (deftest eof-preserves-a-confirmed-turn-in-either-frame-order
-  (doseq [order [:event-first :response-first :missing-event :missing-response :runtime-error :turn-timeout]]
+  (doseq [order [:event-first :response-first :missing-event :missing-response :runtime-error :turn-timeout :drain-timeout]]
     (with-runtime {}
       (fn [c send! next! reply!]
         (let [release (promise)
@@ -611,7 +2613,7 @@
                                         :response {:type "assistant.message" :data {:content "done"}}})]
           (try
             (case order
-              (:event-first :turn-timeout) (do (event!) (result!))
+              (:event-first :turn-timeout :drain-timeout) (do (event!) (result!))
               :response-first (do (result!) (event!))
               :missing-event (result!)
               :missing-response (event!)
@@ -621,15 +2623,140 @@
             (let [events (bounded (future (a/<!! (a/into [] stream))))]
               (is (= (mapv :id (butlast events)) (if (= order :missing-event) [] ["last"])))
               (is (= (-> events last :error ex-data :type) :connection-closed)))
-            (if (= order :turn-timeout) (a/close! deadline) (deliver release true))
+            (case order
+              :turn-timeout (a/close! deadline)
+              :drain-timeout nil
+              (deliver release true))
             (let [{:keys [ok error]} (bounded (future (a/<!! turn)))]
               (case order
                 (:event-first :response-first) (is (= (get-in ok [:data :content]) "done"))
                 :runtime-error (is (= (ex-message error) "Rejected"))
                 :turn-timeout (is (= (:type (ex-data error)) :turn-timeout))
+                :drain-timeout (is (= (:type (ex-data error)) :observer-drain-timeout))
                 (:missing-event :missing-response) (is (= (ex-message error) "Connection closed by remote"))))
             (is (empty? (:waiters @(.-turns s))))
             (finally (deliver release true))))))))
+
+(deftest eof-during-session-release-preserves-accepted-publications
+  (doseq [method ["session.detach" "session.delete" "session.list" nil] observe? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [seen (atom []) opening (try-open c (cond-> {:session-id "s"}
+                                                   observe? (assoc :events {:on-event #(swap! seen conj (:id %))})))
+              _ (reply! (next!) {:sessionId "s"}) s (bounded opening) stream (sdk/subscribe s)
+              turn (sdk/send-and-wait! s "go") request (next!)
+              releasing (when method
+                          (future (try (if (= method "session.detach") (sdk/close!! s) (sdk/delete-session!! c "s"))
+                                       (catch Exception e e))))]
+          (when method (is (= (:method (next-release! next! reply! method "s")) method)))
+          (locking (.-lifecycle c)
+            (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+            (send! {:method "session.event" :params {:sessionId "s" :event {:id "idle" :type "session.idle"}}})
+            (reply! request {:messageId "m" :aborted false :completionEventId "idle"
+                             :response {:type "assistant.message" :data {:content "done"}}})
+            (send! {:id "accepted" :method "unknown" :params {}})
+            (is (= (:id (next!)) "accepted"))
+            (send!)
+            (if releasing
+              (is (= (ex-message (bounded releasing)) "Connection closed by remote"))
+              (let [^Thread reader (:read-thread (.-connection c))]
+                (.join reader 3000)
+                (is (not (.isAlive reader)))
+                (is (nil? (sdk/close!! s)))))
+            (is (= (try (sdk/subscribe s) (catch Exception e (:type (ex-data e)))) :session-closed))
+            (is (not (contains? @(.-lifecycle s) ::client/delete-boundary))))
+          (let [items (bounded (future (a/<!! (a/into [] stream))))
+                result (bounded (future (a/<!! turn)))]
+            (is (= (mapv #(or (:id %) (-> % :error ex-data :type)) items) ["idle" :connection-closed]))
+            (is (= (if observe? (-> result :error ex-data :type) (get-in result [:ok :data :content]))
+                   (if observe? :session-closed "done")))
+            (is (empty? @seen))))))))
+
+(deftest client-shutdown-does-not-join-a-detach-that-already-failed
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
+            detach (future (try (sdk/close!! s) (catch Exception e (:method (ex-data e)))))]
+        (is (= (:method (next!)) "session.detach"))
+        (locking (.-lifecycle c)
+          ;; Keep the handle in the router after its detach caller has returned.
+          (send! {:method "session.lifecycle" :params {:sessionId "park" :type "session.updated"}})
+          (send! {:method "session.event" :params {:sessionId "s" :event {:id "queued" :type "session.info"}}})
+          (send!)
+          (is (= (bounded detach) "session.detach"))
+          (is (= (try (sdk/close!! c) (catch Exception e (:method (ex-data e)))) "runtime.shutdown")))))))
+
+(deftest failed-self-detach-keeps-observer-interruption-with-the-explicit-closer
+  (doseq [external-close? [false true] overflow? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [handle (promise) proceed (promise) entered (promise) detached (promise)
+              release (promise) stopped (promise) drain-timer? (atom false)
+              calls (atom [])
+              observer (fn [{:keys [id error]}]
+                         (swap! calls conj (or id (:type (ex-data error))))
+                         (when-not error
+                           (deliver entered true) (bounded proceed)
+                           (deliver detached (try (sdk/close!! @handle) (catch Exception e (ex-message e))))
+                           (deliver stopped (try @release (catch InterruptedException _ :interrupted)))))
+              opening (try-open c {:session-id "s" :events {:on-event observer}})
+              _ (reply! (next!) {:sessionId "s"}) s (bounded opening) _ (deliver handle s)
+              stream (sdk/subscribe s) deadline (a/chan) clock a/timeout
+              worker @(get-in @(:sessions (.-callbacks c)) ["s" :observer :task])
+              emit! #(send! {:method "session.event" :params {:sessionId "s" :event {:type "session.info" :id %}}})]
+          (try
+            (with-redefs [a/timeout (fn [^long ms] (if (= ms 500) (do (reset! drain-timer? true) deadline) (clock ms)))]
+              (emit! "first")
+              (bounded entered)
+              (is (= (:id (bounded (future (a/<!! stream)))) "first"))
+              (when overflow?
+                (dotimes [n 65] (emit! (str n)) (bounded (future (a/<!! stream)))))
+              (deliver proceed true)
+              (is (= (:method (next!)) "session.detach"))
+              (locking (.-lifecycle c)
+                (send! {:method "session.lifecycle" :params {:type "session.updated" :sessionId "park"}})
+                (emit! "last")
+                (send!)
+                (is (= (bounded detached) "Connection closed by remote"))
+                (when external-close? (is (nil? (sdk/close!! s)))))
+              (is (= (mapv :id (butlast (bounded (future (a/<!! (a/into [] stream)))))) ["last"]))
+              (when-not external-close? (is (false? @drain-timer?)))
+              (deliver release :finished)
+              (is (= (bounded stopped) (if external-close? :interrupted :finished)))
+              (when-not external-close?
+                (.get ^java.util.concurrent.Future worker 5 java.util.concurrent.TimeUnit/SECONDS)
+                (is (= @calls ["first"]))))
+            (finally (deliver proceed true) (deliver release :finished) (a/close! deadline))))))))
+
+(deftest an-observer-that-failed-its-session-remains-interruptible
+  (doseq [end [:eof :detach]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [handle (promise) failed (promise) hold (promise) stopped (promise)
+              observer (fn [_]
+                         (deliver failed (try (sdk/respond!! @handle :tool {:request-id "restored" :result "ok"})
+                                              (catch Exception e (:type (ex-data e)))))
+                         (deliver stopped (try @hold (catch InterruptedException _ :interrupted))))
+              opening (try-open c {:session-id "s" :events {:on-event observer}})
+              _ (reply! (next!) {:sessionId "s"}) s (bounded opening) _ (deliver handle s)
+              life (sdk/lifecycle-events c) deadline (a/chan) timer a/timeout]
+          (try
+            (with-redefs [callbacks/claim-limit 1
+                          a/timeout (fn [^long ms] (if (= ms 500) deadline (timer ms)))]
+              (send! {:method "session.event" :params {:sessionId "s" :event {:type "permission.completed"
+                                                                              :data {:requestId "spent"}}}})
+              (is (= (bounded failed) :callback-claim-limit))
+              (if (= end :eof)
+                (do (send!)
+                    (is (= (-> (bounded (future (a/<!! life))) :error ex-data :type) :connection-closed))
+                    (sdk/close!! s))
+                (let [closing (future (sdk/close!! s))]
+                  (reply! (next!) {:success true})
+                  (bounded closing)
+                  (sdk/force-close!! c)))
+              (deliver hold :not-interrupted)
+              (is (= (bounded stopped) :interrupted)))
+            (finally (deliver hold :finished) (a/close! deadline) (a/close! life))))))))
 
 (deftest a-turn-started-by-its-observer-can-complete-before-its-follow-up-is-observed
   (with-runtime {}
@@ -655,6 +2782,29 @@
         (is (= (get-in (bounded nested) [:ok :data :content]) "inner"))
         (is (= (get-in (sdk/await!! outer) [:data :content]) "outer"))
         (is (= (mapv (fn [_] (bounded (future (a/<!! seen)))) (range 2)) ["outer" "inner"]))))))
+
+(deftest a-retained-observation-can-start-a-turn-without-waiting-on-itself
+  (with-runtime {}
+    (fn [c send! next! reply!]
+      (let [handle (promise) finished (promise) observed (promise)
+            observe (fn [{:keys [id]}]
+                      (case id
+                        "early" (deliver finished (a/<!! (sdk/send-and-wait! (bounded handle) "next")))
+                        "done" (deliver observed true)
+                        nil))
+            opening (try-open c {:cloud {} :events {:on-event observe}})
+            create (next!)
+            event! #(send! {:method "session.event" :params {:sessionId "cloud" :event %}})]
+        (event! {:id "early" :type "session.info"})
+        (reply! create {:sessionId "cloud"})
+        (deliver handle (bounded opening))
+        (let [request (next!)]
+          (is (= (:method request) "session.sendAndWait"))
+          (event! {:id "done" :type "session.idle"})
+          (reply! request {:aborted false :messageId "m" :completionEventId "done"
+                           :response {:type "assistant.message" :data {:content "ok"}}}))
+        (is (= (get-in (bounded finished) [:ok :data :content]) "ok"))
+        (is (true? (bounded observed)))))))
 
 (deftest explicit-client-close-cancels-observers-already-draining-after-eof
   (doseq [force? [false true]]
@@ -1421,33 +3571,41 @@
   (doseq [custom-storage? [false true]]
     (with-runtime (if custom-storage? fs-options {})
       (fn [c send! next! reply!]
-        (let [opening (try-open c (cond-> {:session-id "notes" :github {:token-provider (constantly {:kind :cancelled})}}
+        (let [entered (promise) deliver-idle (promise) fenced (promise) finish-close (promise)
+              opening (try-open c (cond-> {:session-id "notes" :github {:token-provider (constantly {:kind :cancelled})}
+                                           :events {:on-event (fn [_] (deliver entered true) (bounded deliver-idle))}}
                                     custom-storage? (assoc :state {:create-session-fs-provider (memory-fs/provider (atom {}))})))
               create (next!)
               _ (reply! create {:sessionId "notes" :capabilities {:ui {:elicitation true}}})
               s (bounded opening)
               form (sdk/elicit! s {:message "Fixture?" :requested-schema {:type "object"}})
               ask (next!)
-              deadline (a/chan) clock a/timeout expired (promise)
-              state (:state-atom (.-connection c))
+              turn (sdk/send-and-wait! s "pending") request (next!)
+              _ (send! {:method "session.event" :params {:sessionId "notes" :event {:type "session.idle" :id "idle"}}})
+              _ (reply! request {:messageId "m" :aborted false :completionEventId "idle"})
+              _ (bounded entered)
+              deadline (a/chan) clock a/timeout routes (.-sessions c)
               [closing detach] (with-redefs [a/timeout (fn [^long ms] (if (= ms 10000) deadline (clock ms)))]
                                  (let [closing (future (try (sdk/close!! s) (catch Exception e e)))]
                                    [closing (next!)]))]
-          (add-watch state expired
+          (add-watch routes fenced
                      (fn [_ _ old new]
-                       (let [path [:connection :pending-requests (:id detach)]]
-                         (when (and (get-in old path) (not (get-in new path))) (deliver expired true)))))
+                       (when (and (identical? s (get old "notes")) (= ::client/unconfirmed-cleanup (get new "notes")))
+                         (deliver fenced true)
+                         (bounded finish-close))))
           (try
-            (locking c
-              (a/close! deadline)
-              (bounded expired)
-              (reply! detach {:success true})
-              (reply! ask {:action "accept"})
-              (send! (token-request (get-in create [:params :github :tokenProviderRegistrationId]) "refresh"))
-              (is (= (get-in (next!) [:error :code]) -32001))
-              (is (= (-> (bounded (future (a/<!! form))) :error ex-data :type) :session-closed)))
+            (a/close! deadline)
+            (bounded fenced)
+            (reply! detach {:success true})
+            (reply! ask {:action "accept"})
+            (send! (token-request (get-in create [:params :github :tokenProviderRegistrationId]) "refresh"))
+            (is (= (get-in (next!) [:error :code]) -32001))
+            (is (= (-> (bounded (future (a/<!! form))) :error ex-data :type) :session-closed))
+            (deliver deliver-idle true)
+            (is (= (-> (bounded (future (a/<!! turn))) :error ex-data :type) :session-closed))
+            (deliver finish-close true)
             (is (= (ex-message (bounded closing)) "Request timeout"))
-            (finally (remove-watch state expired))))))))
+            (finally (deliver deliver-idle true) (deliver finish-close true) (remove-watch routes fenced))))))))
 
 (deftest a-definitive-open-refusal-fences-the-next-storage-call-before-rollback
   (with-runtime fs-options
@@ -1656,7 +3814,6 @@
               events (sdk/subscribe s)
               staged (promise)
               resume (promise)
-              sender rpc/send-request
               convert util/clj->wire
               offer a/offer!
               offered (promise)
@@ -1668,7 +3825,7 @@
           (try
             (with-redefs [util/clj->wire
                           (fn [v]
-                            (when (and (not= method :eof) (= "overflow" (:request-id v)))
+                            (when (= "overflow" (:request-id v))
                               (deliver staged true) (bounded resume))
                             (convert v))
                           a/offer!
@@ -1676,14 +3833,7 @@
                             (when (and (= "overflow" (get-in frame [:params :requestId]))
                                        (identical? ch (:outgoing-ch (.-connection c))))
                               (deliver offered true))
-                            (offer ch frame))
-                          rpc/send-request
-                          (fn [conn m params & opts]
-                            (if (and (= :eof method) (= "overflow" (:request-id params)))
-                              (sender conn m params (update (first opts) :check-admission!
-                                                            (fn [check!] #(do (deliver staged true) (bounded resume)
-                                                                              (check!)))))
-                              (apply sender conn m params opts)))]
+                            (offer ch frame))]
               (doseq [i (range 2)] (permission! (str i)))
               (is (.await entered 3 java.util.concurrent.TimeUnit/SECONDS))
               (doseq [i (range 2 18)] (permission! (str i)))
@@ -1734,6 +3884,9 @@
              #'util/clj->wire (fn [v] (when (= "manual" (:request-id v)) (deliver preparing true) (bounded resume))
                                 (convert v))}
             (fn []
+              (send! {:method "session.event" :params {:sessionId "s" :event {:type "permission.completed"
+                                                                              :data {:requestId "already-settled"}}}})
+              (is (= :copilot/permission.completed (:type (bounded (future (a/<!! events))))))
               (let [responding (future (try (sdk/respond!! s :tool {:request-id "manual" :result "old"})
                                             (catch Exception e e)))]
                 (bounded preparing)
@@ -1742,6 +3895,11 @@
                                                                                        :permissionRequest {:kind "read"}}}}})
                 (let [failure (:error (bounded (future (a/<!! events))))]
                   (is (= :callback-claim-limit (:type (ex-data failure))))
+                  ;; Remove the failed registration before the prepared answer can submit.
+                  (let [closing (future (sdk/close!! s)) detach (next!)]
+                    (is (= (:method detach) "session.detach"))
+                    (reply! detach {:success true})
+                    (bounded closing))
                   (deliver resume true)
                   (is (identical? failure (bounded responding))))
                 (let [ping (sdk/ping c "fence")
@@ -1909,19 +4067,24 @@
                       closing (or closing-session (future (deliver thread (Thread/currentThread)) (sdk/close!! c)))
                       _ (when pending (reply! pending {:success true}))
                       ^Thread revoker (if pending (:read-thread conn) (bounded thread))
+                      contending? #(if-not pending (.hasQueuedThread barrier revoker)
+                                           (let [info (.getThreadInfo (java.lang.management.ManagementFactory/getThreadMXBean)
+                                                                      (.getId revoker))]
+                                             (= (some-> info .getLockInfo .getIdentityHashCode)
+                                                (System/identityHashCode (:notification-queue conn)))))
                       cancelled? (:cancelled? (bounded context))
                       until (+ (System/nanoTime) 3000000000)]
                   ;; The real ownership check has passed; neither a new pending
                   ;; entry nor an outgoing frame exists while it is suspended.
                   (loop []
-                    (when-not (or (cancelled?) (.hasQueuedThread barrier revoker) (>= (System/nanoTime) until))
+                    (when-not (or (cancelled?) (contending?) (>= (System/nanoTime) until))
                       (Thread/yield)
                       (recur)))
-                  (is (.hasQueuedThread barrier revoker))
+                  (is (contending?))
                   (is (false? (cancelled?)))
                   (deliver resume-check true)
                   (bounded offering)
-                  (is (.hasQueuedThread barrier revoker))
+                  (is (contending?))
                   (is (false? (cancelled?)))
                   (deliver resume-offer true)
                   (let [answer (next!)]
@@ -2389,6 +4552,52 @@
           (send! (token-request original-reg "refresh"))
           (is (= {:kind "cancelled"} (:result (next!)))))))))
 
+(deftest a-confirmed-rollback-releases-the-id-before-the-old-caller-finishes
+  (doseq [kind [:cloud-delete :named-detach :case-mismatch]
+          boundary (if (= kind :cloud-delete) [:ack :notice-before-ack :notice-then-refusal] [:ack])]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [open (if (= kind :case-mismatch)
+                     (future (try (sdk/resume-session!! c "Reuse" {}) (catch Exception e e)))
+                     (try-open c (merge {:git {:coauthor-enabled? false}}
+                                        (if (= kind :cloud-delete) {:cloud {}} {:session-id "reuse"}))))
+              _ (reply! (next!) {:sessionId "reuse"})
+              _ (when-not (= kind :case-mismatch) (reply! (next!) {:success false}))
+              release (next!) method (:method release)
+              parked (promise) finish (promise) seen (atom []) observed (promise)
+              releasing rpc/response-result!
+              emit! #(send! {:method "session.event" :params {:sessionId "reuse" :event {:id % :type "session.info"}}})
+              replacement (try-open c {:cloud {} :events {:on-event (fn [{:keys [id]}]
+                                                                      (swap! seen conj id)
+                                                                      (when (= id "live") (deliver observed @seen)))}})
+              create (next!)]
+          (is (= method (if (= kind :cloud-delete) "session.delete" "session.detach")))
+          (try
+            (with-redefs [rpc/response-result! (fn [m response]
+                                                 (when (= m method) (deliver parked true) (bounded finish))
+                                                 (releasing m response))]
+              (emit! "old")
+              (if (= boundary :ack)
+                (do (reply! release {:success true}) (bounded parked))
+                (send! {:method "session.lifecycle" :params {:sessionId "reuse" :type "session.deleted"}}))
+              (send! {:method "session.lifecycle" :params {:sessionId "reuse" :type "session.created"}})
+              (emit! "early")
+              (reply! create {:sessionId "reuse"})
+              (let [s (bounded replacement)]
+                (is (client/session? s) [kind boundary])
+                (when (client/session? s)
+                  (emit! "live")
+                  (is (= (bounded observed) ["early" "live"]) [kind boundary])))
+              (when-not (= boundary :ack) (reply! release {:success (= boundary :notice-before-ack) :error "refused"}))
+              (deliver finish true)
+              (let [error (bounded open)]
+                (if (= kind :case-mismatch)
+                  (is (= (:type (ex-data error)) :session-id-mismatch))
+                  (is (= (ex-message error) "Runtime rejected the session options patch")))
+                (is (= (mapv #(-> % ex-data :reason) (.getSuppressed error))
+                       (if (= boundary :notice-then-refusal) ["refused"] [])))))
+            (finally (deliver finish true))))))))
+
 (deftest rollback-deletes-only-the-acknowledged-cloud-id-and-preserves-both-errors
   (with-runtime {}
     (fn [c send! next! reply!]
@@ -2676,11 +4885,45 @@
             (send! {:method "session.lifecycle" :params {:type "created" :sessionId "ingress-fence"}})
             (is (= "ingress-fence" (:session-id (first (a/alts!! [events (a/timeout 5000)])))))
             (finally (a/close! events))))
+        (let [deleting (future (try (sdk/delete-session!! c "saved") (catch Exception e e)))]
+          (is (= (get-in (ex-data (bounded deleting)) [:error :data :code]) "session_allocation_unresolved")))
         (let [resume (future (sdk/resume-session!! c "unconfirmed" {}))
               request (next!)]
           (is (= "session.resume" (:method request)))
           (reply! request {:sessionId "unconfirmed"})
           (is (= "unconfirmed" (sdk/session-id (bounded resume)))))))))
+
+(deftest unidentified-allocation-cannot-seed-a-later-or-overlapping-cloud-open
+  (doseq [overlap? [false true]]
+    (with-runtime {}
+      (fn [c send! next! reply!]
+        (let [expire (a/chan) timer a/timeout seen (atom []) called (atom []) live (promise)
+              options {:cloud {} :permissions {:on-request (fn [_ ctx] (swap! called conj (:request-id ctx)) {:kind :no-result})}
+                       :events {:on-event #(do (swap! seen conj (:id %))
+                                               (when (= (:id %) "live") (deliver live true)))}}
+              [first-open first-frame] (with-redefs [a/timeout (fn [^long ms] (if (= ms 60000) expire (timer ms)))]
+                                         (let [op (try-open c {:cloud {}})] [op (next!)]))
+              second-open (when overlap? (try-open c options))
+              second-frame (when overlap? (next!))
+              send-old! #(send! {:method "session.event" :params {:sessionId "same" :event {:type "permission.requested"
+                                                                                            :id % :data {:requestId %
+                                                                                                         :permissionRequest {:kind "read"}}}}})]
+          (when overlap? (send-old! "before-timeout"))
+          (a/close! expire)
+          (is (= (ex-message (bounded first-open)) "Request timeout"))
+          (let [op (or second-open (try-open c options))]
+            (send-old! "late")
+            (reply! first-frame {:sessionId "same"})
+            (when second-frame (reply! second-frame {:sessionId "same"}))
+            (let [result (bounded op)]
+              (if overlap?
+                (do (is (client/session? result)) (is (= "same" (sdk/session-id result))))
+                (is (= "session_allocation_unresolved" (get-in (ex-data result) [:error :data :code]))))
+              (when (client/session? result)
+                (send! {:method "session.event" :params {:sessionId "same" :event {:id "live" :type "session.info"}}})
+                (bounded live))
+              (is (= @seen (if overlap? ["live"] [])))
+              (is (empty? @called)))))))))
 
 (deftest a-timed-out-cleanup-reserves-the-id-even-after-a-late-acknowledgement
   (with-runtime {}

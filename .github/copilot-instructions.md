@@ -183,13 +183,13 @@ clj -T:build install
 
 This project uses 4-segment versioning: `UPSTREAM.CLJ_PATCH`. The first three
 segments track the upstream SDK; the fourth is Clojure-specific. For example,
-`2.0.1.0-SNAPSHOT` is a development version targeting 2.0.1. The platform
+`2.0.3.0-SNAPSHOT` is a development version targeting 2.0.3. The platform
 runtime artifact uses the upstream SDK version, not the community version or
 the runtime engine version.
 
 ```bash
 # Keep the community version unpublished when syncing a development checkout.
-clj -T:build sync-version :upstream '"2.0.1"' :snapshot true
+clj -T:build sync-version :upstream '"2.0.3"' :snapshot true
 
 # Bump the Clojure-specific development patch.
 clj -T:build bump-version :snapshot true

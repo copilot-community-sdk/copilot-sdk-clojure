@@ -1,7 +1,7 @@
 (ns ^:no-doc github.copilot-sdk.session-options
   "Pure builders for native session open, post-open options and message requests.
-  Protocol 4, runtime 1.0.114, microsoft/copilot-sdk 2.0.1:
-  3ce61458503b6b27ebd1f674a980f4d9596d9b22, nodejs/src/{types,client,session}.ts.
+  Protocol 4, runtime 1.0.116, microsoft/copilot-sdk 2.0.3:
+  5671812ecd4ce58ee040e9a41d98da2f849c8095, nodejs/src/{types,client,session}.ts.
 
   Only declared keys are accepted. SDK keys become exact JSON strings before
   the protocol's recursive key conversion. Host metadata and schemas keep
@@ -170,7 +170,8 @@
 (def ^:private storage (choice #{:persistent :in-memory}))
 
 (def ^:private mcp-common
-  {:tools ["tools" strings] :timeout ["timeout" nonnegative]})
+  {:tools ["tools" strings] :timeout ["timeout" nonnegative]
+   :defer-tools ["deferTools" (choice #{:auto :never})]})
 
 (def ^:private stdio-server
   (object (merge mcp-common {:type ["type" (choice #{:stdio :local})] :command ["command" text]
@@ -233,7 +234,7 @@
 (def ^:private common-fields
   {:model ["model" text] :client-name ["clientName" text] :working-directory ["workingDirectory" text]
    :config-directory ["configDirectory" text] :enable-config-discovery? ["enableConfigDiscovery" bool]
-   :system-message ["systemMessage" system-message]})
+   :system-message ["systemMessage" system-message] :extension-paths ["extensionPaths" strings]})
 
 (def ^:private vision-limits
   (object {:supported-media-types ["supported_media_types" strings]

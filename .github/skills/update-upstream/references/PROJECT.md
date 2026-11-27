@@ -67,6 +67,9 @@ implementation surfaces.
 Follow referenced types through aliases and re-exports. A field on an otherwise
 stable configuration can still reference an explicitly experimental type;
 package-root re-export alone does not promote that subsystem to stable.
+Conversely, when a stable callback explicitly returns a generated union,
+compare the fields on each reachable variant at both pins, even if the
+public type alias itself did not change.
 In 2.0.1 the startup permission-mode, sandbox, and diagnostics fields are
 examples: their presence on typed create/resume options does not authorize
 exposure of their experimental backing types. Keep them separate from passive
@@ -148,6 +151,11 @@ tests and TCP benchmarks. Neither their counts nor performance results
 transfer to the in-process client. For a new release, verify classification
 and behavior using current source, source-classpath native tests, and a
 standalone consumer of the built artifact on each platform claimed.
+
+For 2.0.3, `test/resources/native_2_0_3_delta.edn` classifies the additions
+against that baseline; `native_certification_test.clj` verifies both pins.
+The absence of new client methods does not establish identical behavior:
+also compare event delivery before an owning session registers.
 
 ## Deterministic Outputs
 

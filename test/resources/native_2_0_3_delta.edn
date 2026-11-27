@@ -1,0 +1,56 @@
+{:tag "v2.0.3" :commit "5671812ecd4ce58ee040e9a41d98da2f849c8095"
+ :baseline "native_2_0_1_contracts.edn" :baseline-tag "v2.0.1"
+ :runtime "1.0.116" :protocol 4
+ :package-entrypoints #{"." "./extension" "./extension-manifest.schema.json"}
+ :event-source-blob "e94b9d50d79dd96208906599898694f977b10d12"
+ :added-node-event-variants #{SandboxStateChangedEvent SensitivityLabelObservationEvent}
+ :selected-option-id-variants #{PermissionDecisionApproveOnce PermissionDecisionApproveForSession PermissionDecisionApproved
+                                PermissionDecisionUserNotAvailable PermissionDecisionDeniedInteractivelyByUser}
+ ;; Only named type exports were added. Generated RPC declarations do not create high-level client methods.
+ :added-root-types
+ {:stable #{UserInputHandler UserInputRequest UserInputResponse UserInputImageAttachment UserInputImageAttachmentConstraints}
+  :experimental #{ExtensionSources HostPolicyPreCheckOptions HostPolicyPreCheckRequest HostPolicyPreCheckResult}
+  :language-specific #{ExactSettingsResponse SettingsResponse SettingsResponseOptions}
+  :generated-only
+  #{Account AccountHealth AccountKind AccountsGetActiveResult AccountsList AccountsListRequest AccountsLogoutRequest
+    AccountsSetCredentialsRequest AccountsSwitchActiveRequest AgentFileLocation AgentToolCategory AgentToolCategoryId
+    AgentsCreateFileRequest AgentsCreateFileResult AgentsGenerateFileContentRequest AgentsGenerateFileContentResult
+    AgentsListToolCategoriesResult AgentsValidateNameRequest AgentsValidateNameResult AuthIdentity AuthLoginAccount
+    AuthLoginAdvanceRequest AuthLoginBeginRequest AuthLoginBegun AuthLoginCancelRequest AuthLoginIdentity
+    AuthLoginIdentityList AuthLoginListRequest AuthLoginMethod AuthLoginMode AuthLoginResultDto AuthLoginResultStatus
+    AuthLoginStep AuthProviderDescriptor AuthProvidersList AuthValidationError AuthValidationErrors FetchProxyRoute
+    FetchResolveProxyRequest FetchResolveProxyResult FileLogLevel FileLogOpenRequest FileLogOperation FileLogResource
+    FileLogWriteRequest ImportDiagnostic LoginProviderKind McpSecretDeleteRequest McpSecretDeleteServerRequest
+    McpSecretSaveRequest McpSecretSaveResult McpSecretsDeleteRequest McpSecretsDeleteServerRequest McpSecretsSaveRequest
+    McpSecretsSaveResult MemoryImportCounts MemoryImportItemResult MemoryImportRequest MemoryImportResult
+    PermissionsExtensionApproval PermissionsExtensionApprovalsGrantRequest PermissionsExtensionApprovalsGrantResult
+    PermissionsExtensionApprovalsListRequest PermissionsExtensionApprovalsListResult PermissionsExtensionApprovalsRevokeRequest
+    PermissionsExtensionApprovalsRevokeResult PluginActivationStatus PluginsActivateRequest PluginsActivateResult SecretFilterFormat
+    SecretsFilterRequest SecretsFilterResult SecretsRemoveFilterValuesRequest SecretsRemoveFilterValuesResult
+    SessionAccountsLogoutResult SessionImportCounts SessionImportRequest SessionImportResult UserSettingsJsonValue}}
+ :added-option-fields
+ {SessionOptionsBase {extensionPaths :stable extensionSources :experimental}
+  MCPServerConfigBase {deferTools :stable}
+  SessionPermissionOptions {hostPolicyPreCheck :experimental}}
+ :payload-fields
+ {ToolResultObject {skipLargeOutputProcessing :stable}
+  PermissionHandlerInvocation {requestId :stable}
+  ElicitationContext {requestId :stable _meta :stable}
+  ElicitationResult {_meta :stable}
+  UserInputRequest {imageAttachmentConstraints :stable}
+  ToolInvocation {reportProgress :experimental}}
+ :behavior
+ {:create-resume "extensionPaths belongs to the owning open request. Omission and [] are distinct on the wire; either clears existing explicit entries on resume. No change to parent-extension joins (excluded)."
+  :mcp "deferTools applies to local and remote server configs, including custom-agent servers. Omit rather than invent a default."
+  :images "UserInputResponse inherits UIUserInputResponse's existing answer and wasFreeform and adds optional attachments. ElicitationParams still accepts only message/requestedSchema; negotiated metadata is separate from primitive form content."
+  :form-images "Python test_elicitation_image_metadata_survives_event_handler_and_rpc corroborates a version 1 offer with fieldNames and no size limits. The legacy question callback instead requires imageAttachmentConstraints."
+  :early-events "Compare CopilotClient.holdSessionEvent/deliverHeldSessionEvents/routeSession and CopilotSession._dispatchEvent: preserve pre-registration observations without executing already settled requests on the wrong generation."
+  :auth "The authType union widens to include account, token-provider and copilot-api-token; the existing Clojure decoder accepts extensible identifiers."
+  :permission-choices "The public PermissionRequestResult includes PermissionDecisionRequest.result. Its five listed variants accept an optional, non-null selectedOptionId; both automatic and manual replies forward the chosen option without adding attribution."
+  :permission-mode-result "CopilotSession.permissionModeResult includes the optional reason string when the runtime reports a refused mode. session-info preserves the result without exposing the experimental setter."
+  :events "The CLI wire union grows from 178 to 185 variants; Node's exported union grows from 157 to 159. Do not count wire-only prompt cache or tool-baseline events as new public operations. Optional occurredAt is distinct from the envelope timestamp."
+  :runtime "Native engine fixes and Rust panic termination ship in the upstream classifier. Node FFI bindings and protocol 4 are unchanged; no CLI transport or Java SDK dependency."
+  :mode-defaults "Node applyModeDefaults treats null or undefined like an unset member when applying mode defaults. The Clojure typed API represents unset by omission and rejects nil on non-nullable options; explicit false and empty values are not defaults."
+  :lifecycle "CopilotClient.start replacement waiters and child-process shutdown changes do not introduce a reusable Clojure client. open-client!! returns an owned active handle; a closed handle is not restarted. Resident skill provider selection during overlapping resumes is not applicable: the Clojure client rejects replacement of a live handle."
+  :excluded "Host-policy prechecks, progress reporting and extension-source overrides have experimental backing types. Settings projections and generated accounts, file logs, MCP secrets, plugin and other RPC declarations do not add stable high-level methods. The new extension manifest schema is a data asset."
+  :tests "The mirrored source tree contains no nodejs/test directory at either tag. Preserve the 2.0.1 inventory; target tests compare pinned symbols, exercise Clojure builders, callbacks, events and the released native host."}}

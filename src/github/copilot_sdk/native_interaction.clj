@@ -114,13 +114,22 @@
   (check (and f (string? (:question p))
               (or (not (contains? p :choices)) (strings? (:choices p)))
               (or (not (contains? p :allow-freeform)) (boolean? (:allow-freeform p)))
-              (or (not (contains? p :request-id)) (string? (:request-id p)))))
-  (let [req (-> (select-keys p [:question :choices :allow-freeform :request-id])
+              (or (not (contains? p :request-id)) (string? (:request-id p)))
+              (or (not (contains? p :image-attachment-constraints))
+                  (s/valid? ::specs/user-input-image-attachment-constraints (:image-attachment-constraints p)))))
+  (let [constraints (:image-attachment-constraints p)
+        req (-> (select-keys p [:question :choices :allow-freeform :request-id :image-attachment-constraints])
                 (sets/rename-keys {:allow-freeform :allow-freeform?}))
-        {:keys [answer was-freeform?] :as result} (call f req ctx)]
+        {:keys [answer was-freeform? attachments] :as result} (call f req ctx)]
     (check (and (map? result) (string? answer) (boolean? was-freeform?)
-                (every? #{:answer :was-freeform? :decision-context} (keys result))))
-    (attributed result {:answer answer :was-freeform was-freeform?})))
+                (every? #{:answer :was-freeform? :attachments :decision-context} (keys result))))
+    (when (contains? result :attachments)
+      (check (and constraints (vector? attachments) (<= (count attachments) (:max-count constraints))
+                  (or (empty? attachments) (seq answer) was-freeform?)
+                  (every? #(results/allowed-image? constraints %) attachments))))
+    (attributed result (cond-> {:answer answer :was-freeform was-freeform?}
+                         (contains? result :attachments)
+                         (assoc :attachments (mapv #(update % :type name) attachments))))))
 
 (defn- exit-plan [call f ctx p]
   (check (and (string? (:summary p)) (strings? (:actions p)) (string? (:recommended-action p))

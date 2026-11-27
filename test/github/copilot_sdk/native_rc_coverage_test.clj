@@ -101,6 +101,7 @@
                           "connect" {:protocol-version 4}
                           "session.resume" {:session-id (:session-id params) :workspace-path "/virtual/s"
                                             :capabilities {:ui {:elicitation true}}
+                                            :permission-mode-result {:success false :mode "manual" :reason "managed_policy"}
                                             :transcript-recovery {:invalid-line-numbers [5]}}
                           ("session.model.switchTo" "session.log" "session.detach" "runtime.shutdown") {:success true})})))
       (with-redefs [host/open! (fn [_] {:in <-client :out ->client :configure-ui! (constantly nil) :close! #(.close ->client)})]
@@ -118,6 +119,7 @@
               (with-open [s (sdk/resume-session!! c "s" {})]
                 (is (= (sdk/session-info s) {:session-id "s" :workspace-path "/virtual/s"
                                              :capabilities {:ui {:elicitation true}}
+                                             :permission-mode-result {:success false :mode "manual" :reason "managed_policy"}
                                              :transcript-recovery {:invalid-line-numbers [5]}}))
                 (is (nil? (sdk/await!! (sdk/set-model! s "new" {:reasoning-effort "low"
                                                                 :model-capabilities {:supports {:tool-calls? false}}}))))
