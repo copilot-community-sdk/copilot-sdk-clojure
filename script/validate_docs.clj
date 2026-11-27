@@ -198,7 +198,7 @@
 
 (defn validate-namespace-refs [file content]
   (doseq [{:keys [code start-line]} (extract-clojure-blocks content)
-          ns-ref (distinct (re-seq #"github\.copilot[-_]sdk(?:\.[\w-]+)*" code))
+          ns-ref (distinct (re-seq #"\b(?:copilot\.sdk|github\.copilot[-_]sdk)(?:\.[\w-]+)*" code))
           :when (not (source-namespaces (str/replace ns-ref "_" "-")))]
     (warn! file (format "Line %d: code references unknown SDK namespace: %s" start-line ns-ref))))
 

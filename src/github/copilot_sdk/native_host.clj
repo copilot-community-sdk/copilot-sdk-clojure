@@ -5,7 +5,7 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [github.copilot-sdk.logging :as log]
-            [github.copilot-sdk.specs :as specs]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.teardown :as teardown])
   (:import [com.sun.jna CallbackProxy Function Native NativeLibrary Platform Pointer]
            [java.io ByteArrayInputStream File InputStream IOException OutputStream UncheckedIOException]

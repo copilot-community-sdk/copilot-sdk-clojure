@@ -210,7 +210,7 @@ raw enum strings,                              kebab-case maps
 |---|---|---|---|
 | Wire (`github.copilot-sdk.generated.event-specs`) | upstream JSON Schema (auto) | ✅ yes | ❌ never |
 | Coercion (`github.copilot-sdk.generated.coerce`)   | `coercions.edn` (auto)        | ✅ yes | ❌ internal |
-| Idiom (`github.copilot-sdk.specs`)                 | hand-curated, deliberately Clojure-native | curator-reviewed | ✅ yes |
+| Idiom (`copilot.sdk.specs`)                 | hand-curated, deliberately Clojure-native | curator-reviewed | ✅ yes |
 
 ### Policy for contributors
 

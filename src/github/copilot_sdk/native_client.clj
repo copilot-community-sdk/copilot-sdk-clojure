@@ -13,7 +13,7 @@
             [github.copilot-sdk.protocol :as rpc]
             [github.copilot-sdk.reverse :as reverse]
             [github.copilot-sdk.session-options :as options]
-            [github.copilot-sdk.specs :as specs]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.teardown :as teardown]
             [github.copilot-sdk.turn :as turn]
             [github.copilot-sdk.util :as util])
@@ -329,6 +329,9 @@
      :identity (into {} (keep (fn [[k v]] (when (seq v) [(info-keys k) v]))) info)}))
 
 (defn open-client! [opts]
+  (when-not (spec/valid? ::specs/client-options opts)
+    (throw (ex-info "Expected keyword client options with :mode :empty or :coding-agent"
+                    {:type :invalid-client-options})))
   (let [{:keys [identity] host-opts :host} (client-settings opts)
         fs-config (:session-fs opts)
         fs-params (when (contains? opts :session-fs) (fs/provider-params fs-config))
@@ -1113,10 +1116,15 @@
                              uncertain-open? ownership-errors primary)
           (throw primary))))))
 
-(defn open-session! [^Client client config]
-  (scope/check! (.-connection client) :open)
+(defn- check-session-open! [^Client client operation config]
+  (when-not (client? client)
+    (throw (ex-info "Expected an SDK client" {:type :invalid-client})))
+  (scope/check! (.-connection client) operation)
   (when-not (map? config)
-    (throw (ex-info "Expected a session options map" {:path []})))
+    (throw (ex-info "Expected a session options map" {:type :invalid-session-options :path []}))))
+
+(defn open-session! [^Client client config]
+  (check-session-open! client :open config)
   (let [params (options/create-params (.-options client) config)
         id (or (:session-id config) (when-not (:cloud config) (str (UUID/randomUUID))))]
     (open-session* client "session.create" id config (cond-> params id (assoc "sessionId" id)))))
@@ -1134,7 +1142,9 @@
     resolved))
 
 (defn resume-session! [^Client client id config]
-  (scope/check! (.-connection client) :resume)
+  (check-session-open! client :resume config)
+  (when-not (spec/valid? ::specs/session-id id)
+    (throw (ex-info "Expected a nonblank session ID" {:type :invalid-session-id})))
   (let [params (options/resume-params (.-options client) id config)
         ;; Never resolve provider IDs against the host's inventory.
         canonical (if (and (abbreviated-uuid? id)
@@ -1299,17 +1309,27 @@
                    (throw (ex-info "Invalid elicitation result" {:method method})))
                  (update result :action keyword)))))
 
+(defn- check-send! [s message]
+  (when-not (session? s)
+    (throw (ex-info "Expected an SDK session" {:type :invalid-session})))
+  (when-not (spec/valid? ::specs/turn-message message)
+    (throw (ex-info "Expected a prompt string or a message map with :prompt" {:type :invalid-message}))))
+
 (defn send! [^Session s message]
-  (operation "session.send" #(:reply (submit s "session.send" (options/send-params (.-id s) message) 60000 {} true))
+  (operation "session.send" #(do (check-send! s message)
+                                 (:reply (submit s "session.send" (options/send-params (.-id s) message) 60000 {} true)))
              (fn [{:keys [message-id]}]
                (or message-id (throw (ex-info "Runtime omitted messageId" {}))))))
 
-(defn send-and-wait! [^Session s message]
-  (try
-    (live-connection s)
-    (turn/send-and-wait! (.-turns s) #(submit-turn s %1 %2)
-                         (if (string? message) {:prompt message} message))
-    (catch clojure.lang.ExceptionInfo e (a/go {:error e}))))
+(defn start-turn!
+  ([s message] (start-turn! s message nil))
+  ([^Session s message interrupted?]
+   (try
+     (check-send! s message)
+     (live-connection s)
+     (turn/start-turn! (.-turns s) #(submit-turn s %1 %2)
+                       (if (string? message) {:prompt message} message) interrupted?)
+     (catch clojure.lang.ExceptionInfo e (a/go {:error e})))))
 
 (defn abort! [^Session s]
   (operation "session.abort"
@@ -1525,19 +1545,25 @@
   (live-connection s)
   (turn/subscribe (.-turns s)))
 
-(defn await!! [result]
-  ;; Withdraw an interrupted take without cancelling the underlying operation.
-  ;; If delivery already won, return that result and preserve the interrupt.
-  (let [cancel (a/chan)
-        selected (CompletableFuture.)
-        immediate (a/do-alts #(.complete selected %) [result cancel] {:priority true})
-        [outcome] (if immediate
-                    @immediate
-                    (try (.get selected)
-                         (catch InterruptedException e
-                           (a/close! cancel)
-                           (let [[_ port :as choice] (.join selected)]
-                             (if (identical? port cancel)
-                               (throw e)
-                               (do (.interrupt (Thread/currentThread)) choice))))))]
-    (result-value outcome)))
+(defn await!!
+  ([result] (await!! result nil))
+  ([result interrupted?]
+   (let [cancel (a/chan)
+         selected (CompletableFuture.)
+         immediate (a/do-alts #(.complete selected %) [result cancel] {:priority true})
+         [outcome] (if immediate
+                     @immediate
+                     (try (.get selected)
+                          (catch InterruptedException e
+                            (if interrupted?
+                              (do
+                                ;; Fence a queued turn even if its worker is waiting for a lock.
+                                (vreset! interrupted? true)
+                                ;; An offer that already passed its check must finish before cancellation wins.
+                                (locking interrupted? (a/close! cancel)))
+                              (a/close! cancel))
+                            (let [[_ port :as choice] (.join selected)]
+                              (when (identical? port cancel) (throw e))
+                              (.interrupt (Thread/currentThread))
+                              choice))))]
+     (result-value outcome))))

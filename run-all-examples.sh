@@ -9,9 +9,6 @@ case "$(uname -s)/$(uname -m)" in
 esac
 if [[ ${1-} == --live ]]; then
   shift
-  if (( $# == 0 )); then
-    echo "Usage: $0 --live DEMO [PROMPT] (see examples/README.md)" >&2; exit 2
-  fi
   state_dir=$(mktemp -d "${TMPDIR:-/tmp}/copilot-sdk-demo.XXXXXXXX")
   trap 'rm -rf -- "$state_dir"' EXIT
   # Remove the private state only after the JVM and its native workers exit.
@@ -20,7 +17,7 @@ if [[ ${1-} == --live ]]; then
   exit
 fi
 if (( $# > 1 )); then
-  echo "Usage: $0 [EXAMPLE] or $0 --live DEMO [PROMPT] (see examples/README.md)" >&2; exit 2
+  echo "Usage: $0 [EXAMPLE] or $0 --live [DEMO [PROMPT ...]] (see examples/README.md)" >&2; exit 2
 fi
 mkdir -p target/example-work
 exec clojure -J--enable-native-access=ALL-UNNAMED -J-Dclojure.main.report=stderr "-J-Djava.io.tmpdir=$PWD/target/example-work" \

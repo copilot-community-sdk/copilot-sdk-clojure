@@ -1,4 +1,4 @@
-(ns github.copilot-sdk.specs
+(ns copilot.sdk.specs
   "Shared data contracts for the native SDK. Session option builders own
   their input shapes; generated event specs describe the runtime protocol."
   (:require [clojure.spec.alpha :as s]
@@ -7,6 +7,20 @@
 
 (s/def ::non-blank-string (s/and string? (complement str/blank?)))
 (s/def ::session-id ::non-blank-string)
+(defn- keyword-option-map? [v] (and (map? v) (every? keyword? (keys v))))
+(s/def ::client-options (s/and keyword-option-map? #(#{:empty :coding-agent} (:mode %))))
+(s/def ::conversation-config
+  (s/and map? #(= #{:client :session} (set (keys %)))
+         #(s/valid? ::client-options (:client %))
+         #(map? (:session %))))
+(s/def ::turn-message
+  (s/or :prompt string? :options (s/and keyword-option-map? #(string? (:prompt %)))))
+(s/def ::structured-message
+  (s/and keyword-option-map? #(string? (:prompt %)) #(map? (:response-schema %))))
+(s/def ::turn-timeout-ms #(and (pos-int? %) (<= % Integer/MAX_VALUE)))
+(s/def ::turn-reply
+  (s/nilable (s/and map? #(= :copilot/assistant.message (:type %))
+                    #(contains? #{nil ""} (:agent-id %)))))
 (s/def ::log-level #{:none :error :warning :info :debug :all})
 (s/def ::session-idle-timeout-seconds nat-int?)
 
@@ -103,9 +117,9 @@
 (s/def ::conventions #{"windows" "posix"})
 (s/def ::capabilities (s/map-of #{:binary :sqlite :read-file-range} boolean?))
 (s/def ::session-fs
-  (s/and (s/keys :req-un [::initial-cwd ::session-state-path ::conventions]
-                 :opt-un [::capabilities])
-         #(every? #{:initial-cwd :session-state-path :conventions :capabilities} (keys %))))
+  (s/and map? #(every? #{:initial-cwd :session-state-path :conventions :capabilities} (keys %))
+         (s/keys :req-un [::initial-cwd ::session-state-path ::conventions]
+                 :opt-un [::capabilities])))
 
 (defn- accepts-arity? [f n]
   (and (fn? f)
@@ -116,7 +130,7 @@
                  (.getDeclaredMethods (class f))))))
 
 (defn- operation-map? [required optional operations]
-  (and (map? operations)
+  (and (keyword-option-map? operations)
        (every? #(contains? operations %) (keys required))
        (every? (fn [[op f]]
                  (when-let [arity (or (required op) (optional op))]
@@ -124,7 +138,7 @@
                operations)))
 
 (s/def ::session-fs-provider
-  (s/and map?
+  (s/and keyword-option-map?
          #(operation-map? {:read-file 1 :write-file 3 :append-file 3 :exists 1 :stat 1
                            :mkdir 3 :readdir 1 :readdir-with-types 1 :rm 3 :rename 2}
                           {:read-file-bytes 1 :write-file-bytes 3 :read-file-range 3}

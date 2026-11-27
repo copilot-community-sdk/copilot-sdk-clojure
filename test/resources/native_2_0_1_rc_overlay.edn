@@ -4,12 +4,12 @@
  :catalog-git-blob "bb60246eb13a2fd87e529c1f4a3fb151ac70a203"
  :upstream "3ce61458503b6b27ebd1f674a980f4d9596d9b22"
  :reading "This is a working RC overlay on the immutable M1 inventory, not a change to it. Each catalog value, class member, field under the named owner, and callback belongs to one row. Unqualified owner names expand to the owner's catalog fields; explicit owner/member entries override only the named field. A grouped container has no independent behavior: follow its child owner (client.plugins is not session.plugins). M1 experimental/internal fields stay excluded except its explicitly mapped/partial BYOK fields. Mapped means source-traced, not verified. An evidence symbol proves only the behavior its assertions exercise."
- :symbol-prefixes {sdk github.copilot-sdk, client github.copilot-sdk.native-client, host github.copilot-sdk.native-host
+ :symbol-prefixes {sdk copilot.sdk, client github.copilot-sdk.native-client, host github.copilot-sdk.native-host
                    opts github.copilot-sdk.session-options, cb github.copilot-sdk.native-callbacks
                    result github.copilot-sdk.callback-results, rev github.copilot-sdk.reverse
                    interaction github.copilot-sdk.native-interaction, fs github.copilot-sdk.native-fs
                    creds github.copilot-sdk.credentials, discovery github.copilot-sdk.discovery
-                   turn github.copilot-sdk.turn, filter github.copilot-sdk.tool-set, util github.copilot-sdk.util, specs github.copilot-sdk.specs
+                   turn github.copilot-sdk.turn, filter copilot.sdk.tool-set, util github.copilot-sdk.util, specs copilot.sdk.specs
                    client-test github.copilot-sdk.native-client-test, public-test github.copilot-sdk-test, cloud-test github.copilot-sdk.native-cloud-test
                    host-test github.copilot-sdk.native-host-test, opts-test github.copilot-sdk.session-options-test
                    cb-test github.copilot-sdk.native-callbacks-test, rev-test github.copilot-sdk.native-reverse-test
@@ -164,7 +164,7 @@
                        cloud-test/session-callback-workers-do-not-inherit-an-openers-context
                        fs-test/old-requests-never-reach-a-replacement]
                :scope "Provider maps/factories with structured ex-data instead of Node adapter/error classes. Text/binary/range/sqlite wire tests; not a remote persistence proof."}
-  :turn {:status :mapped :local [sdk/send! sdk/send-and-wait! sdk/abort! sdk/subscribe sdk/history turn/response-outcome]
+  :turn {:status :mapped :local [sdk/send! sdk/start-turn! sdk/send-and-wait!! sdk/abort! sdk/subscribe sdk/history turn/response-outcome]
          :tests [opts-test/send-parameters-match-high-level-message-options turn-test/structured-completion-requires-content-without-tool-requests
                  discovery-test/closing-a-turn-result-withdraws-only-that-local-wait
                  turn-test/settled-turns-remove-their-own-long-deadline

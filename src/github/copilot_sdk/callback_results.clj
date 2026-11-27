@@ -4,7 +4,7 @@
   (:require [clojure.set :as set]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [github.copilot-sdk.specs :as specs]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.util :as util]))
 
 (defn- check [valid?]

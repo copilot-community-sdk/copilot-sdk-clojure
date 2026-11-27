@@ -7,13 +7,14 @@ Use the native Clojure SDK to run Copilot inside your JVM.
 | Configure a platform dependency and send a model request | [Getting started](getting-started.md) |
 | Update a CLI-based application | [Migration from 1.x](guides/native-2x.md) |
 | Choose an operation, handle errors, and release resources | [Public API](reference/API.md) |
-| Try real-model chat, structured output, hooks and tools, or run offline smoke tests | From the checkout use `./run-all-examples.sh --live basic-chat` for a signed-in model, or `./run-all-examples.sh` without an account. See `examples/README.md`. |
+| Run the demos | Use `./run-all-examples.sh --live` for the portable live suite, or `./run-all-examples.sh` for offline smoke tests. Add a demo name to run just one. See `examples/README.md`. |
 | Understand deployment and ownership | [Native runtime decision](adr/2026-11-24-native-only-runtime.md) |
+| Understand turn results and live session events | [Turn completion decision](adr/2026-11-27-turn-completion.md) |
 | Maintain event schemas or documentation | [Code generation](codegen.md), [documentation style](style.md) |
 
-`bb docs` generates the public namespace reference: `github.copilot-sdk`,
-`github.copilot-sdk.specs`, `github.copilot-sdk.instrument`, and
-`github.copilot-sdk.tool-set`. The protocol transport and generated wire
+`bb docs` generates the public namespace reference: `copilot.sdk`,
+`copilot.sdk.helpers`, `copilot.sdk.specs`, `copilot.sdk.instrument`, and
+`copilot.sdk.tool-set`. The protocol transport and generated wire
 namespaces are internal, not application APIs.
 
 The native decision defines the current scope. Earlier decisions in `doc/adr/`

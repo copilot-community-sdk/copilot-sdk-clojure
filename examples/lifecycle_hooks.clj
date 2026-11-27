@@ -1,27 +1,47 @@
 (ns lifecycle-hooks
-  "Use a prompt hook to adapt explanations for a new reader."
-  (:require [clojure.string :as str]
-            [github.copilot-sdk :as copilot]))
+  "Use native lifecycle hooks to guide a tool-free reader and observe its work."
+  (:require [basic-chat]
+            [copilot.sdk :as copilot]))
 
-(def audience-brief
-  "Explain this to a new reader. Use plain language and give one everyday example.")
+(def default-prompt "Why do bridges have expansion joints?")
+(def audience-brief "Explain this to a new reader. Use plain language and give one everyday example.")
+(def reader-brief "Give the writer a short factual explanation, not a finished article.")
 
-(defn run [client options prompt]
-  (let [calls (atom 0)
-        add-brief (fn [_input _invocation]
-                    (swap! calls inc)
-                    {:additional-context audience-brief})]
-    (printf "Reader's question (preview): %.500s%n" prompt)
-    (copilot/with-session
-      [session client (assoc options :tools {:available-tools []}
-                             :hooks {:enable-repository-hooks? false
-                                     :handlers {:on-user-prompt-submitted add-brief}})]
-      (let [reply (copilot/await!! (copilot/send-and-wait! session {:prompt prompt :timeout-ms 60000}))
-            answer (get-in reply [:data :content])]
-        (when (zero? @calls)
-          (throw (ex-info "The runtime did not invoke the prompt hook" {})))
-        (printf "Hook :on-user-prompt-submitted fired %d time(s). Added context: %s%n" @calls audience-brief)
-        (when-not (and (string? answer) (not (str/blank? answer)))
-          (throw (ex-info "The model did not return an explanation" {})))
-        (printf "Explanation (preview): %.2000s%n" answer)
-        {:answer answer :prompt-hook-calls @calls}))))
+(defn- handlers [seen]
+  (letfn [(note! [hook detail]
+            (swap! seen conj hook)
+            (locking *out* (println (str "Hook " (name hook) ": " detail)))
+            nil)]
+    {:on-session-start (fn [{:keys [source]} _] (note! :session-start source))
+     :on-session-end (fn [{:keys [reason]} _] (note! :session-end reason))
+     :on-user-prompt-submitted (fn [_ _]
+                                 (note! :prompt audience-brief)
+                                 {:additional-context audience-brief})
+     :on-pre-tool-use (fn [{:keys [tool-name]} _] (note! :pre-tool tool-name))
+     :on-post-tool-use (fn [{:keys [tool-name tool-result]} _]
+                         (note! :post-tool (str tool-name " => " (:result-type tool-result))))
+     :on-subagent-start (fn [{:keys [agent-name]} _]
+                          (note! :subagent-start agent-name)
+                          {:additional-context reader-brief})
+     :on-subagent-stop (fn [{:keys [agent-name]} _] (note! :subagent-stop agent-name))
+     :on-agent-stop (fn [{:keys [stop-reason]} _] (note! :agent-stop stop-reason))
+     :on-error-occurred (fn [{:keys [error-context error]} _]
+                          (note! :error (str error-context ": " error))
+                          {:error-handling :abort})}))
+
+(defn run [client options question]
+  (let [seen (atom #{})
+        reader {:name "reader" :description "Prepare a factual note for the writer."
+                :prompt "Give one fact that helps answer the reader's question." :tools []}
+        prompt (str "Call the reader agent once with the task tool. Use its note to answer: " question)
+        answer (copilot/with-session
+                 [session client (assoc options :tools {:available-tools ["builtin:task"]}
+                                        :agents {:included-builtin-agents [] :definitions [reader]}
+                                        :hooks {:enable-repository-hooks? false :handlers (handlers seen)})]
+                 (basic-chat/ask session prompt))]
+    ;; Detaching the session can invoke session-end. Take the snapshot after with-session.
+    (println "Hooks observed:" (sort @seen))
+    (println "Tool and subagent hooks require a tool call and delegation. On a runtime error, the error hook requests an abort.")
+    (when-not (every? @seen [:session-start :prompt :pre-tool :post-tool :subagent-start :subagent-stop :agent-stop :session-end])
+      (throw (ex-info "The turn did not complete the reader workflow" {:observed @seen})))
+    {:answer answer :hooks @seen}))

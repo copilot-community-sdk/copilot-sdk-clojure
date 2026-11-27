@@ -18,19 +18,20 @@
     (when (or (nil? jar) (seq other))
       (throw (ex-info "Build a single candidate JAR with bb jar first" {:directory (str target)})))
     (with-open [archive (JarFile. (fs/file jar))]
-      (doseq [name ["github/copilot_sdk.clj" "github/copilot_sdk/native_host.clj"
-                    "github/copilot_sdk/api_surface.edn"]]
+      (doseq [name ["copilot/sdk.clj" "copilot/sdk/helpers.clj" "github/copilot_sdk/native_host.clj"
+                    "copilot/sdk/api_surface.edn"]]
         (when-not (.getEntry archive name) (throw (ex-info "Native artifact is incomplete" {:path name}))))
-      (when (.getEntry archive "github/copilot_sdk/process.clj")
-        (throw (ex-info "Native artifact contains the CLI process transport" {}))))
+      (doseq [name ["github/copilot_sdk.clj" "github/copilot_sdk/helpers.clj" "github/copilot_sdk/process.clj"]]
+        (when (.getEntry archive name)
+          (throw (ex-info "Native artifact contains a retired entry" {:path name})))))
     (let [config (edn/read-string (slurp (fs/file root "deps.edn")))
           deps (merge {'io.github.copilot-community-sdk/copilot-sdk-clojure {:local/root (str jar)}}
                       (get-in config [:aliases (keyword classifier) :extra-deps]))
           namespaces '[github.copilot-sdk.native-offline-test github.copilot-sdk.native-fs-integration-test]
           form `(do
-                  (require 'clojure.test 'clojure.java.io 'github.copilot-sdk.native-host-test
+                  (require 'clojure.test 'clojure.java.io 'copilot.sdk.instrument 'github.copilot-sdk.native-host-test
                            ~@(map #(list 'quote %) namespaces))
-                  (assert (= "jar" (.getProtocol (clojure.java.io/resource "github/copilot_sdk.clj"))))
+                  (assert (= "jar" (.getProtocol (clojure.java.io/resource "copilot/sdk.clj"))))
                   (let [turns# (clojure.test/run-tests ~@(map #(list 'quote %) namespaces))
                         hosts# (clojure.test/run-test-var #'github.copilot-sdk.native-host-test/isolated-real-native-hosts)]
                     (shutdown-agents)
@@ -45,9 +46,14 @@
             (fs/create-dirs (fs/parent dest))
             (fs/copy (fs/path root "test" path) dest)))
         (spit (fs/file consumer "deps.edn") (pr-str {:paths ["test"] :deps deps}))
-        (let [classpath (:out (p/shell {:dir (str consumer) :out :string} "clojure" "-Srepro" "-Spath"))]
-          (when (str/includes? (str/replace classpath "\\" "/") "/com/microsoft/copilot-sdk/")
-            (throw (ex-info "Standalone consumer resolved the Copilot Java SDK" {}))))
+        (let [classpath (str/replace (:out (p/shell {:dir (str consumer) :out :string} "clojure" "-Srepro" "-Spath")) "\\" "/")
+              runtimes (filter #(str/includes? % "/com/microsoft/copilot-sdk-runtime/")
+                               (str/split (str/trim classpath) (re-pattern java.io.File/pathSeparator)))]
+          (when (str/includes? classpath "/com/microsoft/copilot-sdk/")
+            (throw (ex-info "Standalone consumer resolved the Copilot Java SDK" {})))
+          (when-not (and (= 1 (count runtimes))
+                         (str/ends-with? (first runtimes) (str "-" (subs classifier (count "native-")) ".jar")))
+            (throw (ex-info "Expected exactly one matching runtime classifier" {:classifier classifier}))))
         (if authenticated?
           (p/shell {:dir (str consumer)} "clojure" "-Srepro" "-M" "-m"
                    "github.copilot-sdk.authenticated-smoke" (str (fs/path consumer "runtime-home")))

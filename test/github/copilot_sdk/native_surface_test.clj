@@ -4,13 +4,13 @@
             [clojure.pprint :as pp]
             [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk]
-            [github.copilot-sdk.instrument]))
+            [copilot.sdk]
+            [copilot.sdk.instrument]))
 
-(def ^:private path "resources/github/copilot_sdk/api_surface.edn")
+(def ^:private path "resources/copilot/sdk/api_surface.edn")
 
 (def ^:private public-namespaces
-  '[github.copilot-sdk github.copilot-sdk.instrument github.copilot-sdk.specs github.copilot-sdk.tool-set])
+  '[copilot.sdk copilot.sdk.helpers copilot.sdk.instrument copilot.sdk.specs copilot.sdk.tool-set])
 
 (defn- surface []
   {:vars (into (sorted-map)
@@ -21,7 +21,7 @@
                  [sym (cond-> {:kind (cond macro :macro arglists :fn :else :value)}
                         arglists (assoc :arglists arglists)
                         contract (assoc :fdef (s/form contract)))]))
-   :spec-keys (sort (filter #(and (keyword? %) (= "github.copilot-sdk.specs" (namespace %)))
+   :spec-keys (sort (filter #(and (keyword? %) (= "copilot.sdk.specs" (namespace %)))
                             (keys (s/registry))))})
 
 (deftest native-public-contract

@@ -5,12 +5,12 @@
             [clojure.set :as set]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
             [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.native-host :as host]
             [github.copilot-sdk.protocol :as rpc]
             [github.copilot-sdk.session-options :as options]
-            [github.copilot-sdk.specs :as specs])
+            [copilot.sdk.specs :as specs])
   (:import [java.security MessageDigest]
            [java.time Instant]
            [java.util HexFormat]))

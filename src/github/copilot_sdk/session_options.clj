@@ -7,7 +7,10 @@
   the protocol's recursive key conversion. Host metadata and schemas keep
   their own spellings. The client owns session IDs, callback registration
   before the first RPC, event delivery and cleanup; no builder calls a handler."
-  (:require [clojure.string :as str]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
+            [copilot.sdk.specs :as specs]
+            [github.copilot-sdk.native-fs :as fs]
             [github.copilot-sdk.util :as util]))
 
 (defn- invalid! [path message]
@@ -384,6 +387,16 @@
   [client-options session-options]
   (open-params create-contract client-options session-options))
 
+(defn conversation-config [config]
+  (when-not (s/valid? ::specs/conversation-config config)
+    (throw (ex-info "Expected :client and :session option maps and an explicit client :mode"
+                    {:type :invalid-conversation-config})))
+  (let [{:keys [client session]} config]
+    (create-params client session)
+    (when (contains? client :session-fs) (fs/provider-params (:session-fs client)))
+    (fs/check-session-provider! (:session-fs client) (get-in session [:state :create-session-fs-provider])))
+  config)
+
 (defn resume-params
   "Encode initial resume options. The session ID is an argument, not an option."
   [client-options session-id session-options]
@@ -447,7 +460,8 @@
                               [:extension-id :title :captured-at])})
 
 (defn- attachment [path value]
-  (when-not (map? value) (invalid! path "expected an attachment map"))
+  (when-not (and (map? value) (every? keyword? (keys value)))
+    (invalid! path "expected an attachment map with keyword fields"))
   (let [kind (:type value)]
     (if-let [encode (get attachments-by-type kind)]
       (assoc (encode path (dissoc value :type)) "type" (if (= kind :extension-context) "extension_context" (name kind)))
@@ -456,9 +470,9 @@
 (defn- message-source [path source]
   (cond
     (#{:user :system} source) (name source)
-    (and (map? source) (= 1 (count source)) (contains? source :agent-id))
+    (and (map? source) (= [:agent-id] (keys source)))
     (str "agent-" (text (conj path :agent-id) (:agent-id source)))
-    (and (map? source) (= 1 (count source)) (contains? source :automation-id))
+    (and (map? source) (= [:automation-id] (keys source)))
     (let [at (conj path :automation-id)
           id (text at (:automation-id source))]
       (when (empty? id) (invalid! at "expected a nonempty automation ID"))
@@ -475,13 +489,21 @@
                                                  "jsonSchema" {"name" "response" "strict" true "schema" (json-object path schema)}})]}
           [:prompt]))
 
+(defn encode-message
+  "Check and encode a message without acquiring a session or invoking handlers."
+  [message-opts]
+  (try
+    (let [opts (if (string? message-opts) {:prompt message-opts} message-opts)
+          params (message-options [] opts)]
+      (when (and (= :immediate (:mode opts)) (contains? opts :response-schema))
+        (invalid! [:response-schema] "cannot request structured output on an immediate steering message"))
+      params)
+    (catch clojure.lang.ExceptionInfo e
+      (throw (ex-info (ex-message e) (assoc (select-keys (ex-data e) [:path]) :type :invalid-message))))))
+
 (defn send-params
   "Encode a prompt string or a MessageOptions map for session.send and
   session.sendAndWait. :response-schema is raw JSON Schema. Timeouts, trace
   context and typed result parsing belong to the caller, not MessageOptions."
   [session-id message-opts]
-  (let [opts (if (string? message-opts) {:prompt message-opts} message-opts)
-        params (message-options [] opts)]
-    (when (and (= :immediate (:mode opts)) (contains? opts :response-schema))
-      (invalid! [:response-schema] "cannot request structured output on an immediate steering message"))
-    (assoc params "sessionId" (identifier [:session-id] session-id))))
+  (assoc (encode-message message-opts) "sessionId" (identifier [:session-id] session-id)))

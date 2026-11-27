@@ -7,7 +7,7 @@
      wire spec  (generated, lives in event-specs)
         │
         ▼  coerce/event-wire->idiom
-     idiom spec (hand-written, lives in github.copilot-sdk.specs)
+     idiom spec (hand-written, lives in copilot.sdk.specs)
 
    The table in coercions.edn is the single source of truth for which fields
    need conversion between the upstream wire shape and the Clojure-idiomatic

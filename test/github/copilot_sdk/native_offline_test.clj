@@ -3,7 +3,8 @@
             [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
+            [copilot.sdk.helpers :as h]
             [github.copilot-sdk.native-offline-fixture :as fixture]))
 
 (defn- client-options []
@@ -16,12 +17,11 @@
    :github {:capi {:enabled? false}}})
 
 (defn- run-turn! [base-url prompt options]
-  (sdk/with-client [client (client-options)]
-    (sdk/with-session [session client (merge (session-options base-url) options)]
-      (let [event (sdk/await!! (sdk/send-and-wait! session {:prompt prompt}))]
-        (when-not (and (map? event) (map? (:data event)))
-          (throw (ex-info "Expected a Clojure event map" {:class (type event)})))
-        {:type (:type event) :content (get-in event [:data :content])}))))
+  (h/with-conversation [session {:client (client-options) :session (merge (session-options base-url) options)}]
+    (let [event (sdk/send-and-wait!! session {:prompt prompt})]
+      (when-not (and (map? event) (map? (:data event)))
+        (throw (ex-info "Expected a Clojure event map" {:class (type event)})))
+      {:type (:type event) :content (get-in event [:data :content])})))
 
 (def ^:private tool-name "fixture_lookup")
 (def ^:private tickets
@@ -79,13 +79,13 @@
     (let [[call-id ticket result] (first tickets)
           opts (session-options base-url)
           session-id (sdk/with-session [s client opts]
-                       (sdk/await!! (sdk/send-and-wait! s {:prompt prompt :timeout-ms 15000}))
+                       (sdk/send-and-wait!! s {:prompt prompt :timeout-ms 15000})
                        (sdk/session-id s))
           requested (a/promise-chan)
           opts (-> opts (assoc :tools (fixture-tools (fn [_ _] result)))
                    (assoc-in [:events :on-event] (permission-observer requested)))]
       (with-open [s (sdk/resume-session!! client session-id opts)]
-        (let [turn (sdk/send-and-wait! s {:prompt prompt :timeout-ms 15000})
+        (let [turn (sdk/start-turn! s {:prompt prompt :timeout-ms 15000})
               id (request-id!! requested turn call-id ticket)]
           {:ack (sdk/respond!! s :permission {:request-id id :result {:kind :approve-once}})
            :content (get-in (sdk/await!! turn) [:data :content])})))))
@@ -117,7 +117,7 @@
                 [sid rid waiter]
                 (sdk/with-session [s c (-> opts (assoc :permissions {:on-request (constantly {:kind :no-result})})
                                            (assoc-in [:events :on-event] (permission-observer requested)))]
-                  (let [turn (sdk/send-and-wait! s {:prompt prompt :timeout-ms 15000})]
+                  (let [turn (sdk/start-turn! s {:prompt prompt :timeout-ms 15000})]
                     [(sdk/session-id s) (request-id!! requested turn call-id ticket) turn]))]
             (check-detached-waiter! waiter sid)
             [sid rid]))

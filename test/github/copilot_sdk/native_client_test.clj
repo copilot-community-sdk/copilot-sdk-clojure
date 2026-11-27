@@ -4,7 +4,7 @@
             [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
             [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.memory-fs-fixture :as memory-fs]
             [github.copilot-sdk.native-callbacks :as callbacks]
@@ -321,25 +321,33 @@
 (deftest interrupting-await-withdraws-the-take-not-the-operation
   (let [response (a/promise-chan)
         parked (promise)
-        outcome (promise)]
+        interrupted (promise)
+        resumed (promise)
+        reply (promise)]
     (with-runtime {}
       (fn [method _] (when (= "ping" method) response))
       (fn [c _]
         (let [result (sdk/ping c)
-              observe-take (reify ap/ReadPort
-                             (take! [_ handler]
-                               (let [v (ap/take! result handler)]
-                                 (deliver parked true)
-                                 v)))
-              waiter (Thread. #(try (deliver outcome (sdk/await!! observe-take))
-                                    (catch Exception e (deliver outcome e))))]
+              observe-take (fn [signal]
+                             (reify ap/ReadPort
+                               (take! [_ handler]
+                                 (let [v (ap/take! result handler)]
+                                   (deliver signal true)
+                                   v))))
+              waiter (Thread. #(try
+                                 (try (sdk/await!! (observe-take parked))
+                                      (catch InterruptedException _
+                                        (deliver interrupted (.isInterrupted (Thread/currentThread)))))
+                                 (deliver reply (sdk/await!! (observe-take resumed)))
+                                 (catch Exception e (deliver reply e))))]
           (try
             (.start waiter)
             (bounded parked)
             (.interrupt waiter)
-            (is (instance? InterruptedException (bounded outcome)))
+            (is (false? (bounded interrupted)))
+            (bounded resumed)
             (a/put! response {:result {:message "original reply"}})
-            (is (= (bounded (future (sdk/await!! result))) {:message "original reply"}))
+            (is (= (bounded reply) {:message "original reply"}))
             (finally (a/close! response) (.interrupt waiter) (.join waiter 3000))))))))
 
 (deftest interrupted-manual-response-keeps-its-acknowledgment
@@ -621,7 +629,7 @@
       (fn [c _]
         (with-open [s (sdk/open-session!! c {:session-id "s"})]
           (let [events (sdk/subscribe s)
-                turn (sdk/send-and-wait! s "pending turn")
+                turn (sdk/start-turn! s "pending turn")
                 answer (sdk/elicit! s form)]
             (try
               (is (= (set (repeatedly 2 #(take!! entered))) #{"session.sendAndWait" "session.ui.elicitation"}))
@@ -1119,7 +1127,7 @@
                                              :events {:on-event (fn [{:keys [id]}]
                                                                   (when (= id "fence")
                                                                     (throw (ex-info "Observer failed" {}))))}})]
-          (let [op (sdk/send-and-wait! s {:prompt "json" :response-schema {:type "object"}})
+          (let [op (sdk/start-turn! s {:prompt "json" :response-schema {:type "object"}})
                 [params reply] (take!! wire)]
             (is (= (get-in params [:response-format :json-schema :schema]) {:type "object"}))
             (a/put! reply {:result {:message-id "sent" :aborted false :completion-event-id "fence"
@@ -1137,7 +1145,7 @@
                   :github {:capi {:enabled? false}}}
             id (sdk/with-session [s c (assoc opts :name "Offline prefix regression"
                                              :session-id "a1234567-fade-4123-abcd-0123456789ab")]
-                 (sdk/await!! (sdk/send-and-wait! s {:prompt prompt :timeout-ms 30000}))
+                 (sdk/send-and-wait!! s {:prompt prompt :timeout-ms 30000})
                  (sdk/session-id s))
             prefix (subs id 0 8)
             resume (fn [config]
@@ -1157,7 +1165,7 @@
             duplicate (with-open [exact (sdk/open-session!! c (assoc opts :session-id prefix))]
                         (let [result (try (with-open [_ (sdk/resume-session!! c prefix opts)] :unexpected)
                                           (catch clojure.lang.ExceptionInfo e (select-keys (ex-data e) [:type :session-id])))]
-                          (sdk/await!! (sdk/send-and-wait! exact {:prompt prompt :timeout-ms 30000}))
+                          (sdk/send-and-wait!! exact {:prompt prompt :timeout-ms 30000})
                           result))
             provider (sdk/with-client [fs {:mode :empty :base-directory (System/getenv "HOME")
                                            :github {:use-logged-in-user? false}

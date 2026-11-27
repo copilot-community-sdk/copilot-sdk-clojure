@@ -4,7 +4,7 @@
             [camel-snake-kebab.extras :as cske]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [github.copilot-sdk.specs :as specs]))
+            [copilot.sdk.specs :as specs]))
 
 (defn- convert-keys [convert unchanged value]
   (cske/transform-keys

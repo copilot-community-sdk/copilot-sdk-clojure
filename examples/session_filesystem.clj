@@ -1,5 +1,5 @@
 (ns session-filesystem
-  (:require [github.copilot-sdk :as copilot]
+  (:require [copilot.sdk :as copilot]
             [github.copilot-sdk.memory-fs-fixture :as memory-fs]))
 
 (defn run [options]

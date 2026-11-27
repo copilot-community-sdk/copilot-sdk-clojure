@@ -5,7 +5,7 @@
             [clojure.set :as sets]
             [clojure.spec.alpha :as s]
             [github.copilot-sdk.callback-results :as results]
-            [github.copilot-sdk.specs :as specs]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.util :as util])
   (:import [java.time Instant]))
 

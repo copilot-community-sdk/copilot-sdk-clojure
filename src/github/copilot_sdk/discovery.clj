@@ -8,7 +8,7 @@
             [github.copilot-sdk.interruption :as interruption]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.protocol :as rpc]
-            [github.copilot-sdk.specs :as specs])
+            [copilot.sdk.specs :as specs])
   (:import [java.util.concurrent FutureTask RejectedExecutionException SynchronousQueue
             ThreadFactory ThreadPoolExecutor TimeUnit]))
 

@@ -1,7 +1,7 @@
 (ns github.copilot-sdk.native-specs-test
   (:require [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk.specs :as specs]))
+            [copilot.sdk.specs :as specs]))
 
 (deftest opaque-json-has-exact-member-names-and-json-leaves
   (is (s/valid? ::specs/json-object {"A_b/C" [nil false 0 42N 2.5M {"nested-key" ""}]}))

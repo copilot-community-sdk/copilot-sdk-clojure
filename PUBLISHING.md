@@ -55,6 +55,9 @@ clj -T:build bump-version :snapshot true
 
 ## Coordinates
 
+The `copilot.sdk` import name does not change the community publisher.
+Microsoft supplies the separate, platform-specific native runtime artifact.
+
 | Repository | Group ID | Artifact ID |
 |------------|----------|-------------|
 | Maven Central | `io.github.copilot-community-sdk` | `copilot-sdk-clojure` |

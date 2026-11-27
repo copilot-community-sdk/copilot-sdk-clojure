@@ -1,20 +1,19 @@
 (ns session-resume
-  (:require [github.copilot-sdk :as copilot]))
+  (:require [basic-chat]
+            [clojure.string :as str]
+            [copilot.sdk :as copilot]))
 
 (defn run [client options prompt]
-  (let [id (copilot/with-session [session client options]
-             (println "You:" prompt)
-             (let [reply (copilot/await!! (copilot/send-and-wait! session {:prompt prompt :timeout-ms 60000}))]
-               (println "Assistant:" (get-in reply [:data :content])))
+  (let [code-word "PINEAPPLE"
+        id (copilot/with-session [session client (assoc options :name "Code word example")]
+             (basic-chat/ask session (str "Remember the code word " code-word ". Repeat it back."))
              (copilot/session-id session))
-        content (copilot/with-resumed-session [session client id options]
-                  (println "Resumed session:" id)
-                  (->> (copilot/await!! (copilot/history session))
-                       (filter #(= (:type %) :copilot/assistant.message))
-                       last :data :content))
-        metadata (copilot/await!! (copilot/session-metadata client id))]
-    ;; Delete only the session this example created.
+        answer (copilot/with-resumed-session [session client id (assoc options :allow-transcript-recovery? false)]
+                 (println "Resumed session:" id)
+                 (when (:transcript-recovery (copilot/session-info session))
+                   (throw (ex-info "Clean resume unexpectedly required transcript recovery" {})))
+                 (basic-chat/ask session prompt))]
     (copilot/delete-session!! client id)
-    (println "Deleted example session:" id)
-    {:content content :found? (= id (:session-id metadata))
-     :deleted? (nil? (copilot/await!! (copilot/session-metadata client id)))}))
+    (when-not (str/includes? (str/upper-case answer) code-word)
+      (throw (ex-info "The resumed session did not recall the code word" {})))
+    answer))

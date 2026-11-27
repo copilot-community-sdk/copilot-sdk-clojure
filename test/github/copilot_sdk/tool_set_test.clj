@@ -1,8 +1,8 @@
 (ns github.copilot-sdk.tool-set-test
-  "Unit tests for github.copilot-sdk.tool-set — the source-qualified tool
+  "Unit tests for copilot.sdk.tool-set — the source-qualified tool
    filter helpers introduced by upstream PR #1428."
   (:require [clojure.test :refer [deftest is testing]]
-            [github.copilot-sdk.tool-set :as tool-set]))
+            [copilot.sdk.tool-set :as tool-set]))
 
 (deftest valid-name?-tests
   (testing "alphanumeric, underscore, hyphen are valid"

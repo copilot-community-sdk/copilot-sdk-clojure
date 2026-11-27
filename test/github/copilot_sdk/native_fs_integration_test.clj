@@ -4,7 +4,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
             [github.copilot-sdk.memory-fs-fixture :as memory-fs]
             [github.copilot-sdk.native-offline-fixture :as fixture])
   (:import [java.util UUID]))

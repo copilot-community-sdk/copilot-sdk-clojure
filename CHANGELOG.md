@@ -3,6 +3,30 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (Clojure API)
+- **BREAKING**: Require `copilot.sdk` for primitives, `copilot.sdk.helpers`
+  for convenience, and `copilot.sdk.specs`, `copilot.sdk.instrument` and
+  `copilot.sdk.tool-set` for their respective APIs. There are no old-name
+  aliases. The Maven coordinate, classifier and `:copilot/...` events are unchanged.
+- Use `query!!` on an existing session or `query-once!!` with explicit client
+  and session options. `query-json!!` decodes a structured reply with string
+  keys; `decode-json` also works on text alone. `with-conversation` scopes
+  both owners; `with-subscription` scopes only session observation. See the
+  [migration guide](doc/guides/native-2x.md).
+
+### Changed (examples)
+- `./run-all-examples.sh --live` runs the portable native demos with their
+  default prompts. A name still selects one demo. Without `--live`, the
+  runner uses local fixtures and never uses a signed-in account.
+- Restored runnable 2.x examples for attachments, model selection and reasoning
+  effort, custom agents, skills, compaction, permission denial, host commands,
+  user input, forms, session metadata, and manual tool responses across resume.
+  The examples preserve independent queries, parallel research and synthesis,
+  code-word recall on resume, and pending permission and tool resolution
+  across three clients. Shell execution, interactive stdin, bring-your-own-model
+  and local MCP examples require explicit selection. The migration guide
+  explains how to run all unchanged originals with the separate 1.x SDK.
+
 ### Changed (v2.0.3 sync)
 - Target [Microsoft Copilot SDK 2.0.3](https://github.com/microsoft/copilot-sdk/releases/tag/v2.0.3)
   with native engine `1.0.116`. The wire protocol remains `4`. Use the `2.0.3`
@@ -46,10 +70,11 @@ All notable changes to this project will be documented in this file. This change
   Clojure SDK. Removed CLI spawning, stdio/TCP attachment, parent extension
   join and protocol 3. Use the previous 1.x release for those transports.
   The Clojure host calls the pinned Rust C interface through JNA.
-- **BREAKING**: `send-and-wait!` uses the runtime's request-correlated
-  completion and returns a core.async result channel. Use `await!!` at a
-  blocking boundary. Configuration is grouped by capability; supply a client
-  mode explicitly.
+- **BREAKING**: Use `send-and-wait!!` for a blocking turn or `start-turn!`
+  for a result channel. Both use the runtime's final reply to one request;
+  neither infers it from session-wide events. The former `send-and-wait!`
+  spelling is removed. `send!` still delivers only the submission ID.
+- Configuration is grouped by capability; supply a client mode explicitly.
 - Documented the [native-only 2.x architecture](doc/adr/2026-11-24-native-only-runtime.md).
   Upstream validation now recognizes the canonical `microsoft/copilot-sdk`
   repository and its pre-transfer URL without changing historical pins.
@@ -74,9 +99,7 @@ All notable changes to this project will be documented in this file. This change
   plugin directory registration, and `mcp-tool-result` for text and binary
   call results. Plugin registration is not installation; review host settings
   before configuring an exporter or content capture.
-- Exposed `github.copilot-sdk.specs/system-message-sections` for prompt
-  customization. The public Codox reference now includes only the facade,
-  specs, instrumentation, and tool-set namespaces.
+- Exposed `copilot.sdk.specs/system-message-sections` for prompt customization.
 - Added opt-in real-model demos for multi-turn chat, streaming, structured
   output, prompt hooks, scoped tools, and resume. They print prompts, model
   output, and relevant callbacks. The offline runner exercises the same
@@ -112,8 +135,9 @@ All notable changes to this project will be documented in this file. This change
   The caller can wait again on the same channel if the interrupt withdrew
   its first wait. `respond!!`, which owns its result channel, instead waits
   for the submitted answer's bounded outcome and preserves the interrupt.
-- Closing a `send-and-wait!` result frees its local wait slot and withdraws a
-  prompt still awaiting admission. It does not abort a turn already admitted.
+- Closing a `start-turn!` result frees its local wait slot. It can withdraw
+  an unsent prompt, including one still queued for the writer; it does not
+  abort a turn already sent to the runtime.
   Finished and abandoned waits no longer leave their deadline timers queued.
 - A detached session no longer sends a provider's unsent error payload.
   A timed-out system-message transform no longer returns a partial result;
@@ -246,7 +270,7 @@ All notable changes to this project will be documented in this file. This change
 - Interrupting a session prefix or trace lookup releases that lookup
   without starting the session request. An ordinary callback result still being prepared when
   graceful shutdown starts can no longer direct the runtime.
-- `send-and-wait!` does not submit a prompt whose deadline passed during
+- `start-turn!` does not submit a prompt whose deadline passed during
   preparation, lock acquisition, trace lookup, or wire conversion. After
   submission, a timeout cancels only that request ID's pending wait. It
   does not abort or resend. A trace provider cannot queue work behind its

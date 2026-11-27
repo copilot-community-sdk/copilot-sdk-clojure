@@ -18,8 +18,9 @@ The two questions share a session. The model's actual answers appear in the
 terminal. `--live` opts in to a Copilot-enabled account and may consume
 usage. Sign in with GitHub CLI (`gh auth login`) if the isolated runtime
 cannot find an account. It does not use the Copilot CLI's normal state
-directory or system keychain. Supply non-sensitive prompts. See
-`examples/README.md` in the checkout for the meeting-note, hook and custom-tool demos.
+directory or system keychain. Supply non-sensitive prompts. Use
+`./run-all-examples.sh --live` without a name to run the portable live suite
+with default prompts. See `examples/README.md` for the catalog.
 
 For a credential-free smoke test, omit `--live`: `./run-all-examples.sh basic-chat`.
 The fixture supplies a model that returns a fixed answer. The application
@@ -83,34 +84,29 @@ The endpoint receives your prompt. Use a trusted endpoint; do not send
 credentials over plain HTTP outside loopback.
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk.helpers :as h])
 
 (defn ask-local [state-dir base-url model-id prompt]
-  (copilot/with-client [client {:mode :empty
-                                :base-directory state-dir
-                                :github {:use-logged-in-user? false}}]
-    (copilot/with-session
-      [session client {:model "local/chat"
-                       :inference {:providers [{:name "local" :provider-type :openai
-                                                :base-url base-url}]
-                                   :models [{:provider "local" :id "chat"
-                                             :model-id model-id :wire-model model-id}]}
-                       :events {:streaming? true}
-                       :github {:capi {:enabled? false}}
-                       :tools {:available-tools []}}]
-      (let [reply (copilot/await!!
-                   (copilot/send-and-wait! session {:prompt prompt :timeout-ms 30000}))]
-        (get-in reply [:data :content])))))
+  (h/query-once!!
+   {:client {:mode :empty :base-directory state-dir :github {:use-logged-in-user? false}}
+    :session {:model "local/chat"
+              :inference {:providers [{:name "local" :provider-type :openai :base-url base-url}]
+                          :models [{:provider "local" :id "chat" :model-id model-id :wire-model model-id}]}
+              :github {:capi {:enabled? false}}
+              :tools {:available-tools []}}}
+   {:prompt prompt :timeout-ms 30000}))
 ```
 
 `"local/chat"` selects the local catalog entry; `:wire-model` selects the
 deployment the endpoint receives. Named provider catalogs are experimental
 upstream.
 
-`await!!` blocks a caller thread and throws if the operation failed. The
-native runtime can complete without an assistant message; in that case the
-function returns `nil`. A wait timeout does not cancel the turn or authorize
-another submission. For streaming and resumption, see the
+`query-once!!` blocks for text and closes its client and session. To keep the
+conversation, use `h/with-conversation` and `h/query!!`. For the full final
+event rather than its text, use `copilot.sdk/send-and-wait!!` on your session.
+If you need to do other work before taking the answer, use `start-turn!`
+instead; it returns a result channel. No query helper retries or aborts a
+submitted turn on timeout. For streaming and resumption, see the
 [migration guide](guides/native-2x.md).
 
 ## Use a GitHub-backed model
@@ -121,7 +117,7 @@ when called. Supply the token through your application's credential store
 and a model ID available to that account. There is no interactive sign-in:
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk :as copilot])
 
 (defn ask-github [state-dir token model-id prompt]
   (when-not (seq token)
@@ -130,7 +126,7 @@ and a model ID available to that account. There is no interactive sign-in:
                                 :github {:use-logged-in-user? false}}]
     (copilot/with-session [session client {:model model-id :github {:token token}
                                            :tools {:available-tools []}}]
-      (get-in (copilot/await!! (copilot/send-and-wait! session {:prompt prompt :timeout-ms 30000}))
+      (get-in (copilot/send-and-wait!! session {:prompt prompt :timeout-ms 30000})
               [:data :content]))))
 ```
 

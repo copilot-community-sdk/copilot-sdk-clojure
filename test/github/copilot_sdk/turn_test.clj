@@ -2,7 +2,7 @@
   (:require [clojure.core.async :as a]
             [clojure.core.async.impl.protocols :as p]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
             [github.copilot-sdk.turn :as turn])
   (:import [clojure.lang ExceptionInfo]))
 
@@ -47,8 +47,8 @@
   (let [state (turn/new-state)
         early (native-result "early")
         late (native-result "late")
-        late-op (turn/send-and-wait! state (fn [_ _] (wire-reply {:result late})) {})
-        early-op (turn/send-and-wait!
+        late-op (turn/start-turn! state (fn [_ _] (wire-reply {:result late})) {})
+        early-op (turn/start-turn!
                   state (fn [opts _]
                           (is (= {:prompt "hello"} opts))
                           (publish-idle! state "early")
@@ -66,7 +66,7 @@
   (let [state (turn/new-state)
         error {:code -32001 :message "Provider error"
                :data {:completionEventId "failure" :VendorKey [1 2]}}
-        op (turn/send-and-wait! state (fn [_ _] (wire-reply {:error error})) {})]
+        op (turn/start-turn! state (fn [_ _] (wire-reply {:error error})) {})]
     (until-draining state "failure")
     (turn/publish! state {:id "failure" :type :copilot/session.error :data {:message "event error"}})
     (let [e (:error (one op))]
@@ -77,13 +77,13 @@
 (deftest local-admission-failure-is-not-a-wire-error
   (let [state (turn/new-state)
         cause (ex-info "Session closed before enqueue" {:type :session-closed})
-        op (turn/send-and-wait! state (fn [_ _] (wire-reply cause)) {})]
+        op (turn/start-turn! state (fn [_ _] (wire-reply cause)) {})]
     (is (identical? cause (:error (one op))))))
 
 (deftest native-completion-shapes
   (let [state (turn/new-state)
         base {:message-id "quiet" :aborted false}
-        run (fn [r] (one (turn/send-and-wait! state (fn [_ _] (wire-reply {:result r})) {})))]
+        run (fn [r] (one (turn/start-turn! state (fn [_ _] (wire-reply {:result r})) {})))]
     (is (= {:ok nil} (run base)))
     (doseq [r [(assoc base :aborted true)
                (assoc base :response {:type "user.message"})
@@ -91,16 +91,19 @@
                (assoc base :response nil)
                nil]]
       (is (instance? ExceptionInfo (:error (run r)))))
+    (let [error (:error (run (assoc base :response {:type "assistant.message" :agent-id "child"
+                                                    :data {:content "private model text"}})))]
+      (is (= (ex-data error) {:type :invalid-completion})))
     (is (= :invalid-timeout
-           (-> (turn/send-and-wait! state (fn [_ _] (throw (AssertionError. "unexpected send")))
-                                    {:timeout-ms nil})
+           (-> (turn/start-turn! state (fn [_ _] (throw (AssertionError. "unexpected send")))
+                                 {:timeout-ms nil})
                one :error ex-data :type)))))
 
 (deftest structured-completion-requires-content-without-tool-requests
   (let [state (turn/new-state)
         base {:message-id "structured" :aborted false}
         completed (fn [response]
-                    (one (turn/send-and-wait!
+                    (one (turn/start-turn!
                           state (fn [_ _] (wire-reply {:result (cond-> base response (assoc :response response))}))
                           {:response-schema {:type "object"}})))
         assistant (fn [data] {:type "assistant.message" :data data})]
@@ -120,10 +123,10 @@
   (let [state (turn/new-state)
         rpc (a/chan 1)
         stale (native-result "old")]
-    (let [op (turn/send-and-wait! state (constantly (request rpc)) {:timeout-ms 20})]
+    (let [op (turn/start-turn! state (constantly (request rpc)) {:timeout-ms 20})]
       (is (= :turn-timeout (-> op one :error ex-data :type)))
       (is (p/closed? rpc)))
-    (let [op (turn/send-and-wait! state (fn [_ _] (wire-reply {:result (native-result "new")})) {})]
+    (let [op (turn/start-turn! state (fn [_ _] (wire-reply {:result (native-result "new")})) {})]
       (until-draining state "new")
       (a/offer! rpc {:result stale})
       (a/close! rpc)
@@ -136,7 +139,7 @@
         queue (.getQueue ^java.util.concurrent.ScheduledThreadPoolExecutor @#'turn/deadline-worker)
         entries #(set (.toArray queue))
         before (entries)
-        start #(turn/send-and-wait! state % {:timeout-ms 1800000})
+        start #(turn/start-turn! state % {:timeout-ms 1800000})
         outstanding (start (constantly (request (a/chan))))
         active (entries)]
     (try
@@ -152,8 +155,8 @@
   (let [state (turn/new-state)
         s (turn/subscribe state)
         rpc (a/chan)
-        pending (turn/send-and-wait! state (constantly (request rpc)) {})
-        drain (turn/send-and-wait! state (fn [_ _] (wire-reply {:result (native-result "wait")})) {})
+        pending (turn/start-turn! state (constantly (request rpc)) {})
+        drain (turn/start-turn! state (fn [_ _] (wire-reply {:result (native-result "wait")})) {})
         cause (ex-info "Disconnected" {:type :disconnected})]
     (until-draining state "wait")
     (dotimes [i 64] (turn/publish! state {:index i}))
@@ -161,7 +164,7 @@
     (turn/close! state (Exception. "redundant close"))
     (is (= (mapv #(hash-map :index %) (range 64)) (vec (repeatedly 64 #(take-bounded s)))))
     (doseq [ch [pending drain s (turn/subscribe state)
-                (turn/send-and-wait! state (fn [_ _] (throw (AssertionError. "unexpected send"))) {})]]
+                (turn/start-turn! state (fn [_ _] (throw (AssertionError. "unexpected send"))) {})]]
       (is (identical? cause (:error (one ch)))))
     (is (p/closed? rpc))))
 
@@ -188,16 +191,16 @@
 (deftest pre-response-completion-history-is-bounded
   (let [state (turn/new-state)
         rpc (a/chan)
-        op (turn/send-and-wait! state
-                                (fn [_ _]
-                                  (dotimes [i 65] (publish-idle! state (str i)))
-                                  (request rpc))
-                                {})]
+        op (turn/start-turn! state
+                             (fn [_ _]
+                               (dotimes [i 65] (publish-idle! state (str i)))
+                               (request rpc))
+                             {})]
     (is (= :completion-overflow (-> op one :error ex-data :type)))
     (is (p/closed? rpc))
     (is (= {:ok nil}
-           (one (turn/send-and-wait! state (fn [_ _] (wire-reply {:result {:message-id "other"
-                                                                           :aborted false}})) {}))))))
+           (one (turn/start-turn! state (fn [_ _] (wire-reply {:result {:message-id "other"
+                                                                        :aborted false}})) {}))))))
 
 (defn- blocking-read [read! ch]
   (let [parked (promise)
@@ -216,7 +219,7 @@
         gate (promise)
         quiet (turn/new-state)
         rpc (a/chan 1)
-        op (turn/send-and-wait! quiet (constantly (request rpc)) {})
+        op (turn/start-turn! quiet (constantly (request rpc)) {})
         done (blocking-read sdk/await!! op)
         closed (blocking-read a/<!! (turn/subscribe quiet))
         cause (ex-info "Detached" {})]
@@ -240,10 +243,10 @@
         trace (atom [])
         submit (fn [opts _] (swap! trace conj [(:prompt opts) (Thread/currentThread)]) (request (a/chan)))
         closed (ex-info "Closed after enqueue" {})
-        op (turn/send-and-wait! state submit {:prompt :turn})]
+        op (turn/start-turn! state submit {:prompt :turn})]
     (swap! trace conj [:abort caller])
     (turn/close! state closed)
-    (let [late (turn/send-and-wait! state submit {:prompt :late})]
+    (let [late (turn/start-turn! state submit {:prompt :late})]
       (is (= [[:turn caller] [:abort caller]] @trace))
       (is (identical? closed (:error (one op))))
       (is (identical? closed (:error (one late)))))))
@@ -254,12 +257,12 @@
         release (promise)
         rpc (a/chan)
         cause (ex-info "Session detached" {})
-        op (future (turn/send-and-wait! state
-                                        (fn [_ _] (deliver entered true)
-                                          (when-not (deref release 3000 false)
-                                            (throw (ex-info "Blocked waiting for client lock" {})))
-                                          (request rpc))
-                                        {}))]
+        op (future (turn/start-turn! state
+                                     (fn [_ _] (deliver entered true)
+                                       (when-not (deref release 3000 false)
+                                         (throw (ex-info "Blocked waiting for client lock" {})))
+                                       (request rpc))
+                                     {}))]
     (try
       (is (true? (deref entered 3000 false)))
       (turn/close! state cause)
@@ -286,7 +289,7 @@
           rpc (a/chan 1)
           id "matched"
           event {:id id :type :copilot/session.idle}
-          op (turn/send-and-wait! state (constantly (request rpc)) {})]
+          op (turn/start-turn! state (constantly (request rpc)) {})]
       (when event-first? (turn/publish! state event receipt))
       (a/offer! rpc {:result (native-result id)})
       (when-not event-first?
@@ -310,7 +313,7 @@
                   {:error {:code -32000 :message "Runtime error" :data {:completionEventId id}}}
                   {:result (native-result id)})
           op (with-redefs [turn/start-deadline (fn [_] [deadline (constantly nil)])]
-               (turn/send-and-wait! state (fn [_ _] (wire-reply reply)) {}))]
+               (turn/start-turn! state (fn [_ _] (wire-reply reply)) {}))]
       (until-draining state id)
       (turn/publish! state {:type :copilot/session.error :id id} receipt)
       (is (true? (deref waiting 3000 false)))

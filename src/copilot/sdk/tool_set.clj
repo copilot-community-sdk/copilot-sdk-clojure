@@ -1,4 +1,4 @@
-(ns github.copilot-sdk.tool-set
+(ns copilot.sdk.tool-set
   "Helpers for building source-qualified tool filter patterns used by
    `:available-tools` and `:excluded-tools` under `:tools` in session options.
 

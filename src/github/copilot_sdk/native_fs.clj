@@ -3,7 +3,7 @@
   microsoft/copilot-sdk@5671812ecd4ce58ee040e9a41d98da2f849c8095,
   nodejs/src/sessionFsProvider.ts and client.ts. No operation uses host files."
   (:require [clojure.spec.alpha :as s]
-            [github.copilot-sdk.specs :as specs]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.util :as util])
   (:import [java.nio.file NoSuchFileException]
            [java.time Instant]
@@ -37,6 +37,15 @@
           :when (get caps cap) op ops :when (not (get p op))]
     (throw (ex-info "Provider does not implement the declared SessionFs capability" {:capability cap :missing op})))
   p)
+
+(defn check-session-provider!
+  "Check the pair and any static provider before opening. A factory needs a live session."
+  [fs-config source]
+  (when-not (= (some? fs-config) (some? source))
+    (throw (ex-info "Configure a filesystem on the client and a provider on each session"
+                    {:path [:state :create-session-fs-provider]})))
+  (when (and (some? source) (not (fn? source)))
+    (validate-provider (:capabilities fs-config) source)))
 
 (defn- expect [pred value message]
   (if (pred value) value (throw (ex-info message {}))))
@@ -160,4 +169,4 @@
     (catch InterruptedException e (throw e))
     (catch Exception e (failure op e))))
 
-(s/fdef provider-params :args (s/cat :config ::specs/session-fs) :ret map?)
+(s/fdef provider-params :args (s/cat :config any?) :ret map?)

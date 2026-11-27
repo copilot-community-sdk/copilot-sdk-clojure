@@ -2,7 +2,7 @@
   (:require [clojure.core.async :as a]
             [clojure.data.json :as json]
             [clojure.test :refer [deftest is]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
             [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.memory-fs-fixture :as memory-fs]
             [github.copilot-sdk.native-callbacks :as callbacks]
@@ -740,7 +740,7 @@
       (let [opening (try-open c {:session-id "s"})
             _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
             s (bounded opening) events (sdk/subscribe s)
-            turn (sdk/send-and-wait! s "pending") request (next!)
+            turn (sdk/start-turn! s "pending") request (next!)
             form (sdk/elicit! s {:message "Continue?" :requested-schema {:type "object"}})
             _ (is (= (:method (next!)) "session.ui.elicitation"))
             _ (send! {:method "session.event" :params {:sessionId "s" :event {:type "session.idle" :id "idle"}}})
@@ -775,7 +775,7 @@
       (let [observed (promise) at-claim (promise) resume (promise) fail @#'callbacks/fail-session!
             open (try-open c {:session-id "s" :events {:on-event #(deliver observed (:id %))}})
             _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
-            s (bounded open) stream (sdk/subscribe s) pending (sdk/send-and-wait! s "pending") _ (next!)
+            s (bounded open) stream (sdk/subscribe s) pending (sdk/start-turn! s "pending") _ (next!)
             form (sdk/elicit! s {:message "m" :requested-schema {:type "object"}}) _ (next!)]
         (try
           (with-redefs [callbacks/claim-limit 0
@@ -802,7 +802,7 @@
               s (bounded open) events (sdk/subscribe s) cause (ex-info "Timed out" {:type :decision-admission-timeout})]
           (reset! trace #(do (deliver started true) headers))
           (try
-            (let [turn (sdk/send-and-wait! s "traced") _ (bounded started)
+            (let [turn (sdk/start-turn! s "traced") _ (bounded started)
                   form (sdk/elicit! s {:message "Continue?" :requested-schema {:type "object"}})
                   close (future (sdk/close!! s)) detach (next!)]
               (is (= (:method detach) "session.detach"))
@@ -826,7 +826,7 @@
   (with-runtime {}
     (fn [c send! next! reply!]
       (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"}) s (bounded opening)
-            stream (sdk/subscribe s) turn (sdk/send-and-wait! s "go") request (next!)
+            stream (sdk/subscribe s) turn (sdk/start-turn! s "go") request (next!)
             emit! #(send! {:method "session.event" :params {:sessionId "s" :event %}})]
         (emit! {:id "idle" :type "session.idle"})
         (is (= (:id (bounded (future (a/<!! stream)))) "idle"))
@@ -850,7 +850,7 @@
       (fn [c send! next! reply!]
         (let [opening (try-open c {:session-id "s"}) _ (reply! (next!) {:sessionId "s"})
               s (bounded opening) events (sdk/subscribe s)
-              turn (sdk/send-and-wait! s "go") request (next!)
+              turn (sdk/start-turn! s "go") request (next!)
               idle! #(send! {:method "session.event" :params {:sessionId "s" :event {:id "idle" :type "session.idle"}}})
               closing
               (locking (.-lifecycle c)
@@ -886,7 +886,7 @@
                                                                      (swap! events conj id)
                                                                      (when (= id "idle") (deliver entered true) (bounded resume)))}})
               _ (reply! (next!) {:sessionId "s"}) s (bounded open) stream (sdk/subscribe s)
-              turn (sdk/send-and-wait! s "pending") request (next!)
+              turn (sdk/start-turn! s "pending") request (next!)
               emit! (fn [id type] (send! {:method "session.event" :params {:sessionId "s" :event {:id id :type type}}}))]
           (try
             (emit! "idle" "session.idle")
@@ -957,7 +957,7 @@
             _ (reply! (next!) {:sessionId "s" :capabilities {:ui {:elicitation true}}})
             s (bounded opening) events (sdk/subscribe s) turns (.-turns s)
             form (sdk/elicit! s {:message "pending" :requested-schema {:type "object"}}) _ (next!)
-            turn (sdk/send-and-wait! s "go") request (next!)
+            turn (sdk/start-turn! s "go") request (next!)
             withdraw rpc/withdraw-requests! write! @#'rpc/write-message! close-turns turn/close!]
         (try
           (send! {:method "session.event" :params {:sessionId "s" :event {:id "idle" :type "session.idle"}}})
@@ -1007,7 +1007,7 @@
           (reset! trace #(do (deliver entered true) (try @headers (catch InterruptedException _ (deliver stopped true) {}))))
           (try
             (let [turn (with-redefs [turn/start-deadline (fn [_] [deadline (constantly nil)])]
-                         (sdk/send-and-wait! s "not submitted"))
+                         (sdk/start-turn! s "not submitted"))
                   _ (bounded entered) read (sdk/history s)
                   deleting (future (sdk/delete-session!! c "s")) listing (next!)
                   _ (reply! listing {:sessions [{:sessionId "s"}]}) request (next!)]
@@ -1061,7 +1061,7 @@
               s (bounded opening) stream (sdk/subscribe s)]
           (reset! trace #(do (deliver entered true) headers))
           (try
-            (let [turn (sdk/send-and-wait! s "traced") _ (bounded entered)
+            (let [turn (sdk/start-turn! s "traced") _ (bounded entered)
                   form (sdk/elicit! s {:message "queued" :requested-schema {:type "object"}})
                   failures (locking (.-lifecycle c)
                              (when close-before-publication?
@@ -1081,7 +1081,7 @@
                 (if close-before-publication?
                   (is (= [(ex-data e) (ex-message e)] [(ex-data closed) (ex-message closed)]))
                   (is (identical? e closed))))
-              (is (= (-> (bounded (future (a/<!! (sdk/send-and-wait! s "new")))) :error ex-data :type) :session-closed))
+              (is (= (-> (bounded (future (a/<!! (sdk/start-turn! s "new")))) :error ex-data :type) :session-closed))
               (is (= (try (sdk/subscribe s) (catch Exception e (-> e ex-data :type))) :session-closed)))
             (finally (a/close! headers) (a/close! stream))))))))
 
@@ -1099,7 +1099,7 @@
               (fn []
                 (let [calling (future (if (= kind :form)
                                         (sdk/elicit! s {:message "m" :requested-schema {:type "object"}})
-                                        (sdk/send-and-wait! s "t")))]
+                                        (sdk/start-turn! s "t")))]
                   (bounded preparing)
                   (let [cause (ex-info "Callback failure" {:type :callback-overflow})]
                     (callbacks/fail! (.-callbacks c) (.-registration s) cause)
@@ -1557,7 +1557,7 @@
         (try
           (with-redefs [turn/match-completion! (fn [& args] (deliver matching true) (bounded publish-result) (apply match! args))
                         reverse/retire-generation! (fn [& args] (deliver taken true) (bounded resume) (apply retire args))]
-            (let [result (sdk/send-and-wait! s "confirmed") send-rpc (next!)
+            (let [result (sdk/start-turn! s "confirmed") send-rpc (next!)
                   _ (send! {:method "session.event" :params {:sessionId id :event {:id "idle" :type "session.idle"}}})
                   _ (reply! send-rpc {:messageId "m" :aborted false :completionEventId "idle"
                                       :response {:type "assistant.message" :data {:content "done"}}})
@@ -2551,7 +2551,7 @@
               (send! {:id "reader-fence" :method "unknown" :params {}})
               (is (= (:id (next!)) "reader-fence"))
               (let [stream (sdk/subscribe s)
-                    turn (sdk/send-and-wait! s "next")
+                    turn (sdk/start-turn! s "next")
                     request (next!)]
                 (idle! "current")
                 (marker! "drained")
@@ -2572,7 +2572,7 @@
     (fn [c send! next! reply!]
       (let [seen (atom []) open (try-open c {:session-id "s" :events {:on-event #(swap! seen conj (:id %))}})
             _ (reply! (next!) {:sessionId "s"}) s (bounded open)
-            turn (sdk/send-and-wait! s "pending") request (next!)
+            turn (sdk/start-turn! s "pending") request (next!)
             lifecycle (sdk/lifecycle-events c) retired (promise) resume (promise) retire @#'client/retire-session!]
         (try
           (with-redefs [client/retire-session! (fn [& args] (deliver retired true) (bounded resume) (apply retire args))]
@@ -2606,7 +2606,7 @@
               stream (sdk/subscribe s)
               deadline (a/chan)
               turn (with-redefs [turn/start-deadline (fn [_] [deadline (constantly nil)])]
-                     (sdk/send-and-wait! s {:prompt "hello" :timeout-ms 5000}))
+                     (sdk/start-turn! s {:prompt "hello" :timeout-ms 5000}))
               request (next!)
               event! #(send! {:method "session.event" :params {:sessionId "s" :event {:type "session.idle" :id "last"}}})
               result! #(reply! request {:aborted false :messageId "m" :completionEventId "last"
@@ -2644,7 +2644,7 @@
         (let [seen (atom []) opening (try-open c (cond-> {:session-id "s"}
                                                    observe? (assoc :events {:on-event #(swap! seen conj (:id %))})))
               _ (reply! (next!) {:sessionId "s"}) s (bounded opening) stream (sdk/subscribe s)
-              turn (sdk/send-and-wait! s "go") request (next!)
+              turn (sdk/start-turn! s "go") request (next!)
               releasing (when method
                           (future (try (if (= method "session.detach") (sdk/close!! s) (sdk/delete-session!! c "s"))
                                        (catch Exception e e))))]
@@ -2758,6 +2758,30 @@
               (is (= (bounded stopped) :interrupted)))
             (finally (deliver hold :finished) (a/close! deadline) (a/close! life))))))))
 
+(deftest interrupting-a-blocking-turn-releases-only-its-own-admitted-wait
+  (with-runtime {}
+    (fn [c _ next! reply!]
+      (let [opening (try-open c {:session-id "notes"})
+            _ (reply! (next!) {:sessionId "notes"})
+            s (bounded opening)
+            other (sdk/start-turn! s "other")
+            first-request (next!)
+            caller (promise)
+            waiting (future
+                      (deliver caller (Thread/currentThread))
+                      (try (sdk/send-and-wait!! s "interrupted")
+                           (catch InterruptedException _ :interrupted)))
+            second-request (next!)]
+        (.interrupt ^Thread (bounded caller))
+        (is (= (bounded waiting) :interrupted))
+        (is (= (mapv (juxt :method #(get-in % [:params :prompt])) [first-request second-request])
+               [["session.sendAndWait" "other"] ["session.sendAndWait" "interrupted"]]))
+        (let [cancel (next!)]
+          (is (= [(:method cancel) (get-in cancel [:params :id])] ["$/cancelRequest" (:id second-request)])))
+        (reply! first-request {:messageId "other" :aborted false
+                               :response {:type "assistant.message" :data {:content "still running"}}})
+        (is (= (get-in (sdk/await!! other) [:data :content]) "still running"))))))
+
 (deftest a-turn-started-by-its-observer-can-complete-before-its-follow-up-is-observed
   (with-runtime {}
     (fn [c send! next! reply!]
@@ -2766,12 +2790,12 @@
             observer (fn [{:keys [id]}]
                        (a/offer! seen id)
                        (when (compare-and-set! first? true false)
-                         (deliver nested (a/<!! (sdk/send-and-wait! @handle {:prompt "inner" :timeout-ms 1500})))))
+                         (deliver nested (sdk/send-and-wait!! @handle {:prompt "inner" :timeout-ms 1500}))))
             opening (try-open c {:session-id "notes" :events {:on-event observer}})
             _ (reply! (next!) {:sessionId "notes"})
             session (bounded opening)
             _ (deliver handle session)
-            outer (sdk/send-and-wait! session "outer")
+            outer (sdk/start-turn! session "outer")
             finish! (fn [request id]
                       (is (= [(:method request) (get-in request [:params :prompt])] ["session.sendAndWait" id]))
                       (send! {:method "session.event" :params {:sessionId "notes" :event {:type "session.idle" :id id}}})
@@ -2779,7 +2803,7 @@
                                        :response {:type "assistant.message" :data {:content id}}}))]
         (finish! (next!) "outer")
         (finish! (next!) "inner")
-        (is (= (get-in (bounded nested) [:ok :data :content]) "inner"))
+        (is (= (get-in (bounded nested) [:data :content]) "inner"))
         (is (= (get-in (sdk/await!! outer) [:data :content]) "outer"))
         (is (= (mapv (fn [_] (bounded (future (a/<!! seen)))) (range 2)) ["outer" "inner"]))))))
 
@@ -2789,7 +2813,7 @@
       (let [handle (promise) finished (promise) observed (promise)
             observe (fn [{:keys [id]}]
                       (case id
-                        "early" (deliver finished (a/<!! (sdk/send-and-wait! (bounded handle) "next")))
+                        "early" (deliver finished (a/<!! (sdk/start-turn! (bounded handle) "next")))
                         "done" (deliver observed true)
                         nil))
             opening (try-open c {:cloud {} :events {:on-event observe}})
@@ -3580,7 +3604,7 @@
               s (bounded opening)
               form (sdk/elicit! s {:message "Fixture?" :requested-schema {:type "object"}})
               ask (next!)
-              turn (sdk/send-and-wait! s "pending") request (next!)
+              turn (sdk/start-turn! s "pending") request (next!)
               _ (send! {:method "session.event" :params {:sessionId "notes" :event {:type "session.idle" :id "idle"}}})
               _ (reply! request {:messageId "m" :aborted false :completionEventId "idle"})
               _ (bounded entered)

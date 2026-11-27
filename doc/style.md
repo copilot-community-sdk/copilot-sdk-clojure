@@ -38,7 +38,7 @@ Short paragraphs (1–3 sentences). Use code blocks liberally.
 - Use `;; prints:` comments for output
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk :as copilot])
 
 (defn runtime-version [client]
   (:version (copilot/await!! (copilot/status client))))
@@ -46,7 +46,8 @@ Short paragraphs (1–3 sentences). Use code blocks liberally.
 
 ### Conventions
 
-- Use `copilot` as the alias for `github.copilot-sdk`
+- Use `copilot` as the alias for `copilot.sdk`
+- Use `h` as the alias for `copilot.sdk.helpers`
 - Prefer `def` over `let` in top-level examples for clarity
 - Use `with-client` and `with-session` for resources the example creates;
   close subscriptions with `clojure.core.async/close!`

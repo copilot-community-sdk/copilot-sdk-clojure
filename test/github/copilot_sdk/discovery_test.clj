@@ -2,13 +2,14 @@
   (:require [clojure.core.async :as a]
             [clojure.core.async.impl.protocols :as ap]
             [clojure.test :refer [deftest is testing]]
-            [github.copilot-sdk :as sdk]
+            [copilot.sdk :as sdk]
             [github.copilot-sdk.callback-scope :as scope]
             [github.copilot-sdk.discovery :as discovery]
             [github.copilot-sdk.framed-peer :as peer]
             [github.copilot-sdk.native-client :as client]
             [github.copilot-sdk.native-host :as host]
             [github.copilot-sdk.protocol :as rpc]
+            [github.copilot-sdk.session-options :as options]
             [github.copilot-sdk.turn :as turn]
             [github.copilot-sdk.util :as util])
   (:import [java.io EOFException PipedInputStream PipedOutputStream]
@@ -370,8 +371,8 @@
                                                                   (if (= ms 43210)
                                                                     (do (deliver armed true) [alarm (constantly nil)])
                                                                     (start! ms)))]
-                                (client/send-and-wait! s {:prompt "hold" :timeout-ms 43210})))
-                    healthy (future (client/send-and-wait! s "healthy"))]
+                                (client/start-turn! s {:prompt "hold" :timeout-ms 43210})))
+                    healthy (future (client/start-turn! s "healthy"))]
                 (is (true? (deref armed 3000 false)))
                 (a/close! alarm)
                 [expired healthy]))]
@@ -390,8 +391,8 @@
             timeout-ms 100
             expired (with-redefs [turn/start-deadline (fn [_] [delayed-alarm (constantly nil)])]
                       (binding [*parent* #(do (deliver entered true) gate)]
-                        (client/send-and-wait! s {:prompt "expired" :timeout-ms timeout-ms})))
-            healthy (client/send-and-wait! s "healthy")]
+                        (client/start-turn! s {:prompt "expired" :timeout-ms timeout-ms})))
+            healthy (client/start-turn! s "healthy")]
         (try
           (is (true? (deref entered 3000 false)))
           ;; Release trace only after the admission budget, without notifying the waiter.
@@ -407,7 +408,7 @@
 (deftest traced-requests-admit-before-return-without-waiting-for-a-reply
   (with-traced-peer
     (fn [c s gate frames]
-      (let [one (binding [*parent* :gated] (client/send-and-wait! s "first"))
+      (let [one (binding [*parent* :gated] (client/start-turn! s "first"))
             two (binding [*parent* "two"] (client/send! s "second"))
             abort (client/abort! s)
             history (client/history s false)]
@@ -474,7 +475,7 @@
 
 (defn- turn-with-deadline [s prompt deadline]
   (with-redefs [turn/start-deadline (fn [_] [deadline (constantly nil)])]
-    (client/send-and-wait! s {:prompt prompt :timeout-ms 43210})))
+    (client/start-turn! s {:prompt prompt :timeout-ms 43210})))
 
 (deftest turn-expiring-during-wire-preparation-never-reaches-the-peer
   (doseq [trace? [false true]]
@@ -489,7 +490,7 @@
                                              (a/close! deadline))
                                            (convert params))]
               (let [expired (turn-with-deadline s "hold" deadline)
-                    healthy (client/send-and-wait! s "healthy")]
+                    healthy (client/start-turn! s "healthy")]
                 (is (= (-> expired outcome :error ex-data) {:type :turn-timeout :timeout-ms 43210}))
                 (is (= (outcome healthy) {:ok nil}))
                 (client/await!! (client/ping c "barrier"))
@@ -503,7 +504,7 @@
             skipped (binding [*parent* :gated] (turn-with-deadline s "skipped" d1))
             d2 (a/chan)
             timed (turn-with-deadline s "hold" d2)
-            closed (client/send-and-wait! s "hold")
+            closed (client/start-turn! s "hold")
             barrier (client/abort! s)
             pending #(set (keys (get-in @(:state-atom (.-connection c)) [:connection :pending-requests])))]
         (a/close! d1)
@@ -532,22 +533,117 @@
 (deftest closing-a-turn-result-withdraws-only-that-local-wait
   (with-traced-peer
     (fn [c s gate frames]
-      (let [queued (binding [*parent* :gated] (sdk/send-and-wait! s "abandoned"))]
+      (let [queued (binding [*parent* :gated] (sdk/start-turn! s "abandoned"))]
         (a/close! queued)
         (a/offer! gate {:traceparent "late"})
         (is (= (outcome (sdk/history s)) {:ok []}))
         (is (not-any? #(= "abandoned" (get-in % [:params :prompt])) @frames))
         (is (nil? (outcome queued))))
-      (let [held (vec (repeatedly 64 #(sdk/send-and-wait! s "hold")))]
+      (let [held (vec (repeatedly 64 #(sdk/start-turn! s "hold")))]
         (sdk/await!! (sdk/history s))
         (let [ids (into #{} (comp (filter #(= "hold" (get-in % [:params :prompt]))) (map :id)) @frames)]
           (is (= (count ids) 64))
           (doseq [result held] (a/close! result))
-          (is (= (outcome (sdk/send-and-wait! s "healthy")) {:ok nil}))
+          (is (= (outcome (sdk/start-turn! s "healthy")) {:ok nil}))
           (sdk/await!! (sdk/ping c "barrier"))
           (is (= (frequencies (keep #(when (= "$/cancelRequest" (:method %)) (get-in % [:params :id])) @frames))
                  (zipmap ids (repeat 1))))
           (is (not-any? #(= "session.abort" (:method %)) @frames)))))))
+
+(deftest interrupted-blocking-caller-does-not-submit-after-preparation
+  (with-session-peer
+    false
+    (fn [c s _ frames]
+      (let [caller (promise)
+            prepare options/send-params]
+        (with-redefs [options/send-params (fn [id message]
+                                            (let [params (prepare id message)]
+                                              (when (= "interrupted" (:prompt message))
+                                                (deliver caller (Thread/currentThread)))
+                                              params))]
+          (let [operation (locking c
+                            (let [result (future (try (sdk/send-and-wait!! s "interrupted")
+                                                      (catch InterruptedException _ (.isInterrupted (Thread/currentThread)))))]
+                              (.interrupt ^Thread (deref caller 3000 nil))
+                              result))]
+            (is (true? (deref operation 3000 false)))))
+        (is (nil? (sdk/send-and-wait!! s "next")))
+        (is (= (mapv (juxt :method #(get-in % [:params :prompt])) (drop 2 @frames))
+               [["session.sendAndWait" "next"]]))))))
+
+(deftest an-interrupted-turn-can-withdraw-a-locally-queued-frame
+  (doseq [traced? [false true]]
+    (with-session-peer
+      traced?
+      (fn [c s _ frames]
+        (let [queued (promise) release (promise) caller (promise)
+              commit-write! @#'rpc/commit-write!]
+          (with-redefs [rpc/commit-write! (fn [state msg]
+                                            (when (= "session.sendAndWait" (:method msg))
+                                              (deliver queued (get-in @state [:connection :pending-requests (:id msg) :queued?]))
+                                              (deref release 5000 nil))
+                                            (commit-write! state msg))]
+            (let [waiting (future
+                            (deliver caller (Thread/currentThread))
+                            (try (sdk/send-and-wait!! s "hold")
+                                 (catch InterruptedException _ :interrupted)))]
+              (try
+                (is (true? (deref queued 3000 false)))
+                (.interrupt ^Thread @caller)
+                (is (= (deref waiting 3000 ::timeout) :interrupted))
+                (deliver release true)
+                (sdk/await!! (sdk/ping c "barrier"))
+                (is (= (mapv :method @frames) ["connect" "session.create" "ping"]))
+                (finally (deliver release true) (future-cancel waiting))))))))))
+
+(deftest interrupting-a-blocking-turn-withdraws-its-unsent-prompt
+  (with-traced-peer
+    (fn [_ s gate frames]
+      (let [caller (volatile! nil)
+            parked (promise)
+            cancelled (promise)
+            release (a/chan)
+            select a/do-alts]
+        (with-redefs [a/do-alts (fn [callback ports opts]
+                                  (if (identical? (Thread/currentThread) @caller)
+                                    (let [v (select (fn [[_ port :as choice]]
+                                                      (a/take! release (fn [_] (callback choice)))
+                                                      (deliver cancelled (identical? port (second ports))))
+                                                    ports opts)]
+                                      (deliver parked true)
+                                      v)
+                                    (select callback ports opts)))]
+          (let [waiting (future
+                          (vreset! caller (Thread/currentThread))
+                          (binding [*parent* :gated]
+                            (try (sdk/send-and-wait!! s "abandoned")
+                                 (catch InterruptedException _ (.isInterrupted (Thread/currentThread))))))]
+            (try
+              (is (true? (deref parked 3000 false)))
+              (.interrupt ^Thread @caller)
+              (is (true? (deref cancelled 3000 false)))
+              ;; Withhold delivery after the cancel take wins. The traced send
+              ;; gets its chance even if join has cleared the caller's flag.
+              (let [^Thread thread @caller
+                    until (+ (System/nanoTime) 3000000000)]
+                (loop []
+                  (when (and (.isInterrupted thread) (< (System/nanoTime) until))
+                    (Thread/yield)
+                    (recur)))
+                (is (not (.isInterrupted thread))))
+              (a/close! gate)
+              (is (nil? (sdk/send-and-wait!! s "next")))
+              (a/close! release)
+              (is (true? (deref waiting 3000 false)))
+              (is (= (try (sdk/send-and-wait!! s {:prompt "json" :response-schema {:type "object"}})
+                          (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))
+                     :missing-structured-response))
+              (is (= (mapv (juxt :method #(get-in % [:params :prompt])) (drop 2 @frames))
+                     [["session.sendAndWait" "next"] ["session.sendAndWait" "json"]]))
+              (finally
+                (a/close! gate)
+                (a/close! release)
+                (future-cancel waiting)))))))))
 
 (deftest session-close-rejects-queued-generation-before-headers-arrive
   (with-traced-peer

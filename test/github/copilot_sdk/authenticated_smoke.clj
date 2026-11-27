@@ -1,7 +1,7 @@
 (ns github.copilot-sdk.authenticated-smoke
   "Opt-in release gate, never part of clojure.test discovery."
   (:require [clojure.string :as str]
-            [github.copilot-sdk :as sdk])
+            [copilot.sdk :as sdk])
   (:import [java.util UUID]))
 
 (defn -main [home]
@@ -13,8 +13,8 @@
         (sdk/with-session [s c {:tools {:available-tools []}
                                 :github {:token token :telemetry-enabled? false}}]
           (let [marker (str "sdk-" (UUID/randomUUID))
-                reply (sdk/await!! (sdk/send-and-wait! s {:prompt (str "Reply with exactly " marker)
-                                                          :timeout-ms 60000}))]
+                reply (sdk/send-and-wait!! s {:prompt (str "Reply with exactly " marker)
+                                              :timeout-ms 60000})]
             (when-not (and (= :copilot/assistant.message (:type reply))
                            (str/includes? (get-in reply [:data :content] "") marker))
               ;; Do not put the prompt, service reply or configuration into CI output.

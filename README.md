@@ -9,36 +9,37 @@ SDK, start a Copilot CLI, or connect to an existing runtime.
 From this **2.x checkout**, on macOS arm64 or glibc Linux x64:
 
 ```bash
+./run-all-examples.sh --live
+# Or run one conversation with your own prompts:
 ./run-all-examples.sh --live basic-chat 'What makes a rainbow?' 'Explain the colors in one sentence.'
 ```
 
-The demo uses a Copilot-enabled account available to the isolated runtime
-(for example, through `gh auth login`) and prints both turns. Live runs
-send prompts to the model and can consume account usage. To try the same app
-without an account, run `./run-all-examples.sh basic-chat`: it uses the real
-runtime with a local model fixture. Both need the Clojure CLI, a JDK and
-access to fetch dependencies on first use. See the [other demos](examples/README.md)
-for live streaming, structured output, hooks, tools and session persistence.
+`--live` runs the portable demos using a Copilot-enabled account (for example,
+through `gh auth login`). Live prompts go to the model and can consume account
+usage. Omit `--live` to run the offline suite against the same native runtime
+with local fixtures. Both commands need the Clojure CLI, a JDK and access to
+fetch dependencies on first use. See the [demo catalog](examples/README.md)
+for individual commands and examples that require extra setup.
 
 The application code is short:
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk.helpers :as h])
 
 (defn ask [client-options session-options prompt]
-  (copilot/with-client [client client-options]
-    (copilot/with-session [session client session-options]
-      (let [reply (copilot/await!!
-                   (copilot/send-and-wait! session {:prompt prompt :timeout-ms 30000}))]
-        (get-in reply [:data :content])))))
+  (h/query-once!! {:client client-options :session session-options}
+                  {:prompt prompt :timeout-ms 30000}))
 ```
 
 Choose the mode, storage, and credentials explicitly. `:empty` requires an
 isolated **session** storage location and an explicit session tool allowlist;
 `[]` means no tools. The storage root does not confine all native process
 writes; see [deployment limits](./doc/getting-started.md#add-the-sdk-to-another-application).
-The result belongs to this request. Closing the session detaches
-the handle; it does not erase history.
+`query-once!!` owns one client and session, waits for this prompt's text,
+and closes both. For a follow-up, use `h/query!!` on an open session.
+Use `copilot.sdk/send-and-wait!!` for the full event or `copilot.sdk/start-turn!`
+for a result channel. These are alternatives, not steps. Closing a session
+detaches the handle; it does not erase history.
 
 ## Install and migrate
 

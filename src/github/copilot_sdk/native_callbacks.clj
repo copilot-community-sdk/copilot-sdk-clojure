@@ -59,7 +59,7 @@
             [github.copilot-sdk.interruption :as interruption]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.protocol :as rpc]
-            [github.copilot-sdk.specs :as specs]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.util :as util])
   (:import [java.util.concurrent ArrayBlockingQueue CancellationException ExecutionException FutureTask SynchronousQueue
             RejectedExecutionException ThreadFactory ThreadPoolExecutor TimeUnit TimeoutException]

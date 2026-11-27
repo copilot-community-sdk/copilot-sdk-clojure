@@ -1,14 +1,13 @@
 # Clojure SDK API
 
-Require `github.copilot-sdk` for the native client, sessions, operations, and
-subscriptions. All functions below use the alias `copilot`.
+Require `copilot.sdk` as `copilot` for primitives and `copilot.sdk.helpers`
+as `h` for the text, JSON and scope helpers.
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk :as copilot])
 
 (defn reply-text [session prompt]
-  (some-> (copilot/await!! (copilot/send-and-wait! session {:prompt prompt
-                                                            :timeout-ms 30000}))
+  (some-> (copilot/send-and-wait!! session {:prompt prompt :timeout-ms 30000})
           :data :content))
 ```
 
@@ -203,35 +202,114 @@ Listing and deletion are separate runtime requests, not a transaction
 with other clients; coordinate external writers that share a store.
 Graceful client close waits for deletions already sent.
 
+## Query and scope helpers
+
+```clojure
+(require '[copilot.sdk.helpers :as h])
+
+(defn follow-up [config prompt question]
+  (h/with-conversation [s config]
+    [(h/query!! s prompt) (h/query!! s question)]))
+```
+
+`config` has exactly `:client` and `:session`, with the same option maps
+used by `with-client` and `with-session`. Supply the client mode, storage,
+model, credentials and tool policy appropriate to the application. No
+helper chooses a shared client, a signed-in account, or a permission handler.
+The helpers check sensitive arguments themselves, including when Clojure
+spec instrumentation is enabled. `with-conversation` checks the session
+create options before opening a host, including the filesystem/provider
+pair and any static provider's operations. Preflight does not invoke a
+factory: the SDK passes it the session handle during open. `query-once!!` also checks the message
+and deadline first: malformed messages report `:invalid-message` and invalid
+deadlines report `:invalid-timeout`. These validation errors do not carry the
+input values. Direct client/session acquisition and turn submission also
+check their options and handles in the implementation: an invalid client
+or resume ID does not attach the other arguments to a spec error. Checks
+that depend on the running host still happen during open. Do not log full
+spec errors from arbitrary instrumented functions; they can contain inputs.
+
+For a structured answer, these functions are alternatives with the **same**
+message and schema. Each sends the prompt only once. Apply any application
+validation to the returned data.
+
+```clojure
+(require '[copilot.sdk :as copilot] '[copilot.sdk.helpers :as h])
+
+(defn structured [s message] (h/query-json!! s message))
+
+(defn structured-from-event [s message]
+  (let [reply (copilot/send-and-wait!! s message)]
+    (h/decode-json (get-in reply [:data :content]))))
+```
+
+| Call | Result and ownership |
+|---|---|
+| `(h/query!! session message)` | Block for this turn's text, or `nil` when there is no text. Borrow the session; never close it. |
+| `(h/query-once!! config message)` | The same text result, with one new client and session. Release both before returning or throwing. Use an application-owned client instead of repeatedly opening hosts in a service. |
+| `(h/with-conversation [s config] body...)` | Open one client and session, bind `s`, then detach the session and close the client on exit. Keep work that needs either handle inside the scope. |
+| `(h/query-json!! session message)` | Send one message with `:prompt` and a `:response-schema` map. Decode **one** JSON value from the final assistant text, on the caller's thread. A JSON `null` returns `nil`; a missing structured reply is an error. |
+| `(h/decode-json text)` | Decode JSON without sending a request. Object keys remain strings and decimals remain exact. Malformed input, trailing non-whitespace or more than 128 nested objects/arrays is an error. A schema requests an output shape; the decoder does not validate application rules. |
+| `(h/with-subscription [events session] body...)` | Subscribe for the body; close **only** that subscription on exit. It observes the whole conversation. It does not start, wait for, or abort a turn. |
+
+The blocking queries accept the turn's `:timeout-ms` in the message map and
+throw on failure. A timeout does not undo accepted work. Use the
+[turn primitives](#operations) if you need the final event or want to
+choose when to wait.
+
 ## Operations
 
-An operation returns a core.async channel that delivers **one** `{:ok value}`
+A **turn** is one prompt and its outcome. Choose **one** of these calls per
+prompt; each starts a request. A message can be a prompt string or a
+[message options map](#message-options).
+
+| Call | Completes when | What the caller gets |
+|---|---|---|
+| `(copilot/send! session message)` | The runtime accepts the submission. | A result channel for the message ID, not the answer. |
+| `(copilot/start-turn! session message)` | The runtime returns this turn's result and the SDK receives the completion event if the reply names one. | A result channel without waiting for the answer. On success it delivers `{:ok event}` for the main assistant's final message, or `{:ok nil}` for an ordinary turn with no reply. |
+| `(copilot/send-and-wait!! session message)` | The same turn completion as `start-turn!`. | The caller blocks and gets the event or `nil` directly, or an exception on failure. Do not call it inside `go`. |
+
+With `start-turn!`, keep the session open until you take the result or close
+the channel to abandon your wait. Use `await!!` on an application thread or
+`<!` on the already-started channel inside `go`. Preparation and lock
+acquisition can happen before `start-turn!` returns. Both forms use the
+same deadline and [event callback rules](#events-and-history); neither waits
+for a subscription reader to consume events or for all session work to stop.
+
+A result channel delivers **one** `{:ok value}`
 or `{:error exception}` and closes. `(copilot/await!! result)` blocks a caller
 thread, returns the value (including `nil`), or throws. Inside `go`, take the
 result with `<!` and inspect it. An event subscription is not an operation.
 
-Interrupting `await!!` does not cancel the operation. If interruption
-withdraws the wait, it throws `InterruptedException`; keep the result
-channel and await it again instead of sending the operation twice. If the
-wait already claimed the result, it delivers that result and preserves the
-thread's interrupt status.
+Interrupting a direct `await!!` does not cancel the operation. If interruption
+withdraws its take, it throws `InterruptedException` with the ordinary Java
+cleared interrupt status. You may await the same channel again on the same
+thread; do not resend the prompt. If the take already claimed the result, it
+delivers that result and preserves the interrupt flag instead.
+`send-and-wait!!` owns its result channel instead: if interrupted before
+it takes the result, it closes that wait and throws `InterruptedException`.
+It also checks for interruption at submission, including after waiting for
+the client lock. It can withdraw a prompt the connection writer has not yet
+claimed; it does not abort a turn already sent to the runtime. Interruption
+leaves the calling thread's interrupt flag set.
 
-| Call | Successful value |
-|---|---|
-| `(status client)` | Map containing `:version` and `:protocol-version`. The runtime may also supply `:host-diagnostics` (experimental data). Reading status does not enable diagnostic collection. |
-| `(ping client)` or `(ping client message)` | Runtime control response; fields include `:message`, `:timestamp`, and `:protocol-version` when reported. No model invocation. |
-| `(auth-status client)` | Authentication status, including `:authenticated?` when reported. This does not sign in. |
-| `(list-models client)` | Vector of model descriptions. Concurrent callers share one fetch, but each gets a separate result channel. Closing one channel does not cancel the fetch for other callers. Successful results are cached per client. New calls fail once shutdown starts. |
-| `(list-sessions client)` or `(list-sessions client filters)` | Vector of session metadata. Optional string filters: `:cwd`, `:git-root`, `:repository`, and `:branch`. |
-| `(last-session-id client)` | ID of the most recently updated session, or `nil`. |
-| `(session-metadata client id)` | Pass a nonblank session ID string, not a session handle. Returns a metadata map, or `nil` if absent. An invalid ID fails only this lookup. `:start-time` and `:modified-time` are `java.time.Instant` values. |
-| `(send! session message)` | Message ID when the runtime accepts the submission. It does **not** indicate completion. |
-| `(send-and-wait! session message)` | Final root assistant event for this request, or `nil` if the runtime completed without an assistant response. |
-| `(abort! session)` | `nil` when the runtime acknowledges the abort. This affects active session work, not just a local wait. |
-| `(history session)` or `(history session view)` | Vector of events. Select `:idiom` (default) or `:raw`. |
-| `(set-model! session model)` or `(set-model! session model tuning)` | `nil` after the runtime processes the model switch. `model` is a string. Omit tuning to change only the selection. |
-| `(log! session message)` or `(log! session message options)` | `nil` after appending a timeline entry. Optional `:level` is `:info`, `:warning`, or `:error`; `:ephemeral? true` omits the entry from saved history. |
-| `(elicit! session form)` | UI result with `:action` (`:accept`, `:decline`, or `:cancel`), optional `:content`, and optional `:_meta` with the host's original JSON keys. Requires an advertised host capability; does not read stdin. |
+For the other one-result operations, each channel waits for the condition in
+the middle column. Querying state does not wait for that state to change.
+
+| Call | Completes when | Successful value |
+|---|---|---|
+| `(status client)` | The runtime reports its current status. | Map with `:version`, `:protocol-version` and optional experimental `:host-diagnostics`. This does not enable diagnostics. |
+| `(ping client)` or `(ping client message)` | The runtime replies to the control request; no model runs. | Response fields include `:message`, `:timestamp`, and `:protocol-version` when reported. |
+| `(auth-status client)` | The runtime reports its current authentication state; it does not sign in. | Status map, including `:authenticated?` when reported. |
+| `(list-models client)` | A cached list is available or the shared lookup finishes. | Vector of models. Each caller gets a separate channel; closing it does not cancel other callers. Successful lookups are cached per client. New calls fail once shutdown starts. |
+| `(list-sessions client)` or `(list-sessions client filters)` | The runtime returns its current listing. | Vector of metadata. Optional string filters: `:cwd`, `:git-root`, `:repository`, `:branch`. |
+| `(last-session-id client)` | The runtime answers the lookup. | Most recently updated session ID, or `nil`. |
+| `(session-metadata client id)` | The runtime answers for this ID. | Metadata or `nil` if absent. Pass a nonblank ID string, not a handle. An invalid ID fails only this lookup. `:start-time` and `:modified-time` are `java.time.Instant` values. |
+| `(abort! session)` | The runtime acknowledges the session abort, not when all listeners finish. | `nil`. This affects active session work, not just the local wait. |
+| `(history session)` or `(history session view)` | The runtime returns its current history, not when an ongoing turn finishes. | Vector of events. Select `:idiom` (default) or `:raw`. |
+| `(set-model! session model)` or `(set-model! session model tuning)` | The runtime processes the model switch. | `nil`. `model` is a string. Omit tuning to change only the selection. |
+| `(log! session message)` or `(log! session message options)` | The runtime acknowledges the timeline entry, not when subscribers read it. | `nil`. Optional `:level` is `:info`, `:warning`, or `:error`; `:ephemeral? true` omits the entry from saved history. |
+| `(elicit! session form)` | The UI host answers, not when the form appears. | `:action` (`:accept`, `:decline`, `:cancel`), optional `:content` and optional `:_meta`. Preserves host JSON keys. Requires the advertised UI capability; does not read stdin. |
 
 `set-model!` accepts `:reasoning-effort`, `:reasoning-summary`, `:context-tier`,
 and `:model-capabilities` in its tuning map. Use `[:inference :capabilities]`
@@ -279,7 +357,7 @@ the submitted boolean. Form property names in `:content` are strings for all
 three actions. Content accompanying `:decline` or `:cancel` is not consent:
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk :as copilot])
 
 (defn confirmed? [session]
   (let [form {:message "Include the appendix?"
@@ -336,7 +414,7 @@ to find the caller's active span. Read the headers on the submitting thread
 and store the immutable map in a Clojure dynamic var:
 
 ```clojure
-(require '[github.copilot-sdk :as copilot])
+(require '[copilot.sdk :as copilot])
 
 (def ^:dynamic *trace-headers* {})
 (def tracing {:observability {:on-get-trace-context (fn [] *trace-headers*)}})
@@ -373,21 +451,24 @@ separate delete reply. If connection loss retires the session, its
 existing reservations report that loss. New calls on the closed handle
 report `:session-closed`.
 
-The `send-and-wait!` budget starts after the session registers the wait,
-before message preparation. With or without tracing, the SDK checks the
+The turn deadline for `start-turn!` and `send-and-wait!!` starts after the
+session registers the wait, before message preparation. With or without tracing, the SDK checks the
 deadline under the client lock after wire conversion, when registering the
-RPC as pending. This registration admits the request; writing the frame can
-happen later. If the deadline has passed, the SDK sends neither the prompt
-nor a cancellation. After admission, a timeout cancels only that request's
-pending wait, not the agent's work.
-The deadline does not interrupt preparation or lock acquisition; the call
-can return its result channel after the deadline.
+RPC as pending. Registration places the request in the local outgoing queue;
+it does not mean the runtime received the prompt. If the deadline has already
+passed, the SDK sends neither the prompt nor a cancellation.
+The deadline does not interrupt preparation or lock acquisition;
+`start-turn!` can return its result channel after the deadline.
 
-Explicitly closing the `send-and-wait!` result channel abandons only that
-caller's wait and frees its slot. If the prompt is still waiting for trace
-context, it will not be sent. If the request was already admitted, the SDK
-cancels its pending reply, not the underlying turn. Use `abort!` to ask the
-runtime to stop work. A finished or abandoned wait also releases its deadline
+Explicitly closing the `start-turn!` result channel abandons only that
+caller's wait and frees its slot. On close, interruption of the owning
+blocking call, or timeout, an unsent reservation or a queued frame not yet
+claimed by the writer can be withdrawn without sending the prompt. Once the
+writer claims it, the prompt may execute and the SDK only cancels its pending
+reply; it does not abort runtime work. When an interrupt races submission,
+either side can win. An interrupt or timeout alone does not tell you whether
+the runtime received the prompt. Do not retry blindly. Use `abort!` to explicitly ask the
+runtime to stop session work. A finished or abandoned wait also releases its deadline
 timer without waiting for the original timeout. Interrupting `await!!` alone
 does not close the channel.
 
@@ -423,10 +504,10 @@ substitute for omission. Common configuration groups are listed below.
 | `:suppress-resume-event?`, `:allow-transcript-recovery?`, `:continue-pending-work?` | Resume-only booleans. | Omit to leave the runtime behavior unchanged. |
 
 For `:system-message` customization, look up section identifiers and descriptions
-in `github.copilot-sdk.specs/system-message-sections`. For example:
+in `copilot.sdk.specs/system-message-sections`. For example:
 
 ```clojure
-(require '[github.copilot-sdk.specs :as specs])
+(require '[copilot.sdk.specs :as specs])
 
 (get-in specs/system-message-sections [:tone :description])
 ;; => "Response style, length, and format."
@@ -692,7 +773,7 @@ answers, the tool can remain pending. A local wait timeout does not deny
 permission or abort the turn.
 
 After a successful detach or delete acknowledgment, a late runtime reply
-cannot turn an unanswered `send-and-wait!` into success. Without an
+cannot turn an unanswered turn request into success. Without an
 `:on-event` observer, a turn keeps its runtime result or error if the SDK
 received the reply and its matching completion event before the acknowledgment,
 even if the event is still queued for publication. A missing reply or
@@ -911,7 +992,7 @@ from an attachment, a model response, or a message's source.
 | Key | Type | Default or omission |
 |---|---|---|
 | `:prompt` | String | Required in a message map. |
-| `:timeout-ms` | Positive integer, at most 2147483647 | `send-and-wait!` only; defaults to 60000. A timeout ends the local wait, **not** the agent's work. Do not retry blindly. |
+| `:timeout-ms` | Positive integer, at most 2147483647 | `start-turn!` and `send-and-wait!!` only; defaults to 60000. A timeout ends the local wait, **not** the agent's work. Do not retry blindly. |
 | `:mode` | `:enqueue` or `:immediate` | Omitted uses the runtime delivery mode. Immediate steering cannot request structured output. |
 | `:agent-mode` | `:interactive`, `:plan`, `:autopilot`, or `:shell` | Omitted uses the session mode. |
 | `:attachments` | Vector of attachment maps | Omitted sends none. Examples: `{:type :file :path path}`, `{:type :blob :data base64-text :mime-type media-type}`. |
@@ -921,7 +1002,11 @@ from an attachment, a model response, or a message's source.
 ## Events and history
 
 `(copilot/subscribe session)` returns a **read channel of event maps**, not
-`{:ok event}` results. Drain it while the turn runs. An event has a type such
+`{:ok event}` results. It observes the whole conversation, not a particular
+prompt. With overlapping turns, a live text fragment identifies an assistant
+message but not necessarily the prompt that produced it. Use the turn's own
+result for its answer; do not infer it from event order or `session.idle`.
+Drain the subscription while the turn runs. An event has a type such
 as `:copilot/assistant.message_delta` and content at `[:data :delta-content]`.
 Each subscription buffers up to 64 events. Filtering by `:type` **after**
 taking, including in a downstream channel, does not reduce admission to that
@@ -985,7 +1070,7 @@ another thread can still interrupt it. The handle cannot be used for new work af
 `close!!` returns. No detach is sent on a dead connection. Still close the
 client to stop any remaining observers and release its native host. A graceful
 client close cannot confirm remote shutdown after connection loss.
-If `send-and-wait!` received its runtime reply and matching completion event
+If a turn received its runtime reply and matching completion event
 before EOF, it waits for observer delivery under the original deadline. If
 the observer drains, the turn returns the runtime result or error. If the
 drain times out or the worker stops before delivery finishes, the wait fails
@@ -1028,6 +1113,6 @@ applies only to that revision.
 
 ### query-chan
 
-Use `send-and-wait!` for a request result or `subscribe` for a session event
+Use `start-turn!` for a request result or `subscribe` for a session event
 stream. See [the 1.x query-chan contract](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/01246672fc5fb8e8f2b50437eea6a55145e54934/doc/reference/API.md#query-chan)
 if maintaining an old application.

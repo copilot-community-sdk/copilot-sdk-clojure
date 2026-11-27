@@ -1,8 +1,8 @@
 (ns structured-output
   "Turn a meeting note into a summary and a list of action items."
-  (:require [clojure.data.json :as json]
-            [clojure.string :as str]
-            [github.copilot-sdk :as copilot]))
+  (:require [clojure.string :as str]
+            [copilot.sdk :as copilot]
+            [copilot.sdk.helpers :as h]))
 
 (def note-schema
   {:type "object"
@@ -15,25 +15,41 @@
 (defn- nonblank-text? [value]
   (and (string? value) (not (str/blank? value))))
 
-(defn- parse-note [content]
-  (let [{:keys [summary actions] :as note}
-        (json/read-str content :key-fn keyword :extra-data-fn json/on-extra-throw)]
-    (when-not (and (map? note) (= #{:summary :actions} (set (keys note)))
-                   (nonblank-text? summary) (vector? actions) (every? nonblank-text? actions))
-      (throw (ex-info "Expected a summary string and an array of action items" {})))
-    note))
+(defn- validate-note [{:strs [summary actions] :as note}]
+  (when-not (and (map? note) (= #{"summary" "actions"} (set (keys note)))
+                 (nonblank-text? summary) (vector? actions) (every? nonblank-text? actions))
+    (throw (ex-info "Expected a summary string and an array of action items" {})))
+  note)
 
-(defn run [client options prompt]
+(defn answer [client options prompt]
+  (let [schema {:type "object" :properties {:answer {:type "string"} :confidence {:type "number" :minimum 0 :maximum 1}}
+                :required ["answer" "confidence"] :additionalProperties false}]
+    (copilot/with-session [session client options]
+      (println "You:" prompt)
+      (let [{:strs [answer confidence] :as result} (h/query-json!! session {:prompt prompt :response-schema schema})]
+        (when-not (and (map? result) (= #{"answer" "confidence"} (set (keys result))) (nonblank-text? answer)
+                       (number? confidence) (<= 0 confidence 1))
+          (throw (ex-info "Expected a text answer and confidence between zero and one" {})))
+        (println "Answer:" answer "| reported confidence:" confidence)
+        result))))
+
+(defn- extract-note [query client options prompt]
   (printf "Extracting action items from this note (preview): %.500s%n" prompt)
   (copilot/with-session
     [session client (assoc options :tools {:available-tools []}
                            :system-message {:mode :append
                                             :content "Summarize the meeting note. Extract only agreed actions. Do not invent tasks."})]
-    (let [reply (copilot/await!! (copilot/send-and-wait! session {:prompt prompt
-                                                                  :response-schema note-schema
-                                                                  :timeout-ms 60000}))
-          {:keys [summary actions] :as note} (parse-note (get-in reply [:data :content]))]
+    (let [{:strs [summary actions] :as note} (validate-note (query session {:prompt prompt :response-schema note-schema}))]
       (printf "Summary: %.500s%nAction items (%d; up to 5 shown):%n" summary (count actions))
       (doseq [action (take 5 actions)]
         (printf "  - %.240s%n" action))
       note)))
+
+(defn run [client options prompt]
+  (extract-note h/query-json!! client options prompt))
+
+(defn run-primitive [client options prompt]
+  (letfn [(query [session message]
+            (let [reply (copilot/send-and-wait!! session message)]
+              (h/decode-json (get-in reply [:data :content]))))]
+    (extract-note query client options prompt)))

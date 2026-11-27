@@ -2,7 +2,9 @@
   "Request-correlated native turn completion and session event subscriptions."
   (:require [clojure.core.async :as a]
             [clojure.core.async.impl.protocols :as p]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [copilot.sdk.specs :as specs]
             [github.copilot-sdk.channels :as channels]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.logging :as log]
@@ -43,7 +45,7 @@
     (update converted :type util/event-type->keyword)))
 
 (defn- failure [cause]
-  {:error (if (instance? ExceptionInfo cause)
+  {:error (if (or (instance? ExceptionInfo cause) (instance? InterruptedException cause))
             cause
             (ex-info (or (ex-message cause) "Session closed") {} cause))})
 
@@ -149,7 +151,7 @@
         {:error (ex-info "Invalid native completion result" {:type :invalid-completion})}
         (and (contains? result :response)
              (not (and (= "assistant.message" (:type response)) (root-event? response))))
-        {:error (ex-info "Runtime returned a non-root assistant response" {:event response})}
+        {:error (ex-info "Runtime returned a non-root assistant response" {:type :invalid-completion})}
         aborted {:error (ex-info "The requested run was aborted" {:type :turn-aborted})}
         (and structured? (or (not (string? content)) (str/blank? content) (seq tool-requests)))
         {:error (ex-info "Run completed without a structured assistant response"
@@ -226,11 +228,11 @@
 (defn- completed [outcome]
   (doto (a/chan 1) (finish! outcome)))
 
-(defn send-and-wait!
+(defn start-turn!
   "Return a channel with exactly one {:ok root-assistant-event-or-nil} or
-   {:error ExceptionInfo}. (send-fn message admission-options) submits or reserves
+   {:error cause}. (send-fn message admission-options) submits or reserves
    one native RPC on the caller and returns {:reply channel :cancel! fn}.
-   Pass :check-admission! and :on-submitted from admission-options to the RPC,
+   Forward admission-options to the RPC without removing its checks or hooks,
    including after a queued trace lookup. A local reservation is not a
    submitted turn. cancel!
    releases only this reservation or pending RPC. The message excludes :timeout-ms.
@@ -238,19 +240,21 @@
    covers preparation, admission, the RPC, publication and its observer receipt.
    It does not interrupt a caller waiting for a lock or bound channel return time.
    Closing the result abandons the local wait and withdraws any unsent
-   reservation. Neither timeout nor close aborts runtime work. A session
+   reservation or a queued request not yet claimed by the writer. Neither
+   timeout nor close aborts runtime work. A session
    admits up to 64 concurrent waits. Each tracks up to 64 distinct early root
    completion IDs. Exceeding either limit returns an error, never a best guess."
-  [state send-fn options]
-  (let [timeout-ms (get options :timeout-ms 60000)
+  [state send-fn options & [interrupted?]]
+  (let [caller (when interrupted? (Thread/currentThread))
+        timeout-ms (get options :timeout-ms 60000)
         signal (a/chan 1)
         submitted? (volatile! false)
         rejected (locking state
                    (or (waits-closed @state)
                        (cond
-                         (not (and (pos-int? timeout-ms) (<= timeout-ms Integer/MAX_VALUE)))
+                         (not (s/valid? ::specs/turn-timeout-ms timeout-ms))
                          {:error (ex-info "Expected :timeout-ms between 1 and 2147483647"
-                                          {:type :invalid-timeout :timeout-ms timeout-ms})}
+                                          {:type :invalid-timeout})}
                          (>= (count (:waiters @state)) capacity)
                          {:error (ex-info "Too many pending turns" {:type :turn-capacity})}
                          :else (do (register! state :waiters signal (fn [cursor] {:cursor cursor :seen {} :submitted? submitted?})) nil))))]
@@ -262,11 +266,14 @@
         (let [start (System/nanoTime)
               budget-ns (* 1000000 (long timeout-ms))
               [deadline stop-timer!] (start-deadline timeout-ms)
-              check-deadline! #(when (or (p/closed? deadline)
-                                         (>= (unchecked-subtract (System/nanoTime) start) budget-ns))
-                                 (throw (timeout-error timeout-ms)))
-              rpc (try (send-fn (dissoc options :timeout-ms) {:check-admission! check-deadline!
-                                                              :on-submitted #(vreset! submitted? true)})
+              check! (fn []
+                       (when (and interrupted? (or (.isInterrupted ^Thread caller) @interrupted?))
+                         (throw (InterruptedException. "Interrupted before turn submission")))
+                       (when (or (p/closed? deadline) (>= (unchecked-subtract (System/nanoTime) start) budget-ns))
+                         (throw (timeout-error timeout-ms))))
+              rpc (try (send-fn (dissoc options :timeout-ms)
+                                (cond-> {:check-admission! check! :on-submitted #(vreset! submitted? true)}
+                                  interrupted? (assoc :with-admission (fn [offer!] (locking interrupted? (offer!))))))
                        (catch Throwable t (stop-timer!) (throw t)))
               cleanup (delay (stop-timer!) ((:cancel! rpc)))
               result (await-response state signal (assoc rpc :cancel! #(force cleanup))

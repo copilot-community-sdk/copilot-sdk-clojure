@@ -1,21 +1,18 @@
-(ns github.copilot-sdk.instrument
+(ns copilot.sdk.instrument
   "Opt-in spec instrumentation of the native Clojure facade."
   (:require [clojure.core.async.impl.protocols :as async]
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
-            [github.copilot-sdk :as sdk]
-            [github.copilot-sdk.tool-set :as tool-set]
-            [github.copilot-sdk.native-client :as client]
-            [github.copilot-sdk.specs :as specs]))
+            [copilot.sdk :as sdk]
+            [copilot.sdk.helpers :as h]
+            [copilot.sdk.specs :as specs]
+            [copilot.sdk.tool-set :as tool-set]
+            [github.copilot-sdk.native-client :as client]))
 
-(s/def ::mode #{:empty :coding-agent})
-(s/def ::client-options (s/keys :req-un [::mode]))
 (s/def ::client client/client?)
 (s/def ::session client/session?)
 (s/def ::session-id ::specs/session-id)
 (s/def ::result-channel #(satisfies? async/ReadPort %))
-(s/def ::prompt string?)
-(s/def ::message (s/or :prompt string? :options (s/keys :req-un [::prompt])))
 
 (def ^:private targets (atom #{}))
 
@@ -23,9 +20,11 @@
   `(do (s/fdef ~sym ~@spec)
        (swap! targets conj '~(symbol (resolve sym)))))
 
-(register-fdef! sdk/open-client!! :args (s/cat :options ::client-options) :ret ::client)
-(register-fdef! sdk/open-session!! :args (s/cat :client ::client :options map?) :ret ::session)
-(register-fdef! sdk/resume-session!! :args (s/cat :client ::client :id ::session-id :options map?) :ret ::session)
+;; These calls validate their sensitive arguments in the implementation.
+;; A failing stest argument spec would retain the whole options map or message.
+(register-fdef! sdk/open-client!! :args (s/cat :options any?) :ret ::client)
+(register-fdef! sdk/open-session!! :args (s/cat :client any? :options any?) :ret ::session)
+(register-fdef! sdk/resume-session!! :args (s/cat :client any? :id any? :options any?) :ret ::session)
 (register-fdef! sdk/close!! :args (s/cat :resource (s/or :client ::client :session ::session)) :ret nil?)
 (register-fdef! sdk/force-close!! :args (s/cat :client ::client) :ret nil?)
 (register-fdef! sdk/session-id :args (s/cat :session ::session) :ret ::session-id)
@@ -43,14 +42,22 @@
 (register-fdef! sdk/list-sessions :args (s/cat :client ::client :filters (s/? map?)) :ret ::result-channel)
 (register-fdef! sdk/delete-session!! :args (s/cat :client ::client :id ::session-id) :ret nil?)
 (register-fdef! sdk/history :args (s/cat :session ::session :view (s/? #{:raw :idiom})) :ret ::result-channel)
-(register-fdef! sdk/send! :args (s/cat :session ::session :message ::message) :ret ::result-channel)
-(register-fdef! sdk/send-and-wait! :args (s/cat :session ::session :message ::message) :ret ::result-channel)
+(register-fdef! sdk/send! :args (s/cat :session any? :message any?) :ret ::result-channel)
+(register-fdef! sdk/start-turn! :args (s/cat :session any? :message any?) :ret ::result-channel)
+(register-fdef! sdk/send-and-wait!! :args (s/cat :session any? :message any?) :ret ::specs/turn-reply)
 (register-fdef! sdk/abort! :args (s/cat :session ::session) :ret ::result-channel)
 (register-fdef! sdk/set-model! :args (s/cat :session ::session :model string? :tuning (s/? map?)) :ret ::result-channel)
 (register-fdef! sdk/subscribe :args (s/cat :session ::session) :ret ::result-channel)
 (register-fdef! sdk/log! :args (s/cat :session ::session :message string? :opts (s/? map?)) :ret ::result-channel)
 (register-fdef! sdk/elicit! :args (s/cat :session ::session :form map?) :ret ::result-channel)
 (register-fdef! sdk/await!! :args (s/cat :operation ::result-channel) :ret any?)
+
+;; stest retains rejected arguments in exception data. Leave validation of
+;; credential-bearing configuration, headers and model text to these functions.
+(register-fdef! h/query!! :args (s/cat :session any? :message any?) :ret (s/nilable string?))
+(register-fdef! h/query-once!! :args (s/cat :config any? :message any?) :ret (s/nilable string?))
+(register-fdef! h/decode-json :args (s/cat :text any?) :ret ::specs/json-value)
+(register-fdef! h/query-json!! :args (s/cat :session any? :message any?) :ret ::specs/json-value)
 
 (defn instrument-all! [] (stest/instrument @targets))
 (defn unstrument-all! [] (stest/unstrument @targets))

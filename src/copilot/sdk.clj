@@ -1,7 +1,8 @@
-(ns github.copilot-sdk
+(ns copilot.sdk
   "Clojure client for the in-process Copilot runtime. Exchange immutable data
   over core.async channels. Resource acquisition and close block the caller."
-  (:require [github.copilot-sdk.callback-results :as results]
+  (:require [clojure.core.async :as a]
+            [github.copilot-sdk.callback-results :as results]
             [github.copilot-sdk.native-client :as client]
             [github.copilot-sdk.teardown :as teardown]))
 
@@ -170,14 +171,29 @@
   [session message]
   (client/send! session message))
 
-(defn send-and-wait!
-  "Return this request's final root assistant event as {:ok event}, or
-  {:ok nil} when the runtime completed it without an assistant response.
-  Errors arrive as {:error cause}. Closing the result withdraws an unsent
-  reservation or ends its admitted wait. Neither close nor timeout aborts
-  a turn already admitted by the runtime connection."
+(defn start-turn!
+  "Start one turn from a prompt string or message map. Return a one-shot
+  result channel without waiting for the answer: `{:ok event}` for this
+  request's final root assistant message, `{:ok nil}` for an ordinary turn
+  with no reply, or `{:error cause}`. This is not a stream of progress events.
+  :timeout-ms defaults to 60000. Close the channel if you abandon the wait:
+  this can withdraw a prompt the writer has not claimed, but does not abort
+  a turn already sent to the runtime."
   [session message]
-  (client/send-and-wait! session message))
+  (client/start-turn! session message))
+
+(defn send-and-wait!!
+  "Start one turn and block the calling thread for its final assistant event
+  (or nil for an ordinary turn with no reply). Throws on error or timeout.
+  Takes the same message and deadline as start-turn!. Check for interruption
+  at submission. If interruption withdraws the take, abandon this wait and
+  throw InterruptedException with the flag set. Do not abort or resend.
+  Inside go, take an already-started result with `<!` instead of blocking."
+  [session message]
+  (let [interrupted? (volatile! false)
+        result (client/start-turn! session message interrupted?)]
+    (teardown/with-cleanup #(a/close! result)
+      (client/await!! result interrupted?))))
 
 (defn abort!
   "Ask the runtime to abort active work on the session. The result channel
@@ -192,8 +208,9 @@
   ([session model tuning] (client/set-model! session model tuning)))
 
 (defn subscribe
-  "Subscribe to session events. Close the subscription when done; closing
-  a subscription does not abort work or detach the session."
+  "Observe events from the whole session, including other turns. Use a turn's
+  own result for its final reply. Close the subscription when done; this
+  does not abort work or detach the session."
   [session]
   (client/subscribe session))
 
@@ -216,7 +233,8 @@
 
 (defn await!!
   "Block for one operation result. Return its value (including nil) or throw
-  its error. Interrupting the wait does not cancel the operation. If the take
+  its error. If interruption withdraws the take, throw InterruptedException
+  with the flag cleared. You can await the same operation again. If the take
   already claimed the result, deliver it and preserve the interrupt status.
   Inside a go block, use <! and inspect the result instead."
   [result]

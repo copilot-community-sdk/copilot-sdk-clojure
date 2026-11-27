@@ -32,7 +32,7 @@ tests, and inventory removed test paths alongside source deltas.
 
 | Contract area | Clojure source |
 |---------------|----------------|
-| Package facade and public system-message section catalog | `src/github/copilot_sdk.clj`, `github.copilot-sdk.specs/system-message-sections` |
+| Public primitives, Clojure query helpers and system-message catalog | `src/copilot/sdk.clj`, `src/copilot/sdk/helpers.clj`, `copilot.sdk.specs/system-message-sections` |
 | Client/session ownership, admission and cleanup | `src/github/copilot_sdk/native_client.clj` |
 | Pure create/resume/update/send wire builders | `src/github/copilot_sdk/session_options.clj` |
 | Rust C ABI, native image, UI actions and callback quiescence | `src/github/copilot_sdk/native_host.clj` |
@@ -40,12 +40,12 @@ tests, and inventory removed test paths alongside source deltas.
 | Reverse calls, lifecycle hooks, credentials and virtual storage | `src/github/copilot_sdk/reverse.clj`, `native_interaction.clj`, `credentials.clj`, `native_fs.clj` in that directory |
 | Model discovery and trace context | `src/github/copilot_sdk/discovery.clj` |
 | Request-correlated turn completion and subscriptions | `src/github/copilot_sdk/turn.clj` |
-| Source-qualified tool filters | `src/github/copilot_sdk/tool_set.clj` |
-| Caller-facing shapes | `src/github/copilot_sdk/specs.clj` |
-| Public function contracts | `src/github/copilot_sdk/instrument.clj` |
+| Source-qualified tool filters | `src/copilot/sdk/tool_set.clj` |
+| Caller-facing shapes | `src/copilot/sdk/specs.clj` |
+| Public function contracts | `src/copilot/sdk/instrument.clj` |
 | Protocol and normalization | `src/github/copilot_sdk/protocol.clj`, `src/github/copilot_sdk/util.clj` |
 | Generated wire validation and coercion | `src/github/copilot_sdk/generated/` |
-| Versioned public compatibility snapshot | `resources/github/copilot_sdk/api_surface.edn` |
+| Versioned public compatibility snapshot | `resources/copilot/sdk/api_surface.edn` |
 
 ## Delta Classification
 

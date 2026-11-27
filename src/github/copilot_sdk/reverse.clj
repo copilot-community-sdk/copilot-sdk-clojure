@@ -245,9 +245,7 @@
                                 end-hook (assoc :end-hook (volatile! {:id id-slot :retired? retired? :jobs (atom {})
                                                                       :confirmed? (volatile! false)
                                                                       :callbacks {:hooks {:on-session-end end-hook}}})))))]
-    (when-not (= (some? fs-config) (some? source))
-      (throw (ex-info "Configure a filesystem on the client and a provider on each session"
-                      {:path [:state :create-session-fs-provider]})))
+    (fs/check-session-provider! fs-config source)
     (locking registry
       (when-not (and @registry (not (:draining? @registry)) (connected? conn @(:state-atom conn)))
         (throw (inactive)))
@@ -272,11 +270,10 @@
   (when-let [source (get-in opts [:state :create-session-fs-provider])]
     (deliver (get-in reg [:cleanup :provider])
              (run-job! owner reg (deadline 60) nil :reverse
-                       #(fs/validate-provider (:capabilities fs-config)
-                                              (if (fn? source)
-                                                (scope/invoke (:conn owner) nil :factory
-                                                              (partial source session))
-                                                source))))))
+                       #(if (fn? source)
+                          (fs/validate-provider (:capabilities fs-config)
+                                                (scope/invoke (:conn owner) nil :factory (partial source session)))
+                          source)))))
 
 (defn register!
   "Register a known session and initialize its filesystem before its first RPC."

@@ -5,7 +5,8 @@ Guidelines for AI agents working on this codebase.
 ## Project Overview
 
 This is the native Clojure port of the [Microsoft Copilot SDK](https://github.com/microsoft/copilot-sdk).
-The 2.x source, tests and JAR use `github.copilot-sdk`. There is no separate
+The 2.x public API uses `copilot.sdk` and `copilot.sdk.helpers`. Internal
+implementation namespaces are not a second API. There is no separate
 source profile or 1.x client on the runtime classpath.
 
 ### Design Philosophy
@@ -130,21 +131,23 @@ ping, and an offline fixture do not establish live authentication.
 ### Instrumented Testing
 
 All public API functions have `clojure.spec` fdefs defined in `instrument.clj`.
-When `github.copilot-sdk.instrument` is required (which happens automatically during
-integration tests), every public function call is validated against its spec at runtime.
+When `copilot.sdk.instrument` is required, registered functions have their
+arguments checked at runtime. Query helpers validate sensitive inputs in
+their bodies: raw spec instrumentation can disclose the entire
+argument list, including credentials or model output, on an invalid call.
 
 Instrumentation checks call arguments. Test actual return values, channel
 closure and failure behavior separately. When adding new public functions:
 
-1. Add a `register-fdef!` form in `src/github/copilot_sdk/instrument.clj` (same syntax as
+1. Add a `register-fdef!` form in `src/copilot/sdk/instrument.clj` (same syntax as
    `s/fdef`, but also records the symbol in a single registry so `instrument-all!` /
    `unstrument-all!` derive their target list automatically — no parallel symbol lists)
-2. Ensure the corresponding specs exist in `src/github/copilot_sdk/specs.clj`
+2. Ensure the corresponding specs exist in `src/copilot/sdk/specs.clj`
 3. Run `bb test` — if specs are wrong, instrumented tests will catch it
 
 ### Public API Surface Guard
 
-`resources/github/copilot_sdk/api_surface.edn` records the published namespaces'
+`resources/copilot/sdk/api_surface.edn` records the published namespaces'
 qualified names, arglists, function/macro/value kind, fdefs, and curated spec
 keys. The guard checks that Codox documents exactly those namespaces. Run `bb api-surface:update`
 after an intentional change and review the diff. The surface snapshot does
@@ -161,8 +164,9 @@ Examples are part of the test suite but run separately:
 ./run-all-examples.sh
 ```
 
-This runs the Clojure demos against offline fixtures. Use `--live` with one
-model-backed demo for an explicitly requested manual run. Examples should
+This runs the Clojure demos against offline fixtures. Use `--live` for an
+explicitly requested manual run of the portable live suite, or `--live NAME`
+for a single live demo. Examples with extra prerequisites require a name. Examples should
 teach the public API and show the application's output; live model calls do
 not belong in CI or replace the protected release smoke.
 
@@ -267,7 +271,8 @@ protocol. The 1.x TCP benchmark results do **not** measure the native SDK.
 ## Project Structure
 
 ```
-src/github/copilot_sdk.clj           # Public native Clojure facade
+src/copilot/sdk.clj                 # Public native Clojure facade
+src/copilot/sdk/helpers.clj         # Scoped conversations, subscriptions, and text/JSON queries
 src/github/copilot_sdk/native_host.clj  # Verified library, core C functions, UI actions and callback barrier
 src/github/copilot_sdk/native_client.clj # Owns clients, session handles and teardown
 src/github/copilot_sdk/protocol.clj  # Framed, bidirectional in-memory JSON-RPC
@@ -298,7 +303,7 @@ The SDK keeps two distinct spec namespaces, on purpose:
 - **Wire specs** (`github.copilot-sdk.generated.event-specs`, AUTO-GENERATED) —
   validate raw post-`wire->clj` payloads. ISO strings, raw enum strings. Drift-proof.
   **NEVER re-export these as the public API.**
-- **Idiom specs** (`github.copilot-sdk.specs`, HAND-CURATED) — define the
+- **Idiom specs** (`copilot.sdk.specs`, HAND-CURATED) — define the
   Clojure-native API: `java.time.Instant`, keywords, sets. This is what callers see.
 - **Coercion** (`github.copilot-sdk.generated.coerce`, AUTO-GENERATED) bridges
   the two; the table is generated from a curated `script/codegen/coercions.edn`.

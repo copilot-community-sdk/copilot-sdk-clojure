@@ -18,10 +18,10 @@ only from generated output.
 | Area | Canonical inputs | Documentation |
 |------|------------------|---------------|
 | Public overview/install | `build.clj`, `deps.edn`, public facade | `README.md`, `doc/getting-started.md` |
-| Client, session and turns | `native_client.clj`, `turn.clj`, public facade | `doc/reference/API.md`, `doc/getting-started.md` |
+| Client, session, turns and helpers | `native_client.clj`, `turn.clj`, `src/copilot/sdk.clj`, `src/copilot/sdk/helpers.clj` | `doc/reference/API.md`, `doc/getting-started.md` |
 | Native prerequisites | `native_host.clj`, `deps.edn`, `build.clj` | `README.md`, `doc/getting-started.md` |
 | Callbacks, tools and filesystems | `native_callbacks.clj`, `callback_results.clj`, `reverse.clj`, `native_interaction.clj`, `native_fs.clj`, `tool_set.clj` | `doc/reference/API.md` |
-| Specs/fdefs | `src/github/copilot_sdk/specs.clj`, `instrument.clj` | `doc/reference/API.md` |
+| Specs/fdefs | `src/copilot/sdk/specs.clj`, `instrument.clj` | `doc/reference/API.md` |
 | Session options, MCP and authentication | `session_options.clj`, `native_client.clj`, `credentials.clj`, `discovery.clj` | `doc/reference/API.md`, `doc/getting-started.md` |
 | Session and lifecycle events | `turn.clj`, `native_client.clj`, generated wire specs and coercion | `doc/reference/API.md` |
 | Examples | `examples/*.clj` | `README.md`, `examples/README.md`, related guides |
@@ -74,9 +74,9 @@ Run `bb docs` after public docstrings or topics change. When removing a
 namespace or topic, regenerate from a clean output directory so obsolete HTML
 does not survive. Run the generator twice from identical inputs; compare the
 full output (including new and deleted files), not just the working tree stat.
-Keep the Codox namespace list in `deps.edn` explicit: the facade, specs,
-instrumentation, and tool-set helpers. Do not publish raw protocol or generated
-wire namespaces to fill documentation gaps.
+Keep the Codox namespace list in `deps.edn` explicit: the facade, query and
+scope helpers, specs, instrumentation, and tool-set helpers. Do not publish
+raw protocol or generated wire namespaces to fill documentation gaps.
 
 ## 5. Validate
 
