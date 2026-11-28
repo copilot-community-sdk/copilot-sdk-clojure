@@ -1,7 +1,7 @@
 ---
 name: update-upstream
 description: Use when syncing the Clojure Copilot SDK with upstream releases or recertifying parity with the official Node.js SDK.
-compatibility: Requires authenticated copilot and gh CLIs, Clojure CLI, bb, and a local github/copilot-sdk checkout beside the primary checkout or specified by COPILOT_SDK_UPSTREAM.
+compatibility: Requires git, a JDK, the Clojure CLI, bb, a tested native classifier, and a local microsoft/copilot-sdk checkout beside the primary checkout or specified by COPILOT_SDK_UPSTREAM. No Copilot CLI or login is needed for offline verification.
 ---
 
 # Update Upstream
@@ -49,7 +49,9 @@ not a changed-file grep or generated-schema scan.
 1. Inventory the Node package root exports and public types.
 2. Inventory `CopilotClient` constructors, builders, and methods.
 3. Inventory `CopilotSession` methods and lifecycle behavior.
-4. Trace extension and join paths, including any distinct builders.
+4. Trace extension and join paths to classify their applicability. Parent
+   extension attachment, another process's stdio, and TCP are deployment
+   exclusions in native 2.x, not missing Clojure transports.
 5. Read relevant stable unit and end-to-end tests for behavior not explicit in
    types.
 6. Use Python only as behavioral corroboration. Use CLI and generated protocol
@@ -61,8 +63,9 @@ Classify every discovered delta as:
 - stable public;
 - experimental;
 - internal;
-- generated-only; or
-- language-specific.
+- generated-only;
+- language-specific; or
+- excluded transport.
 
 Port stable public behavior. Experimental work requires an explicit maintainer
 decision, accepted ADR, or direct user request. Record intentional exclusions
@@ -74,7 +77,7 @@ unresolved gaps.
 For each stable public delta, create one row in a contract matrix covering:
 
 1. public Node export or type;
-2. applicable create, resume, join, or method builder;
+2. applicable native create, resume, callback or method builder;
 3. exact wire key, nesting, enum spelling, and omission/null semantics;
 4. Clojure public name and idiomatic value shape;
 5. closed-key/value specs and registered fdefs;
@@ -83,7 +86,7 @@ For each stable public delta, create one row in a contract matrix covering:
 8. docs, examples, and changelog.
 
 Apply the optional-field proof in `references/PROJECT.md` to every applicable
-builder and mutable update path. Keep separate create/resume/join builders
+builder and mutable update path. Keep separate create/resume builders
 consistent without assuming their accepted options are identical.
 
 Present the classified inventory and implementation plan for approval before
@@ -142,16 +145,21 @@ Use the smallest targeted gates during iteration, then run:
 
 ```bash
 COPILOT_UPSTREAM_VALIDATION=true bb test
-bb ci:full
+bb ci:full native-darwin-arm64  # or native-linux-x64 on glibc Linux x64
 ```
 
 The first command validates committed exact-pin evidence against the resolved
 local upstream checkout. Normal `bb test` and CI remain hermetic when that
 external checkout is unavailable.
 
-If authenticated end-to-end prerequisites are unavailable, run `bb ci` and
-state the limitation. Review example output, generated diffs, and the
-machine-readable parity inventory.
+Native gates use local model fixtures, not ambient credentials or a CLI.
+Run `bb test:native <classifier>` for the real runtime, and `bb jar` followed
+by `bb test:artifact <classifier>` to verify a fresh consumer resolves the
+candidate JAR and POM. If the current platform has no gate, run `bb ci` and
+state which native checks did not run. Authenticated smoke is separate:
+only the protected release dispatch uses `COPILOT_NATIVE_SMOKE_TOKEN`; an
+absent token blocks that gate. Never use historical CLI results in its place.
+Review example output, generated diffs, and the contract inventory.
 
 Obtain independent review focused on stable-surface completeness, exact wire
 semantics, spec/fdef/API-snapshot coverage, Clojure idioms, concurrency and
@@ -164,9 +172,8 @@ If available, invoke a PR-authoring skill before creating or editing the pull
 request. Otherwise perform the same checks directly:
 
 1. confirm the branch is based on current `origin/main`;
-2. commit logical changes with a descriptive message that follows active
-   repository and attribution rules;
-3. push the current branch and create one focused pull request; and
+2. obtain maintainer review and approval before committing;
+3. only if asked, push the current branch and create one focused pull request; and
 4. include the contract changes, validation, exclusions, and review findings in
    the PR body.
 

@@ -1,0 +1,9 @@
+{:description "The sealed 1.x contract inventories and their executable tests describe the subprocess SDK, not the native 2.x SDK."
+ :commit "https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/01246672fc5fb8e8f2b50437eea6a55145e54934"
+ :v1-inventory-sha256 "1e7b4289f6f2fadde45b4153d4c12dcc8e9046616c658e374c5ffb705968a043"
+ :matching-tests
+ {"stable_upstream_delta_<pin>.edn" "test/github/copilot_sdk/integration/stable_sync_<pin>_test.clj"
+  "optional_wire_contracts.edn" "test/github/copilot_sdk/optional_wire_contract_test.clj"}
+ :benchmark-tests "The matched TCP benchmark, statistical analysis, and process-cleanup tests are in test/github/copilot_sdk/benchmark_contract_test.clj at this commit. Their results do not measure the native SDK."
+ :retrieve "git show 01246672fc5fb8e8f2b50437eea6a55145e54934:test/github/copilot_sdk/integration/stable_sync_f45c46fd_test.clj"
+ :run "In a separate checkout at the specified commit, run bb test using the prerequisites documented there."}

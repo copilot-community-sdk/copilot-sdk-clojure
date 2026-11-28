@@ -1,343 +1,153 @@
-# Getting Started with the Copilot SDK for Clojure
+# Getting started
 
-> **Note:** Version `1.0.0.0` is the first generally available (GA) release (tracking upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) `v1.0.0`). The public API is stable. Subsequent releases follow the upstream versioning scheme (see [Versioning](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/PUBLISHING.md#versioning)); any breaking changes are called out in the [CHANGELOG](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/CHANGELOG.md).
+Try a conversation with your signed-in model or an offline fixture, then configure your own application.
 
-In this tutorial, you'll use the Copilot SDK for Clojure to build a command-line assistant. You'll start with the basics, add streaming responses, then add custom tools — giving Copilot the ability to call your code.
+## Run the examples
 
-**What you'll build:**
-
-```
-Q: What's the weather like in Seattle?
-🤖: Let me check the weather for Seattle...
-    Currently 62°F and cloudy with a chance of rain.
-
-Q: How about Tokyo?
-🤖: In Tokyo it's 75°F and sunny. Great day to be outside!
-```
-
-## Prerequisites
-
-Before you begin, make sure you have:
-
-- **GitHub Copilot CLI** installed and authenticated ([Installation guide](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli))
-- **Clojure** 1.12+ with the `clojure` CLI tool
-- **Java** 11+
-
-Verify the CLI is working:
+Use a 2.x source checkout, the Clojure CLI, and a 64-bit JDK. The native
+test configurations are glibc Linux x64 with JDK 17 and macOS arm64 with
+JDK 21. The upstream distribution also has Windows, macOS x64, Linux arm64,
+and musl classifiers. They are not covered by this repository's acceptance
+matrix. A published classifier is not a tested platform claim.
 
 ```bash
-copilot --version
+./run-all-examples.sh --live basic-chat 'Name a garden herb.' 'Suggest a dish that uses it.'
 ```
 
-## Step 1: Add the SDK Dependency
+The two questions share a session. The model's actual answers appear in the
+terminal. `--live` opts in to a Copilot-enabled account and may consume
+usage. Sign in with GitHub CLI (`gh auth login`) if the isolated runtime
+cannot find an account. It does not use the Copilot CLI's normal state
+directory or system keychain. Supply non-sensitive prompts. Use
+`./run-all-examples.sh --live` without a name to run the portable live suite
+with default prompts. See `examples/README.md` for the catalog.
 
-Add to your `deps.edn`:
+For a credential-free smoke test, omit `--live`: `./run-all-examples.sh basic-chat`.
+The fixture explains how a rainbow forms and answers the follow-up with
+conditions to look for outdoors. The application
+runs in a separate test JVM with a fresh home and no inherited account
+credentials. Inside that JVM the SDK loads the Rust runtime and exchanges
+JSON-RPC messages in memory. Only the model request uses loopback HTTP.
+The first dependency download requires network access.
+
+## Add the SDK to another application
+
+Community SDK version in this checkout: `2.0.3.0-SNAPSHOT`. Do not substitute
+a published 1.x JAR or assume a development build is on Maven Central. For example,
+place the 2.x checkout next to your application. On macOS arm64, use this
+application `deps.edn`:
+
+```edn
+{:deps
+ {io.github.copilot-community-sdk/copilot-sdk-clojure
+  {:local/root "../copilot-sdk-clojure"}
+  com.microsoft/copilot-sdk-runtime$darwin-arm64 {:mvn/version "2.0.3"}}}
+```
+
+For glibc Linux x64, use `com.microsoft/copilot-sdk-runtime$linux-x64`
+instead. Include **one** matching classifier. This Maven artifact contains
+the platform binary, not the Java SDK. The loader verifies its checksum and
+needs a writable JVM temporary directory that permits native code loading.
+If the classifier is absent or incompatible, opening the client fails; there
+is no process or TCP fallback.
+
+**Keep the original classifier JAR as a separate file on the runtime
+classpath.** An application uberjar (one JAR containing its dependencies)
+can include the Clojure SDK and JNA, but must exclude the classifier from
+merging, shading, or nesting. Put the unmodified classifier beside the
+application JAR and include both on the classpath. Verification covers the
+whole published classifier archive, not just `runtime.node`.
+
+The SDK extracts the verified runtime once per JVM. A process crash can
+leave its temporary files behind. On Windows a loaded native library can
+remain locked until the JVM exits. Use a deployment-owned temporary directory
+that you can clean up **after** the application stops.
+
+The session storage root is not a filesystem sandbox. On macOS the pinned
+runtime can create `~/Library/Application Support/Microsoft/DeveloperTools/deviceid`
+under the process user's home, even if an `:empty` client only opens and
+pings with a separate `:base-directory`. An application session filesystem
+does not redirect host-wide files. If all writes must be isolated, run the
+JVM under a dedicated OS account or container with its own home and temp
+directory; enforce write restrictions at the OS boundary.
+
+Start the application REPL with `clojure -M`. From the SDK checkout instead,
+use `clojure -M:native-darwin-arm64` or `clojure -M:native-linux-x64`; the
+checkout defines those aliases for you.
+
+## Connect your own model
+
+This function sends a prompt to an **explicitly supplied** OpenAI-compatible
+chat-completions endpoint. Pass an absolute directory reserved for this
+application, the endpoint base URL (including `/v1` where required), and a
+model identifier served there. It configures no model key and grants no tools.
+The endpoint receives your prompt. Use a trusted endpoint; do not send
+credentials over plain HTTP outside loopback.
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.16.0"}}}
+(require '[copilot.sdk.helpers :as h])
+
+(defn ask-local [state-dir base-url model-id prompt]
+  (h/query-once!!
+   {:client {:mode :empty :base-directory state-dir :github {:use-logged-in-user? false}}
+    :session {:model "local/chat"
+              :inference {:providers [{:name "local" :provider-type :openai :base-url base-url}]
+                          :models [{:provider "local" :id "chat" :model-id model-id :wire-model model-id}]}
+              :github {:capi {:enabled? false}}
+              :tools {:available-tools []}}}
+   {:prompt prompt :timeout-ms 30000}))
 ```
 
-Or use as a Git dependency:
+`"local/chat"` selects the local catalog entry; `:wire-model` selects the
+deployment the endpoint receives. Named provider catalogs are experimental
+upstream.
+
+`query-once!!` blocks for text and closes its client and session. To keep the
+conversation, use `h/with-conversation` and `h/query!!`. For the full final
+event rather than its text, use `copilot.sdk/send-and-wait!!` on your session.
+If you need to do other work before taking the answer, use `start-turn!`
+instead; it returns a result channel. No query helper retries or aborts a
+submitted turn on timeout. For streaming and resumption, see the
+[migration guide](guides/native-2x.md).
+
+## Use a GitHub-backed model
+
+For an application with a GitHub credential, use the GitHub service instead
+of a local catalog. The following function **does make a service request**
+when called. Supply the token through your application's credential store
+and a model ID available to that account. There is no interactive sign-in:
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
-        {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "c14c173597033970a34751f8ada6ca0bb665940c"}}}
+(require '[copilot.sdk :as copilot])
+
+(defn ask-github [state-dir token model-id prompt]
+  (when-not (seq token)
+    (throw (ex-info "A GitHub token is required" {})))
+  (copilot/with-client [client {:mode :empty :base-directory state-dir
+                                :github {:use-logged-in-user? false}}]
+    (copilot/with-session [session client {:model model-id :github {:token token}
+                                           :tools {:available-tools []}}]
+      (get-in (copilot/send-and-wait!! session {:prompt prompt :timeout-ms 30000})
+              [:data :content]))))
 ```
 
-## Step 2: Send Your First Message
+This is not part of the offline runner. For renewable credentials use a
+[session token provider](reference/API.md#credentials-and-interactive-callbacks)
+instead of `:token`.
 
-The simplest way to use the SDK — about 3 lines of code:
+## Verify a checkout
 
-```clojure
-(require '[github.copilot-sdk.helpers :as h])
-
-(println (h/query "What is 2 + 2?"))
-;; => "4"
+```bash
+bb test
+bb test:native native-darwin-arm64  # or native-linux-x64
+./run-all-examples.sh
+bb jar
+bb test:artifact native-darwin-arm64  # or native-linux-x64
 ```
 
-That's it! The helpers API manages the client lifecycle automatically.
-
-For more control, use the explicit client/session API:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4"}]
-  (let [response (copilot/send-and-wait! session {:prompt "What is 2 + 2?"})]
-    (println (get-in response [:data :content]))))
-```
-
-**You should see:**
-
-```
-4
-```
-
-Congratulations! You just built your first Copilot-powered app in Clojure.
-
-### Return Structured Data
-
-Pass a JSON Schema plus a parser when the application needs data rather than
-assistant prose:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def answer-schema
-  {"type" "object"
-   "properties" {"answer" {"type" "integer"}}
-   "required" ["answer"]
-   "additionalProperties" false})
-
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4"}]
-  (copilot/send-and-wait!
-   session
-   {:prompt "What is 2 + 2?"}
-   {:to-json-schema (constantly answer-schema)
-    :parse #(get % "answer")}
-   60000))
-;; => 4
-```
-
-The runtime enforces the JSON Schema. The SDK decodes the final correlated
-assistant response and passes it to `:parse`. See
-[Structured Output](reference/API.md#structured-output) for the raw event form,
-errors, and attachment details.
-
-## Step 3: Add Streaming Responses
-
-Right now, you wait for the complete response before seeing anything. Stream the response as it is generated.
-
-### Using Scope-Bound Lazy Sequences
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-(require '[github.copilot-sdk.helpers :as h])
-
-(defmulti handle-event :type)
-(defmethod handle-event :default [_] nil)
-(defmethod handle-event :copilot/assistant.message_delta [{{:keys [delta-content]} :data}]
-  (print delta-content)
-  (flush))
-(defmethod handle-event :copilot/session.idle [_]
-  (println))
-
-(h/with-query-seq [events "Tell me a short joke"
-                   :session {:on-permission-request copilot/approve-all
-                             :streaming? true}]
-  (run! handle-event events))
-```
-
-### Using core.async Channels
-
-```clojure
-(require '[clojure.core.async :refer [chan tap go-loop <!]])
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4" :streaming? true}]
-  (let [ch (chan 256)
-        done (promise)]
-    (tap (copilot/events session) ch)
-    (go-loop []
-      (when-let [event (<! ch)]
-        (case (:type event)
-          :copilot/assistant.message_delta
-          (do (print (get-in event [:data :delta-content]))
-              (flush))
-
-          :copilot/session.idle
-          (do (println)
-              (deliver done true))
-          nil)
-        (recur)))
-    (copilot/send! session {:prompt "Tell me a short joke"})
-    @done))
-```
-
-Run the code and you'll see the response appear word by word.
-
-### Async Session Creation
-
-Use `<create-session` and `<send!` for fully non-blocking operations inside `go` blocks:
-
-```clojure
-(require '[clojure.core.async :refer [go <! <!!]])
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/with-client [client]
-  (let [result-ch
-        (go
-          (let [session (<! (copilot/<create-session client {:on-permission-request copilot/approve-all
-                                                            :model "gpt-5.4"}))]
-            (when (instance? Throwable session)
-              (throw session))
-            (let [answer (<! (copilot/<send! session {:prompt "Capital of France?"}))]
-              answer)))]
-    (println (<!! result-ch))))
-```
-
-This pattern parks (instead of blocking) on the core.async thread pool, enabling true parallelism across multiple `go` blocks — ideal for multi-agent orchestration. See the [multi-agent example](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md) for a complete walkthrough.
-
-### Event Subscription Methods
-
-The SDK uses core.async `mult/tap` for event subscription:
-
-| Function | Description |
-|----------|-------------|
-| `(copilot/events session)` | Get the core.async mult for all events |
-| `(copilot/subscribe-events session)` | Get a tapped channel (convenience) |
-| `(copilot/unsubscribe-events! session ch)` | Untap a channel |
-| `(copilot/events->chan session opts)` | Advanced: custom buffer, transducer |
-
-## Step 4: Add a Custom Tool
-
-Now for the powerful part. Let's give Copilot the ability to call your code by defining a custom tool:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-(require '[github.copilot-sdk.helpers :as h])
-
-;; Define a tool that Copilot can call
-(def get-weather
-  (copilot/define-tool "get_weather"
-    {:description "Get the current weather for a city"
-     :parameters {:type "object"
-                  :properties {:city {:type "string"
-                                      :description "The city name"}}
-                  :required ["city"]}
-     :handler (fn [{:keys [city]} _invocation]
-                ;; In a real app, you'd call a weather API here
-                (let [conditions ["sunny" "cloudy" "rainy" "partly cloudy"]
-                      temp (+ 50 (rand-int 30))
-                      condition (rand-nth conditions)]
-                  (copilot/result-success
-                   (str city ": " temp "°F and " condition))))}))
-
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4"
-                                       :tools [get-weather]}]
-  (println (h/query "What's the weather like in Seattle and Tokyo?"
-                    :session session)))
-```
-
-Run it and you'll see Copilot call your tool to get weather data, then respond with the results!
-
-## Step 5: Build an Interactive Assistant
-
-Let's put it all together into an interactive assistant:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-(require '[github.copilot-sdk.helpers :as h])
-
-(def get-weather
-  (copilot/define-tool "get_weather"
-    {:description "Get the current weather for a city"
-     :parameters {:type "object"
-                  :properties {:city {:type "string" :description "The city name"}}
-                  :required ["city"]}
-     :handler (fn [{:keys [city]} _]
-                (let [temp (+ 50 (rand-int 30))
-                      condition (rand-nth ["sunny" "cloudy" "rainy"])]
-                  (copilot/result-success
-                   (str city ": " temp "°F and " condition))))}))
-
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4"
-                                       :streaming? true
-                                       :tools [get-weather]}]
-  (println "🌤️  Weather Assistant (type 'exit' to quit)")
-  (println "   Try: 'What's the weather in Paris?'")
-  (println)
-  (loop []
-    (print "You: ")
-    (flush)
-    (let [input (read-line)]
-      (when (and input (not= (.toLowerCase input) "exit"))
-        (print "🤖: ")
-        (println (h/query input :session session))
-        (println)
-        (recur)))))
-```
-
-## Step 6: List Available Models
-
-Discover which models are available and their billing multipliers:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/with-client [client]
-  (doseq [m (copilot/list-models client)]
-    (println (:id m) (str "x" (get-in m [:model-billing :multiplier])))))
-;; prints:
-;; gpt-5.4 x1.0
-;; claude-sonnet-4.5 x1.0
-;; o1 x2.0
-;; ...
-```
-
-Each model map includes `:id`, `:name`, `:vendor`, `:family`, `:max-input-tokens`, `:max-output-tokens`, and nested `:model-capabilities`, `:model-billing`, and `:model-policy` maps. See the [API Reference](./reference/API.md#list-models) for the full structure.
-
-## What's Next?
-
-Now that you have the basics, explore these topics:
-
-- **[API Reference](./reference/API.md)** — Complete API documentation, plus new v1.0.9 options like `:enable-managed-settings?` for enterprise-managed permissions
-- **[Dynamic Workflows](./guides/dynamic-workflows.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-workflow` / `run-workflow!`
-- **[Authentication](./auth/index.md)** — All auth methods including BYOK
-- **[MCP Servers](./mcp/overview.md)** — Connect to external tools via MCP
-- **[Examples](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md)** — More working examples
-
-### Permissions (deny-by-default)
-
-The SDK uses a **deny-by-default** permission model. When Copilot requests permission
-to run shell commands, write files, or fetch URLs, the SDK denies all requests unless
-you provide an `:on-permission-request` handler.
-
-Use `approve-all` to permit everything:
-
-```clojure
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4"}]
-  ...)
-```
-
-Or write a custom handler for fine-grained control. See [Permission Handling](./reference/API.md#permission-handling) in the API Reference.
-
-### Identifying Your Application
-
-Pass `:client-name` to identify your application in API requests (included in the User-Agent header):
-
-```clojure
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.4"
-                                       :client-name "my-weather-app"}]
-  ...)
-```
-
-### Key Concepts
-
-| Concept | Description |
-|---------|-------------|
-| **Client** | Manages the connection to the Copilot CLI server |
-| **Session** | A conversation with context, model, and tools |
-| **Tools** | Functions that Copilot can call in your code |
-| **Events** | Streaming updates via core.async channels |
-| **On-Event** | Optional callback receiving all session events, registered before RPC |
-| **Helpers** | High-level stateless API with automatic lifecycle management |
-
-### Comparison with JavaScript SDK
-
-| JavaScript | Clojure |
-|------------|---------|
-| `new CopilotClient()` | `(copilot/client {})` or `(copilot/with-client ...)` |
-| `client.createSession({...})` | `(copilot/create-session client {...})` |
-| `session.sendAndWait({prompt})` | `(copilot/send-and-wait! session {:prompt ...})` |
-| `session.on("event", handler)` | `(tap (copilot/events session) ch)` |
-| `defineTool("name", {...})` | `(copilot/define-tool "name" {...})` |
-| `await` / Promises | Blocking calls or `core.async` go blocks |
+`bb jar` builds locally. Run `bb test:artifact` **after** building: it starts
+a fresh consumer that resolves the JAR's dependencies from its POM. None of
+these commands signs in or publishes a release. The protected release
+dispatch has a separate authenticated smoke gate. A missing
+`COPILOT_NATIVE_SMOKE_TOKEN` blocks that gate; the offline commands do not
+use it.

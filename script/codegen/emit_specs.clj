@@ -366,14 +366,21 @@
       {:type "object"}
       node)))
 
+(defn- emit-leaf-union [forms]
+  (if (every? set? forms)
+    (into (sorted-set) cat forms)
+    `(~'s/spec (~'fn [~'value]
+                (~'or ~@(map (fn [f] `(~'s/valid? ~f ~'value)) forms))))))
+
 (defn- collect-leaf-properties
   "Return a map describing emitted leaf-property forms.
 
    `:leaf-map`         — sorted-by-name map of kebab-name → emitted spec form.
                          When the same property name maps to multiple distinct
                          schemas across event/data payloads, emit a
-                         non-conforming union — a `(fn [v] (or (s/valid? f1 v)
-                         ...))` wrapper. We avoid `s/or` because it conforms
+                         non-conforming union: a single set for literal
+                         alternatives, or a predicate for mixed forms.
+                         We avoid `s/or` because it conforms
                          values, which would break the envelope spec's
                          `s/and` chain (the per-event `:type` predicate
                          inspects the raw map and would see a conformed
@@ -438,9 +445,7 @@
                   [kebab
                    (if (= 1 (count forms))
                      (first forms)
-                     `(~'s/spec
-                       (~'fn [~'value]
-                             (~'or ~@(map (fn [f] `(~'s/valid? ~f ~'value)) forms)))))])))
+                     (emit-leaf-union forms))])))
         env-form-by-kebab  (side-form env-groups)
         ;; Per-kebab distinct envelope/data forms — used to decide whether a
         ;; key's leaf-union is *truly* weakened from the envelope side (i.e.,
@@ -470,9 +475,7 @@
                   [kebab (first uniq)]
 
                   :else
-                  (let [union-form `(~'s/spec
-                                     (~'fn [~'value]
-                                           (~'or ~@(map (fn [f] `(~'s/valid? ~f ~'value)) uniq))))
+                  (let [union-form (emit-leaf-union uniq)
                         env-fs  (env-forms-by-kebab kebab #{})
                         data-fs (data-forms-by-kebab kebab #{})
                         ;; Only flag each side as "weakened" if the *other*
@@ -735,7 +738,7 @@
                             `(~'s/def ~kw ~form))]
     (concat
      [`(~'ns ~(symbol ns-name)
-             "AUTO-GENERATED. clojure.spec definitions for upstream session events.
+             ~(str "AUTO-GENERATED. clojure.spec definitions for upstream session events.
 
    Each event variant's `data` payload is registered under
    `::<event-type>-data` (e.g. `::session.start-data`).
@@ -749,7 +752,7 @@
    namespace. These are entries in this file, not namespaces to require;
    explanations retain both the part identifier and the failing property.
 
-   Source: schemas/session-events.schema.json"
+   Source: schemas/session-events.schema.json")
              (:require [clojure.spec.alpha :as ~'s]))]
       ;; Registered object shapes must precede leaf defs: some leaf defs are
       ;; bare-keyword aliases (e.g. `(s/def ::citations ::citations-shape)`),
@@ -822,9 +825,9 @@
   "Build the generated event metadata namespace."
   [root]
   [`(~'ns ~'github.copilot-sdk.generated.event-metadata
-          "AUTO-GENERATED event normalization metadata.
+          ~(str "AUTO-GENERATED event normalization metadata.
 
-   Source: schemas/session-events.schema.json")
+   Source: schemas/session-events.schema.json"))
    `(~'def ~'opaque-json-paths
            "Event-type -> raw/idiom paths whose JSON key spelling is opaque."
            ~(collect-opaque-json-paths root))])

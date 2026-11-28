@@ -7,7 +7,7 @@
      wire spec  (generated, lives in event-specs)
         │
         ▼  coerce/event-wire->idiom
-     idiom spec (hand-written, lives in github.copilot-sdk.specs)
+     idiom spec (hand-written, lives in copilot.sdk.specs)
 
    The table in coercions.edn is the single source of truth for which fields
    need conversion between the upstream wire shape and the Clojure-idiomatic
@@ -21,7 +21,8 @@
        its class; `coerce-data` catches and re-throws with `:event-type`,
        `:field`, and `:direction` added to ex-data for diagnosability."
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [codegen.core :as cc]))
 
 ;; ---------------------------------------------------------------------------
 ;; Static converter table — emitted verbatim into coerce.clj.
@@ -80,9 +81,18 @@
    Clojure-idiomatic public API. Source: script/codegen/coercions.edn"
          (:require [~'github.copilot-sdk.util :as ~'util])))
 
+(def ^:private attachment-types
+  ;; The stable Node 2.0.1 event Attachment union includes GitHub pointers.
+  ;; AttachmentSessionReference is experimental; MessageOptions is a separate union.
+  (into {}
+        (map (juxt identity cc/wire-key->kw))
+        ["file" "directory" "selection" "github_reference" "blob" "extension_context"
+         "github_commit" "github_release" "github_actions_job" "github_repository"
+         "github_file_diff" "github_tree_comparison" "github_url" "github_file" "github_snippet"]))
+
 (defn- emit-converter-defs
   "Emit converter functions, sharing identifier validation with API-boundary specs."
-  []
+  [attachment-types]
   (list
    ;; iso-string ⇄ instant ────────────────────────────────────────────────
    `(~'defn ~'iso-string->instant
@@ -137,20 +147,10 @@
 
    ;; attachment-type-strings <-> attachment-type-keywords
    `(~'def ~(with-meta 'attachment-type-wire->idiom {:private true})
-           {"file" :file
-            "directory" :directory
-            "selection" :selection
-            "github_reference" :github-reference
-            "blob" :blob
-            "extension_context" :extension-context})
+           ~attachment-types)
 
    `(~'def ~(with-meta 'attachment-type-idiom->wire {:private true})
-           {:file "file"
-            :directory "directory"
-            :selection "selection"
-            :github-reference "github_reference"
-            :blob "blob"
-            :extension-context "extension_context"})
+           ~(into {} (map (fn [[wire idiom]] [idiom wire])) attachment-types))
 
    `(~'defn ~'attachment-type-string->keyword
             "Convert a wire attachment discriminator to its closed idiomatic keyword domain."
@@ -296,7 +296,7 @@
   [coercions]
   (concat
    [(emit-ns-form)]
-   (emit-converter-defs)
+   (emit-converter-defs attachment-types)
    [(emit-converters-map)
     (emit-field-coercions coercions)]
    (emit-coerce-data)))

@@ -1,17 +1,25 @@
 {:paths ["src"]
  :deps {org.clojure/clojure {:mvn/version "1.12.4"}}
  :tasks
- {test {:doc "Run the test suite."
-        :task (clojure "-M:test" "-m" "cognitect.test-runner")}
+ {test {:doc "Run the hermetic test suite without requiring a native classifier."
+        :task (clojure "-M:test" "-m" "cognitect.test-runner" "-e" "native")}
 
-  api-surface:update {:doc "Regenerate the versioned multi-namespace public API snapshot."
-                      :task (clojure "-M:test" "-m" "github.copilot-sdk.api-surface")}
+  test:native
+  {:doc "Run real in-process acceptance tests with the indicated platform classifier."
+   :task (let [[platform & more] *command-line-args*]
+           (when (or (seq more) (not (#{"native-darwin-arm64" "native-linux-x64"} platform)))
+             (throw (ex-info "Select native-darwin-arm64 or native-linux-x64" {})))
+           (clojure (str "-M:test:" platform)
+                    "-m" "cognitect.test-runner" "-i" "native"))}
+
+  api-surface:update {:doc "Regenerate the native public API snapshot."
+                      :task (clojure "-M:test" "-m" "github.copilot-sdk.native-surface-test" "--update")}
 
   fmt {:doc "Format all Clojure files."
-       :task (clojure "-M:fmt" "fix" "src" "test" "examples" "benchmarks/clojure")}
+       :task (clojure "-M:fmt" "fix" "src" "test" "examples")}
 
   fmt:check {:doc "Check formatting without modifying files."
-            :task (clojure "-M:fmt" "check" "src" "test" "examples" "benchmarks/clojure")}
+            :task (clojure "-M:fmt" "check" "src" "test" "examples")}
 
   docs {:doc "Generate API documentation with codox."
         :task (clojure "-X:codox")}
@@ -19,20 +27,17 @@
   jar {:doc "Build the JAR and POM."
        :task (clojure "-T:build" "jar")}
 
-  install-docs:sha {:doc "Update git dependency SHA in install docs (README, getting-started) to HEAD."
-                    :task (clojure "-T:build" "update-install-doc-shas")}
+  test:artifact {:doc "Test a clean consumer of the built JAR with its native classifier."
+                 :task (apply shell "bb" "script/test_native_artifact.clj" *command-line-args*)}
 
-  ci {:doc "Run CI pipeline: unit/integration tests, doc validation, jar build."
-      :task (shell "bash" "-lc"
-                   "bb test && bb validate-docs && bb jar")}
+  ci {:doc "Run hermetic tests, validate docs, and build the JAR. No classifier required."
+      :depends [test validate-docs jar]}
 
-  ci:full {:doc "Run full CI pipeline including E2E tests and examples (requires copilot CLI)."
-           :task (shell "bash" "-lc"
-                        "COPILOT_E2E_TESTS=true bb test && ./run-all-examples.sh && bb validate-docs && bb jar")}
-
-  ci:deploy {:doc "Run the CI pipeline and deploy to Maven Central."
-             :depends [ci]
-             :task (clojure "-T:build" "deploy-central")}
+  ci:full {:doc "Run all credential-free gates. Pass native-darwin-arm64 or native-linux-x64."
+           :task (do (run 'test:native)
+                     (shell "./run-all-examples.sh")
+                     (run 'ci)
+                     (run 'test:artifact))}
 
   install {:doc "Install the JAR locally (build via ci)."
            :task (clojure "-T:build" "install")}
@@ -44,17 +49,4 @@
                  :task (shell "bb" "script/codegen/fetch_schemas.clj")}
 
   codegen {:doc "Regenerate Clojure code from upstream JSON Schemas in schemas/."
-           :task (shell "bb" "-cp" "script" "-m" "codegen.main")}
-
-  benchmark:test
-  {:doc "Run benchmark infrastructure contract tests."
-   :task (shell "bash" "-lc"
-                "clojure -M:test -m cognitect.test-runner -n github.copilot-sdk.benchmark-contract-test && node --test benchmarks/test/*.test.mjs")}
-
-  benchmark:smoke
-  {:doc "Run the quick matched Node/Clojure benchmark profile."
-   :task (clojure "-M:bench" "-m" "github.copilot-sdk.bench.runner" "--profile=smoke")}
-
-  benchmark:rigorous
-  {:doc "Run the rigorous matched Node/Clojure benchmark profile."
-   :task (clojure "-M:bench" "-m" "github.copilot-sdk.bench.runner" "--profile=rigorous")}}}
+           :task (shell "bb" "-cp" "script" "-m" "codegen.main")}}}

@@ -1,44 +1,65 @@
 (ns tool-integration
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  "Implement a small catalog tool and distinguish lookup failure from permission denial."
+  (:require [basic-chat]
+            [copilot.sdk :as copilot])
+  (:import [java.util Locale]))
 
-;; See examples/README.md for usage
+(def ^:private catalog
+  {"clojure" "Clojure is a Lisp that runs on the JVM."
+   "python" "Python is a general-purpose language."
+   "rust" "Rust checks ownership at compile time."
+   "javascript" "JavaScript runs in browsers and other hosts."
+   "haskell" "Haskell is a purely functional language."})
 
-;; Define a knowledge base for our tool
-(def ^:private knowledge-base
-  {"clojure" "Clojure is a dynamic, functional programming language that runs on the JVM. Created by Rich Hickey in 2007. It emphasizes immutability and functional programming."
-   "rust" "Rust is a systems programming language focused on safety, speed, and concurrency. Created by Mozilla. Known for its ownership model and zero-cost abstractions."
-   "python" "Python is a high-level, interpreted programming language known for its readability. Created by Guido van Rossum in 1991. Popular for data science and web development."
-   "javascript" "JavaScript is a dynamic scripting language primarily used for web development. Created by Brendan Eich in 1995. The language of the web browser."
-   "haskell" "Haskell is a purely functional programming language. Named after Haskell Curry. Known for its strong static typing and lazy evaluation."})
+(defn- catalog-key [^String language] (.toLowerCase language Locale/ROOT))
 
-;; Define a lookup tool
-(def lookup-tool
-  (copilot/define-tool "lookup_language"
-    {:description "Look up information about a programming language from our knowledge base. Available languages: clojure, rust, python, javascript, haskell."
-     :parameters {:type "object"
-                  :properties {:language {:type "string"
-                                          :description "The programming language to look up (e.g., 'clojure', 'rust', 'python')"}}
-                  :required ["language"]}
-     :handler (fn [args _invocation]
-                (let [lang (-> args :language str clojure.string/lower-case)
-                      info (get knowledge-base lang)]
-                  (if info
-                    (copilot/result-success info)
-                    (copilot/result-failure
-                     (str "No information found for language: " lang ". Available: clojure, rust, python, javascript, haskell")
-                     "language not in knowledge base"))))}))
+(defn- lookup [language]
+  (if-let [description (get catalog (catalog-key language))]
+    {:result-type :success :text-result-for-llm description}
+    {:result-type :failure :text-result-for-llm "No entry in the example catalog."}))
 
-(def defaults
-  {:languages ["clojure" "python" "rust"]})
+(defn- private-language? [language]
+  (and (string? language) (= "private" (catalog-key language))))
 
-(defn run
-  [{:keys [languages] :or {languages (:languages defaults)}}]
-  (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                         :model "claude-haiku-4.5"
-                                         :tools [lookup-tool]}]
-    (doseq [lang languages]
-      (println (str "Looking up: " lang))
-      (println (h/query (str "What is " lang "? Use the lookup_language tool to find out.")
-                        :session session))
-      (println))))
+(defn- run-lookup [client options queries]
+  (let [calls (atom [])
+        refusal (atom nil)
+        tool {:name "lookup_language" :description "Look up a language in the demo catalog."
+              :parameters {:type "object" :properties {:language {:type "string"}} :required ["language"]
+                           :additionalProperties false}
+              :handler (fn [{:keys [language]} _]
+                         (let [result (lookup language)]
+                           (swap! calls conj language)
+                           (println "lookup_language:" language "=>" (:result-type result))
+                           result))}
+        permit (fn [{:keys [kind tool-name args]} _]
+                 (if (and (= kind "custom-tool") (= tool-name (:name tool)) (= #{:language} (set (keys args)))
+                          (string? (:language args)) (not (private-language? (:language args))))
+                   {:kind :approve-once}
+                   (do (reset! refusal [kind tool-name args])
+                       (println "Permission denied:" tool-name)
+                       {:kind :reject :feedback "The private catalog is not available."})))]
+    (copilot/with-session [session client (assoc options :tools {:available-tools ["custom:lookup_language"] :definitions [tool]}
+                                                 :permissions {:on-request permit})]
+      (mapv (fn [[language prompt]]
+              (reset! refusal nil)
+              (let [before (count @calls)
+                    answer (basic-chat/ask session prompt)
+                    [kind tool-name args] @refusal]
+                (when-not (if (private-language? language)
+                            (and (= kind "custom-tool") (= tool-name (:name tool))
+                                 (= #{:language} (set (keys args))) (private-language? (:language args))
+                                 (= before (count @calls)))
+                            (some #(= (catalog-key language) (catalog-key %)) (subvec @calls before)))
+                  (throw (ex-info "The requested lookup or permission decision did not occur" {:language language})))
+                answer))
+            queries))))
+
+(defn run [client options & languages]
+  (run-lookup client options
+              (mapv (fn [language] [language (str "Call lookup_language for " language
+                                                  ". Report its description, or say it was not found. Do not retry.")])
+                    languages)))
+
+(defn run-denied [client options prompt]
+  (first (run-lookup client options [["private" prompt]])))

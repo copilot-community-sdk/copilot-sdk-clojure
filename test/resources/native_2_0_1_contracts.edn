@@ -1,0 +1,595 @@
+{:format 1
+ :claim :frozen-preview-inventory-not-parity
+ :upstream {:repository "https://github.com/microsoft/copilot-sdk" :tag "v2.0.1"
+            :commit "3ce61458503b6b27ebd1f674a980f4d9596d9b22"
+            :package "@microsoft/copilot-sdk" :protocol 4 :runtime "1.0.114"
+            :entrypoints {"." "nodejs/src/index.ts" "./extension" "nodejs/src/extension.ts"}
+            :protocol-file "sdk-protocol-version.json" :runtime-file "nodejs/package.json"
+            :node-test-directory :absent-at-pin}
+ :preview {:tree "a5a3c1f55ac5c1a2c353fbe4e00536876ddfb06d"
+           :facade "v2/src/github/copilot_sdk.clj" :packaging "build.clj#native-jar"
+           :snapshot "v2/resources/github/copilot_sdk/api_surface.edn"
+           :snapshot-blob "b96b668a332b4d3dcf7bfc3545d7c0b52f4c091f"
+           :schema-root "v2"
+           :schema-blobs {"schemas/api.schema.json" "a884b2838734c445412d9d431d58bc76f54a471c"
+                          "schemas/session-events.schema.json" "666e63e4de481cb41495e78db6cf07c6afaf9a83"
+                          "schemas/lifecycle-diagnostics.schema.json" "0afbbd64538d17957a9fecacf47c4880bca96a61"}}
+ :release-layout {:facade "src/github/copilot_sdk.clj" :schema-root "."
+                  :snapshot "resources/github/copilot_sdk/api_surface.edn"}
+ :historical-v1 {:role :not-native-certification
+                 :clojure-commit "01246672fc5fb8e8f2b50437eea6a55145e54934"
+                 :resource-tree "b01e88ff265aa61eeddab03b9bfcd2445fc0f81b"
+                 :upstream "b96cd2b54f7eb87458fd50f485a751c712e88f62" :runtime "1.0.100-1"
+                 :inventory "test/resources/stable_upstream_delta_b96cd2b.edn"
+                 :blob "9bc383c3aa1b038f0e8f38897f10fc607e441b09"
+                 :earlier-wire-oracle {:upstream "3108e8ce26286043afa52f12781331460628baa0"
+                                       :path "test/resources/optional_wire_contracts.edn"
+                                       :blob "cd39bd68a8cdf63c666fe44c680ff5d0e1827af9"}}
+ :reading
+ {:comparison "Read git show <upstream commit>:<path> in the upstream checkout and git show <preview tree>:<path> here. The latter is a tree object, not a published commit. Retain that object to repeat the frozen comparison."
+  :authority "Explicit package export plus public handwritten type, method, or builder. An experimental generated DTO can back a documented high-level field: that does not make its whole RPC namespace stable. Conversely a root type re-export alone does not establish a runtime operation."
+  :status {:mapped "Reachable native path found in the frozen shipped code; not a behavioral proof."
+           :partial "Named path exists, but a known part of its high-level behavior is absent."
+           :missing "No caller-facing native path in the frozen artifact."
+           :verified "Only the stated behavior and fixture scope in :proofs, at the frozen tree."
+           :excluded "Not a required native 2.x counterpart; see classification."
+           :groups "Container only; see the corresponding option type for individual fields."}
+  :classes {:stable "Documented high-level native-host path, possibly conditional on entitlement/capability."
+            :experimental "Explicit experimental API or a helper usable only with an experimental subsystem."
+            :internal "SDK plumbing, not application input."
+            :language-only "Language representation, syntax or standard cleanup idiom."
+            :transport-exclusion "Requires an excluded SDK connection or TUI server."
+            :generated-only "Generated surface without an independent high-level behavioral authority."}
+  :scope "Client RPC uses only the owned native connection. HTTP to a service, cloud execution, stdio MCP servers, and launching extensions from a native host are not alternative SDK transports."
+  :type-buckets "rpc-* groups are declarations for generated RPC surfaces, not separate stable Clojure methods; experimental-* groups belong to opt-in subsystems. Other shapes inherit their consuming high-level route or field disposition. TypeScript interfaces are not Clojure runtime vars."
+  :symbols "Method keys are members of the named class. Option keys are fields of the named TypeScript type (direct declarations; inherited fields are listed once). Local names are frozen Clojure symbols or option keys; not proposed new spellings."}
+
+ ;; Each unqualified member is relative to nodejs/src/{client,session}.ts.
+ ;; The last column is either a native facade var, a subsystem, or a concrete limitation.
+ :methods
+ {CopilotClient
+  {constructor [:stable :mapped open-client!!]
+   start [:stable :mapped open-client!!]
+   stop [:stable :mapped close!!]
+   Symbol.asyncDispose [:language-only :mapped with-client]
+   forceStop [:stable :missing :forced-owned-host-teardown]
+   createSession [:stable :partial :session-open]
+   resumeSession [:stable :partial :session-open]
+   resumeSessionForExtension [:internal :excluded :extension-join]
+   rpc [:experimental :excluded :generated-rpc-gateways]
+   decisions [:experimental :excluded :decisions]
+   startAhpHost [:experimental :excluded :ahp-host]
+   ping [:stable :missing :client-introspection]
+   getStatus [:stable :partial status]
+   getAuthStatus [:stable :mapped auth-status]
+   listModels [:stable :missing :model-discovery]
+   getLastSessionId [:stable :missing :last-session]
+   deleteSession [:stable :mapped delete-session!!]
+   listSessions [:stable :mapped list-sessions]
+   getSessionMetadata [:stable :mapped session-metadata]
+   getForegroundSessionId [:transport-exclusion :excluded :tui-server]
+   setForegroundSessionId [:transport-exclusion :excluded :tui-server]
+   onLifecycle [:stable :missing :client-lifecycle]}
+  CopilotSession
+  {constructor [:internal :excluded :owned-by-client]
+   sessionId [:stable :partial session-id]
+   rpc [:experimental :excluded :generated-rpc-gateways]
+   workflow [:experimental :excluded :dynamic-workflows]
+   workspacePath [:stable :missing :open-result]
+   transcriptRecovery [:stable :missing :open-result]
+   permissionModeResult [:stable :missing :open-result]
+   capabilities [:stable :missing :open-result]
+   ui [:stable :missing :capability-gated-ui]
+   send [:stable :mapped send!]
+   sendAndWait [:stable :partial send-and-wait!]
+   on [:stable :mapped subscribe]
+   openCanvases [:experimental :excluded :canvases]
+   setSessionCreationHandler [:experimental :excluded :conditional-session-management]
+   getEvents [:stable :mapped history]
+   getRawEvents [:stable :mapped history]
+   disconnect [:stable :mapped close!!]
+   Symbol.asyncDispose [:language-only :mapped with-session]
+   abort [:stable :mapped abort!]
+   setModel [:stable :missing :model-switch]
+   setAutoTier [:experimental :excluded :live-auto-tier]
+   setFusionTier [:experimental :excluded :live-auto-tier]
+   setTools [:experimental :excluded :live-tool-replacement]
+   log [:stable :missing :timeline-log]}}
+
+ ;; These are actual runtime values, not interface/type declarations.
+ :root-values
+ {CopilotClient [:stable :mapped open-client!!]
+  CopilotSession [:stable :mapped open-session!!]
+  RuntimeConnection [:stable :partial :native-only]
+  ToolSet [:language-only :mapped :source-qualified-vectors]
+  BuiltInTools [:stable :missing :curated-isolated-allowlist]
+  defineTool [:language-only :mapped :tool-definition-map]
+  approveAll [:stable :missing :managed-policy-aware-helper]
+  DisableBypassPermissionsModes [:stable :missing :managed-policy]
+  createAttributedPermissionResult [:stable :missing :attributed-answers]
+  createAttributedResult [:stable :missing :attributed-answers]
+  convertMcpCallToolResult [:stable :missing :tool-result-conversion]
+  createSessionFsAdapter [:stable :mapped :provider-map]
+  SessionFsSqliteTransactionFailure [:language-only :mapped :structured-ex-data]
+  SessionFsWriteFailure [:language-only :mapped :structured-ex-data]
+  SYSTEM_MESSAGE_SECTIONS [:stable :mapped github.copilot-sdk.specs/system-message-sections]
+  toSavedProviderConfiguration [:experimental :missing :credential-free-saved-provider]
+  parseTrajectoryJson [:experimental :missing :lossless-standalone-parser]
+  CopilotDecisions [:experimental :excluded :decisions]
+  decisionErrorData [:experimental :excluded :decisions]
+  decisionErrorKind [:experimental :excluded :decisions]
+  AhpHost [:experimental :excluded :ahp-host]
+  defineWorkflow [:experimental :excluded :dynamic-workflows]
+  WorkflowResumeError [:experimental :excluded :dynamic-workflows]
+  isWorkflowRunTerminal [:experimental :excluded :dynamic-workflows]
+  WORKFLOW_AGENT_OPTION_KEYS [:experimental :excluded :dynamic-workflows]
+  Canvas [:experimental :excluded :canvases]
+  CanvasError [:experimental :excluded :canvases]
+  createCanvas [:experimental :excluded :canvases]
+  CopilotRequestHandler [:experimental :excluded :model-request-interception]
+  CopilotWebSocketHandler [:experimental :excluded :model-request-interception]
+  CopilotWebSocketCloseStatus [:experimental :excluded :model-request-interception]
+  CopilotWebSocketForwarder [:experimental :excluded :model-request-interception]}
+ :other-entrypoints
+ {:extension {:authority "nodejs/src/extension.ts#joinSession"
+              :classification :transport-exclusion
+              :values [joinSession Canvas CanvasError createCanvas defineWorkflow WorkflowResumeError isWorkflowRunTerminal]
+              :types [JoinSessionOptions JoinedSession ExtensionInfo CanvasAction CanvasDeclaration CanvasHostContext CanvasJsonSchema CanvasOptions JsonValue]
+              :additional-type-family :experimental-workflow
+              :note "Requires parent-process stdio, not a second native session builder. Join omits extensions.sdkPath, skills.provider and tools.imageGeneration; requestedEnvironmentVariables and workflows are join-only. JoinedSession.fetch, workflow and canvas exports remain experimental."}
+  :events {:authority "nodejs/src/index.ts" :export "export type * from \"./generated/session-events.js\";"
+           :source "nodejs/src/generated/session-events.ts" :blob "9a5fb693695bf1ef3772b234e1c52f87de4ebc92"
+           :explicit-shadow [SessionEvent PermissionRequest PermissionRequestedData PermissionRequestedEvent AssistantMessageEvent JsonValue]
+           :note "Static event and payload types, not executable methods. The generated Clojure schemas and opaque-path tables describe data, not a claim that every event can be produced, handled or normalized correctly."}}
+
+ ;; Bucket names here describe the field at the handwritten boundary. Group containers
+ ;; have no independent behavior. A :partial field has detail below (or in :callbacks).
+ :option-fields
+ {CopilotClientOptions {:groups [plugins extensions installations observability github models]
+                        :mapped [runtime mode sessionFs] :missing [clientInfo]
+                        :experimental [entra network] :internal [internalTestOptions _internalConnection]}
+  InProcessRuntimeConnection {:mapped [kind] :missing [runOnUiThread]}
+  OwnedRuntimeOptions {:mapped [baseDirectory sessionIdleTimeoutSeconds]}
+  ClientPluginOptions {:missing [builtinDirectories]}
+  ClientExtensionOptions {:experimental [launchProvider]}
+  ClientInstallationOptions {:experimental [confirmationHandler]}
+  ClientObservabilityOptions {:mapped [logLevel] :missing [telemetry onGetTraceContext]}
+  ClientGitHubOptions {:mapped [token useLoggedInUser] :experimental [onTelemetry]}
+  ClientModelOptions {:missing [onListModels] :experimental [requestHandler]}
+  CopilotClientInfo {:missing [applicationName applicationVersion integrationName integrationVersion]}
+  TelemetryConfig {:missing [otlpEndpoint otlpProtocol filePath exporterType sourceName captureContent]}
+  SessionFsConfig {:mapped [initialCwd sessionStatePath conventions capabilities]}
+  SessionOptionsBase {:groups [inference policy experiments tools canvases extensions interaction agents skills
+                               github filesystem execution instructions git permissions mcp hooks events plugins state]
+                      :mapped [clientName model configDirectory enableConfigDiscovery workingDirectory]
+                      :partial [systemMessage] :missing [diagnostics] :internal [lifecycleDiagnostics]}
+  CreateSessionOptions {:groups [filesystem instructions] :mapped [sessionId name] :missing [cloud]}
+  ResumeSessionOptions {:groups [canvases] :mapped [allowTranscriptRecovery suppressResumeEvent]
+                        :partial [continuePendingWork]}
+  SessionInferenceOptions {:mapped [allowMultipleToolCalls reasoningEffort reasoningSummary contextTier defaultProvider]
+                           :missing [capabilities] :experimental-partial [providers models] :experimental [enableCitations]}
+  SessionPolicyOptions {:mapped [allowedModels excludedManagedSettings enforceManagedModelDefaults] :missing [managedSettings]}
+  SessionExperimentOptions {:mapped [enableExperimentalMode flags] :internal [assignments]}
+  SessionToolOptions {:mapped [largeOutput search availableTools excludedTools manageScheduleEnabled]
+                      :partial [definitions] :experimental [imageGeneration]}
+  SessionCanvasOptions {:experimental [definitions requestRenderer provider]}
+  SessionExtensionOptions {:missing [enabled sdkPath identity]}
+  SessionInteractionOptions {:missing [onShellAuthenticationRequest commands onUserInputRequest askUserVariant
+                                        onElicitationRequest onExitPlanModeRequest onAutoModeSwitchRequest autoModeRecovery]}
+  SessionAgentOptions {:mapped [excludedBuiltinAgents includedBuiltinAgents localDiscoveryOnly selected directories]
+                       :missing [definitions default]}
+  SessionSkillOptions {:mapped [includedBuiltinSkills directories disabledSkills enabled] :experimental [provider]}
+  SessionGitHubOptions {:mapped [telemetryEnabled token fetchManagedSettings interactiveUser] :partial [capi]
+                        :missing [mcp tokenProvider]}
+  SessionFilesystemOptions {:mapped [trackFileChanges additionalDirectories]}
+  CreateSessionFilesystemOptions {:mapped [trustWorkingDirectory]}
+  SessionExecutionOptions {:experimental [limits autopilot]}
+  SessionInstructionOptions {:mapped [skipCustomInstructions directories organizationText onDemandDiscovery]}
+  CreateSessionInstructionOptions {:mapped [refreshCustomInstructions]}
+  SessionGitOptions {:mapped [coauthorEnabled enableHostGitOperations]}
+  SessionPermissionOptions {:partial [onRequest] :missing [sandbox mode]}
+  SessionMcpOptions {:missing [onAuthRequest servers] :experimental [enableApps]
+                     :mapped [oauthTokenStorage authClientIdMetadataUrl disabledServers]}
+  SessionHookOptions {:missing [handlers] :mapped [directories enableRepositoryHooks]}
+  SessionEventOptions {:mapped [streaming includeSubAgentStreamingEvents onEvent]}
+  SessionPluginOptions {:mapped [directories]}
+  SessionStateOptions {:missing [infiniteSessions] :partial [memory]
+                       :mapped [skipEmbeddingRetrieval embeddingCacheStorage enableCrossSessionStore createSessionFsProvider]}
+  ResumeSessionCanvasOptions {:experimental [open]}
+  MessageOptions {:mapped [prompt source attachments mode agentMode requestHeaders displayPrompt clientTurnId]
+                  :partial [responseSchema]}
+  Tool {:mapped [name title description parameters handler overridesBuiltInTool skipPermission defer metadata isTerminal idempotent]
+        :experimental [namespace]}
+  CapiSessionOptions {:mapped [enabled enableWebSocketResponses] :missing [autoTier] :experimental [fusionTier]}
+  MemoryConfiguration {:mapped [enabled] :experimental [mode storeMemory]}
+  InfiniteSessionConfig {:missing [enabled backgroundCompactionThreshold bufferExhaustionThreshold]}
+  GitHubMcpToolConfig {:missing [enableAllTools additionalToolsets additionalTools enableInsidersMode disableFormDeferral]}
+  CustomAgentConfig {:missing [hooks name displayName description tools prompt mcpServers infer skills model modelPolicy reasoningEffort]}
+  DefaultAgentConfig {:missing [excludedTools]}
+  ManagedSettings {:missing [permissions]}
+  ManagedSettingsPermissions {:missing [disableBypassPermissionsMode disableAssistedPermissionsMode deny ask allow limitTo]}
+  MCPServerConfigBase {:missing [type tools timeout]}
+  MCPStdioServerConfig {:missing [type command args env workingDirectory]}
+  MCPHTTPServerConfig {:missing [type url headers]}
+  CloudSessionOptions {:missing [repository]}
+  CloudSessionRepository {:missing [owner name branch]}
+  ExtensionInfo {:missing [source name]}
+  ToolSearchConfig {:mapped [enabled deferThreshold]}
+  LargeToolOutputConfig {:mapped [enabled maxSizeBytes outputDirectory]}
+  NamedProviderConfig {:experimental-mapped [name type localModel wireApi transport modelProvider baseUrl apiKey apiKeyCommand
+                                             bearerToken azure headers] :experimental [bearerTokenProvider]}
+  ProviderModelConfig {:experimental-mapped [autoLocal metadata id provider wireModel modelId name maxPromptTokens
+                                              maxContextWindowTokens maxOutputTokens] :experimental [capabilities]}
+  SessionHooks {:missing [onPreToolUse onPreMcpToolCall onPostToolUse onPostToolUseFailure onUserPromptSubmitted
+                          onUserPromptTransformed onSessionStart onSessionEnd onErrorOccurred onAgentStop
+                          onSubagentStart onSubagentStop]}
+  SessionUiApi {:missing [elicitation confirm select input]}
+  SectionOverride {:partial [action] :mapped [content]}
+  SessionListFilter {:mapped [workingDirectory gitRoot repository branch]}
+  SessionMetadata {:mapped [sessionId startTime modifiedTime summary isRemote context clientName lastClientName]}
+  GetStatusResponse {:mapped [version protocolVersion] :missing [hostDiagnostics]}
+  GetAuthStatusResponse {:mapped [isAuthenticated authType host login statusMessage]}}
+ :field-legend
+ {:mapped [:stable :mapped] :partial [:stable :partial] :missing [:stable :missing]
+  :experimental [:experimental :excluded] :experimental-partial [:experimental :partial]
+  :experimental-mapped [:experimental :mapped] :internal [:internal :excluded] :groups [:container :groups]}
+
+ ;; Type-only exports describe shapes, not another set of runtime calls. Locus is the
+ ;; nearest handwritten contract or explicitly experimental generated family.
+ ;; Option type names already cataloged above are referenced by :option-type-exports.
+ :option-type-exports
+ [CopilotClientOptions InProcessRuntimeConnection OwnedRuntimeOptions ClientPluginOptions ClientExtensionOptions
+  ClientInstallationOptions ClientObservabilityOptions ClientGitHubOptions ClientModelOptions CopilotClientInfo
+  TelemetryConfig SessionFsConfig SessionOptionsBase CreateSessionOptions ResumeSessionOptions SessionInferenceOptions
+  SessionPolicyOptions SessionExperimentOptions SessionToolOptions SessionCanvasOptions SessionExtensionOptions
+  SessionInteractionOptions SessionAgentOptions SessionSkillOptions SessionGitHubOptions SessionFilesystemOptions
+  CreateSessionFilesystemOptions SessionExecutionOptions SessionInstructionOptions CreateSessionInstructionOptions
+  SessionGitOptions SessionPermissionOptions SessionMcpOptions SessionHookOptions SessionEventOptions SessionPluginOptions
+  SessionStateOptions ResumeSessionCanvasOptions MessageOptions Tool CapiSessionOptions MemoryConfiguration
+  InfiniteSessionConfig GitHubMcpToolConfig CustomAgentConfig DefaultAgentConfig ManagedSettings ManagedSettingsPermissions
+  MCPStdioServerConfig MCPHTTPServerConfig CloudSessionOptions CloudSessionRepository ExtensionInfo ToolSearchConfig
+  LargeToolOutputConfig NamedProviderConfig ProviderModelConfig SessionHooks SessionUiApi SectionOverride
+  SessionListFilter SessionMetadata GetStatusResponse GetAuthStatusResponse]
+ :type-exports
+ {:native-host [CopilotClientMode]
+  :excluded-connections [ChildProcessRuntimeConnection SpawnedStdioRuntimeConnection SpawnedTcpRuntimeConnection TcpRuntimeConnection ForegroundSessionInfo]
+  :telemetry [TraceContext TraceContextProvider]
+  :session-storage [SessionFsProvider SessionFsByteRange SessionFsFileInfo SessionFsSqliteQueryResult SessionFsSqliteQueryType
+                    SessionFsSqliteProvider SessionFsSqliteStatement SessionFsSqliteTransactionErrorClass SessionContext
+                    TranscriptRecovery WorkingDirectoryTrust]
+  :events [AssistantMessageEvent SessionEvent SessionEventHandler SessionEventPayload SessionEventType SessionLifecycleEvent
+           SessionLifecycleEventMetadata SessionLifecycleEventType SessionLifecycleHandler SessionCreatedEvent SessionDeletedEvent
+           SessionUpdatedEvent SessionForegroundEvent SessionBackgroundEvent TypedSessionEventHandler TypedSessionLifecycleHandler]
+  :structured-message [ResponseSchema MessageSource ZodSchema ExtensionContextAttachment TrajectoryJsonValue JsonValue]
+  :system-message [SystemMessageAppendConfig SystemMessageConfig SystemMessageCustomizeConfig SystemMessageReplaceConfig
+                   SystemMessageSection SectionOverrideAction SectionTransformFn]
+  :tools [ToolHandler ToolInvocation CurrentToolMetadata ToolTelemetry ToolResultObject]
+  :mcp [MCPServerConfig]
+  :permission-decision [PermissionHandler PermissionRequest PermissionRequestedData PermissionRequestedEvent
+                        PermissionRequestResult AttributedPermissionResult PromptDecisionLabel PermissionDecisionContext
+                        PermissionDecisionOutcome PermissionDecisionSource PermissionDecisionSurface PermissionResponseCapability]
+  :open-policy [SandboxConfig SandboxConfigSource]
+  :open-status [HostDiagnostics HostErrorReportingStatus SessionCapabilities]
+  :auth [GitHubTokenAcquireReason GitHubTokenAcquireResult GitHubTokenProvider GitHubTokenProviderArgs GitHubTokenProviderResult]
+  :model [Model ModelBilling ModelBillingTokenPrices ModelBillingTokenPricesLongContext ModelCapabilities
+          AdaptiveThinkingSupport ModelCapabilitiesSupports ModelCapabilitiesLimits ModelCapabilitiesLimitsVision ModelPolicyState
+          ModelBillingPromo ModelPickerCategory ModelPickerPriceCategory ModelMessage ModelWarningText ModelCapabilitiesOverride
+          ModelCapabilitiesOverrideSupports ModelCapabilitiesOverrideLimits ModelCapabilitiesOverrideLimitsVision ModelPolicy AutoTier]
+  :interaction [AskUserVariant CommandContext CommandDefinition CommandHandler ElicitationFieldValue ElicitationHandler
+                ElicitationParams ElicitationContext ElicitationHandlerResult ElicitationResult ElicitationSchema
+                ElicitationSchemaField ExitPlanModeHandler ExitPlanModeRequest ExitPlanModeResult ShellAuthenticationHandler
+                ShellAuthenticationRequest ShellAuthenticationResponse AutoModeSwitchHandler AutoModeRecoveryContext
+                AutoModeSwitchRequest AutoModeSwitchResponse UiInputOptions]
+  :hooks [AgentStopHandler AgentStopHookInput AgentStopHookOutput SubagentStartHandler SubagentStartHookInput
+          SubagentStartHookOutput SubagentStopHandler SubagentStopHookInput SubagentStopHookOutput
+          UserPromptTransformedHandler UserPromptTransformedHookInput UserPromptTransformedHookOutput]
+  :session-management [SessionCreationHandler ManagedSessionInfo SessionManagementCloseRequest SessionManagementCloseResult
+                       SessionManagementConfigureRequest SessionManagementCreateHostRequest SessionManagementCreateRequest
+                       SessionManagementCreateResult SessionManagementListRequest SessionManagementListResult
+                       SessionManagementMessageRequest SessionManagementMessageResult SessionManagementPolicy
+                       SessionManagementScope SessionManagementToolOverrides]
+  :internal-assignment [CopilotExpAssignmentResponse ExpConfigEntry ExpFlagValue]
+  :experimental-provider [ProviderConfigModelProvider ProviderTokenArgs BearerTokenProvider]
+  :experimental-routing [CurrentModel FusionTier ModelSwitchAutoTierResult ModelSwitchAutoTierStatus]
+  :experimental-tools [ToolNamespace ImageGenerationConfig]
+  :experimental-execution [AutopilotOptions]
+  :experimental-entra [EntraAuthConfig EntraAuthOptions EntraTokenProvider EntraTokenProviderArgs EntraTokenProviderResult]
+  :experimental-telemetry [GitHubTelemetryNotification GitHubTelemetryEvent GitHubTelemetryClientInfo]
+  :experimental-skills [SkillProvider SkillProviderCallOptions SkillProviderDescriptor]
+  :experimental-memory [MemoryStoreCallOptions StoredMemory]
+  :experimental-extension-launch [ExtensionLaunchProfile ExtensionLaunchProvider ExtensionLaunchProviderResolveRequest
+                                  ExtensionLaunchProviderResolveResult]
+  :experimental-installation [InstallationConfirmationHandler InstallationConfirmationRequest InstallationConfirmationResponse
+                              InstallationDecision InstallationReview McpInstallationReview]
+  :experimental-network [NetworkAuthenticateBasicRequest NetworkAuthenticateBasicResult NetworkAuthenticateNegotiateRequest
+                         NetworkConfig NetworkResolveProxyRequest NetworkScope CopilotRequestContext]
+  :experimental-canvas [CanvasAction CanvasDeclaration CanvasHostContext CanvasHostContextCapabilities CanvasJsonSchema
+                        CanvasOptions CanvasProviderIdentity]
+  :experimental-ahp [AhpHostExit AhpHostOptions AhpHostAuthentication AhpSessionAuthentication AhpSessionCreateRequest
+                     AhpSessionResumeRequest HostLocalServerOptions HostGitHubEnvironmentOptions]
+  :experimental-workflow [WorkflowRunOptions WorkflowResumeOptions WorkflowLimitOverrides WorkflowResumeErrorCode
+                          SessionWorkflowApi WorkflowAgentOptions WorkflowContext WorkflowDefinition WorkflowHandle
+                          WorkflowAgentReference WorkflowJsonSchema WorkflowLimits WorkflowMeta WorkflowPipelineStage
+                          WorkflowStepOptions WorkflowRunResult WorkflowRunStatus WorkflowRunSummary WorkflowListRunsOptions
+                          WorkflowRunsPage WorkflowRunDetail WorkflowProgressPage WorkflowProgressLine WorkflowPhaseObservation
+                          WorkflowPhaseStatus WorkflowAgentContextObservation WorkflowAgentModelObservation
+                          WorkflowAgentReasoningEffortObservation WorkflowAgentSummary]
+  :experimental-decisions [DecisionCallOptions DecisionsAskResultWithNames YesNoOptions YesNoResult DecisionAnswer
+                           DecisionContext DecisionErrorData DecisionErrorKind DecisionLevel DecisionLevelProbability
+                           DecisionModelInfo DecisionModelLimits DecisionOption DecisionOptionProbability DecisionQuestion
+                           DecisionsAskRequest DecisionsAskResult DecisionUsage DecisionViolation]
+  :rpc-skills [SkillInstallSourceKind SkillInstallSourceScope SkillRemoveSourceEntry SkillRemoveSourceKind
+               SkillsInstallSourceRequest SkillsInstallSourceResult SkillsRemoveSourceInventory SkillsRemoveSourceOutcome
+               SkillsRemoveSourceRequest SkillsRemoveSourceResult]
+  :rpc-credentials-fetch [CredentialContextErrorCode CredentialContextErrorData FetchCancelRequest FetchCancelResult
+                          FetchCreateResult FetchFileErrorData FetchFileErrorKind FetchFileOperation FetchHeader FetchProxyEnv
+                          FetchReadRequest FetchReadResult FetchRedirect FetchRequestId FetchResponseMode FetchSendParams
+                          FetchSendRequest FetchSendResult FetchTransportErrorData FetchTransportErrorKind AuthIdentityMetadata AuthInfoType]
+  :rpc-provider-management [AzureMlAcquireFamilyRequest AzureMlHardwareResult AzureMlRegistrationKind AzureMlRegistrationOperation
+                            AzureMlRegistrationRequest AzureMlRegistrationResult ModelProviderSaveConfigurationRequest
+                            SavedProviderConfigurationAddModelRequest SavedProviderConfigurationAddModelResult
+                            SavedProviderConfigurationProviderInput SavedProviderConfigurationType
+                            SessionProvidersModelsDiagnoseRequest SessionProvidersModelsDiagnoseResult]
+  :rpc-local-models [LocalModelAutoRegistration LocalModelAzureMlIdentity LocalModelDescriptor LocalModelJsonValue
+                     LocalModelDiskRequirement LocalModelDownloadProgress LocalModelGpuRequirement LocalModelLimits LocalModelMachineRow
+                     LocalModelMachineView LocalModelNotice LocalModelOperation LocalModelSource LocalModelStatus LocalModelTimelineMessage
+                     LocalModelsConfigureRequest LocalModelsConfigureResult LocalModelsEvent LocalModelsInspectResult LocalModelsModelIdRequest
+                     LocalModelsModelRequest LocalModelsRefreshRequest LocalModelsSetupRequest LocalModelsSnapshot LocalModelsView
+                     LocalModelsWatchRequest LocalModelsWatchResult LocalModelsPrepareRequest LocalModelsPrepareResult
+                     LocalModelsDeleteModelRequest LocalModelsCancelRequest LocalModelsDismissNoticeRequest]
+  :rpc-connectors [ConnectorAccountRequest ConnectorAvailability ConnectorCapabilities ConnectorCatalogEntry ConnectorCatalogResult
+                   ConnectorCatalogStatus ConnectorConnectRequest ConnectorConnectResult ConnectorContinueRequest ConnectorDisconnectResult
+                   ConnectorMcpStatus ConnectorReconcileRequest ConnectorRuntimeStatus ConnectorSessionAccount ConnectorSessionAccountResult
+                   ConnectorStatus]
+  :rpc-model-admission [ModelGetReasoningSummariesRequest ModelGetReasoningSummariesResult ModelStartupAdmissionRequest ModelStartupAdmissionResult]
+  :rpc-lsp [LspConfigurationProblem LspConfigurationSnapshot LspServerSummary LspGlobalConfigurationRequest LspInitializeRequest
+            LspProbeExitStatus LspProbeRequest LspProbeResult LspSetEnabledRequest LspWarmupError LspWarmupResult LspListResult
+            LspListRequest SessionLspListResult SessionLspStartResult SessionLspDiagnoseResult SessionLspDiagnoseRequest SessionLspSetRequest]
+  :rpc-session-shell [RemoteSessionMode SessionsHasEventsRequest SessionsHasEventsResult ShellBuildInteractiveEnvironmentRequest
+                      ShellBuildInteractiveEnvironmentResult]}
+
+ :routes
+ {:client {:upstream ["client.ts#CopilotClient.constructor" "client.ts#CopilotClient.startInProcessFfi"
+                      "client.ts#CopilotClient.verifyProtocolVersion" "client.ts#CopilotClient.doStart"
+                      "client.ts#CopilotClient.setupClientGlobalHandlers" "ffiRuntimeHost.ts#FfiRuntimeHost"]
+           :preview [github.copilot-sdk/open-client!! github.copilot-sdk.native-host/open!
+                     github.copilot-sdk.native-host/host-config github.copilot-sdk.native-client/open-client!]}
+  :session-open {:upstream ["client.ts#CopilotClient.createSessionInternal" "client.ts#CopilotClient.resumeSessionWithInitialization"
+                            "client.ts#CopilotClient.applyModeDefaults" "client.ts#CopilotClient.updateSessionOptionsForMode"]
+                 :preview [github.copilot-sdk/open-session!! github.copilot-sdk/resume-session!!
+                           github.copilot-sdk.native-client/open-session* github.copilot-sdk.session-options/create-params
+                           github.copilot-sdk.session-options/resume-params github.copilot-sdk.session-options/open-options-patch]}
+  :turn {:upstream ["session.ts#CopilotSession.createSendParams" "session.ts#CopilotSession.sendWithCompletion"
+                    "session.ts#CopilotSession.sendAndWait" "session.ts#CopilotSession.getRawEvents"]
+         :preview [github.copilot-sdk.session-options/send-params github.copilot-sdk.turn/send-and-wait!
+                   github.copilot-sdk.turn/response-outcome github.copilot-sdk.native-client/history]}
+  :callback {:upstream ["client.ts#CopilotClient.attachConnectionHandlers" "session.ts#CopilotSession._dispatchEvent"]
+             :preview [github.copilot-sdk.native-callbacks/register! github.copilot-sdk.native-callbacks/publish!
+                       github.copilot-sdk.native-callbacks/invoke-request! github.copilot-sdk.native-fs/register!]}
+  :schema {:upstream ["index.ts#SessionEvent" "generated/session-events.ts#SessionEvent"]
+           :preview [github.copilot-sdk.generated.event-metadata/opaque-json-paths
+                     github.copilot-sdk.protocol/preserve-event-opaque-fields github.copilot-sdk.turn/normalize-event]}}
+
+ ;; SDK paths are relative to nodejs/src. No raw RPC leaf is a new stable method
+ ;; merely because its generated implementation or an old wrapper is present.
+ :callbacks
+ [{:path "ClientModelOptions.onListModels" :authority "client.ts#CopilotClient.listModels" :via :direct
+   :status :missing :contract "Host override instead of models.list; accepts a model list, shares the per-client successful cache, no fallback to the runtime on handler failure."}
+  {:path "ClientObservabilityOptions.onGetTraceContext" :authority "telemetry.ts#getTraceContext" :via :direct
+   :status :missing :contract "Resolve before create/resume/send (including sendAndWait); copy W3C traceparent/tracestate at the request root. Failed lookup must not break operations."}
+  {:path "InProcessRuntimeConnection.runOnUiThread" :authority "client.ts#CopilotClient.setupClientGlobalHandlers" :via :reverse
+   :wire "uiThread.run" :status :missing :contract "Host schedules the supplied action; the native connection configures UI-thread support, then runs the specific actionId. Not a generic event observer."}
+  {:path "Tool.handler" :authority "session.ts#CopilotSession._dispatchEvent" :via :broadcast :status :mapped
+   :wire ["external_tool.requested" "session.tools.handlePendingToolCall" "external_tool.completed"]
+   :contract "Arguments are user JSON. Only the owning handler answers; request completion or disconnect cancels it. Declaration-only tools require the manual path below."}
+  {:path "SessionPermissionOptions.onRequest" :authority "session.ts#CopilotSession._dispatchEvent" :via :broadcast :status :partial
+   :wire ["permission.requested" "session.permissions.handlePendingPermissionRequest" "permission.completed"]
+   :contract "Never infer approval from absence, hook resolution or failure. Preview accepts approve-once, reject, user-not-available and no-result only. No scope-specific approvals or attributed responses."}
+  {:path "SessionMcpOptions.onAuthRequest" :authority "client.ts#CopilotClient.createSessionInternal" :via :broadcast :status :missing
+   :wire ["session.eventLog.registerInterest" "mcp.oauth_required" "session.mcp.oauth.handlePendingRequest"]
+   :contract "Register interest after both create and resume acknowledge the effective ID. A truthy wire capability on open is not a substitute. Preserve provider token and cancellation shapes."}
+  {:path "SessionInteractionOptions.commands" :authority "session.ts#CopilotSession._dispatchEvent" :via :broadcast :status :missing
+   :wire ["interaction.commands" "command.execute" "session.commands.handlePendingCommand"]
+   :contract "Advertise name and description; run handler locally; report success/error by request id."}
+  {:path "SessionInteractionOptions.onElicitationRequest" :authority "session.ts#CopilotSession._handleElicitationRequest"
+   :via :broadcast :status :missing :wire ["interaction.requestElicitation" "elicitation.requested" "session.ui.handlePendingElicitation"]
+   :contract "Return typed fields or cancellation, with optional decisionContext. Preserve application-defined field names."}
+  {:path "SessionInteractionOptions.onUserInputRequest" :authority "client.ts#CopilotClient.handleUserInputRequest"
+   :via :reverse :status :missing :wire ["interaction.requestUserInput" "userInput.request"]}
+  {:path "SessionInteractionOptions.onShellAuthenticationRequest" :authority "client.ts#CopilotClient.handleShellAuthenticationRequest"
+   :via :reverse :status :missing :wire ["interaction.requestShellAuthentication" "shellAuthentication.request" "shellAuthentication.cancel"]
+   :contract "Advertise only when installed. Cancellation or handler failure must never substitute an answer; do not log secrets."}
+  {:path "SessionInteractionOptions.onExitPlanModeRequest" :authority "client.ts#CopilotClient.handleExitPlanModeRequest"
+   :via :reverse :status :missing :wire ["interaction.requestExitPlanMode" "exitPlanMode.request"]}
+  {:path "SessionInteractionOptions.onAutoModeSwitchRequest" :authority "client.ts#CopilotClient.handleAutoModeSwitchRequest"
+   :via :reverse :status :missing :wire ["interaction.requestAutoModeSwitch" "autoModeSwitch.request"]
+   :contract "autoModeRecovery requires the handler and positive open acknowledgment in capabilities.ui.autoModeRecovery. Consent is not a request to resend a turn."}
+  {:path "SessionHookOptions.handlers" :authority "session.ts#CopilotSession._handleHooksInvoke"
+   :via :reverse :status :missing :wire ["hooks.hasHandlers" "hooks.invoke"]
+   :contract "One dispatcher for the twelve SessionHooks fields. Register callbacks before open; keep dates, errors and opaque MCP inputs/outputs distinct from protocol records."}
+  {:path "SectionOverride.action" :authority "client.ts#extractTransformCallbacks" :via :reverse :status :partial
+   :wire ["systemMessage.sections" "systemMessage.transform"]
+   :contract "Preview handles the five static actions. A function-valued action must be registered by section ID and serialized as action=transform, never as a function."}
+  {:path "SessionGitHubOptions.tokenProvider" :authority "client.ts#CopilotClient.registerGitHubTokenProvider"
+   :via :reverse :status :missing :wire ["github.tokenProviderRegistrationId" "gitHubToken.getToken"]
+   :contract "Session-only, mutually exclusive with github.token. Register before open, rebind to canonical ID, re-supply on resume and release on rollback/detach. Pass host, sessionId, reason; return cancellation or token + expiresIn. Distinct from client auth and BYOK bearer callbacks."}
+  {:path "SessionStateOptions.createSessionFsProvider" :authority "client.ts#CopilotClient.setupSessionFs" :via :reverse
+   :status :mapped :wire ["sessionFs.setProvider" "sessionFs.readFile" "sessionFs.writeFile" "sessionFs.sqliteTransaction"]
+   :contract "Connection declares initialCwd, sessionStatePath, conventions and capabilities; per-session factory must be routable before session.open acknowledgment. Require independent binary, range and SQLite capabilities."}
+  {:path "SessionEventOptions.onEvent" :authority "session.ts#CopilotSession.on" :via :notification :status :mapped
+   :wire "session.event" :contract "Preview observer receives all session events; subscribe uses a closeable bounded channel. Filter typed events locally. Not the client lifecycle stream."}
+  {:path "CopilotClient.onLifecycle" :authority "client.ts#CopilotClient.handleSessionLifecycleNotification" :via :notification :status :missing
+   :wire "session.lifecycle" :contract "Client-wide created/deleted/updated, plus foreground/background where supported. Unsubscribe independently. Does not require the TUI for the first three."}
+  {:path "CopilotSession.setSessionCreationHandler" :authority "session.ts#CopilotSession.setSessionCreationHandler" :via :reverse :status :excluded
+   :wire ["session.management.configure" "sessionManagement.create"]
+   :contract "Public setter installs/removes the callback, rolls back on failed configuration and does not enable tools. docs/session-management.md explicitly labels the whole subsystem experimental."}]
+
+ :gaps
+ [{:id :policy-and-decisions :priority :release-blocker
+   :node ["types.ts#SessionPermissionOptions" "types.ts#ManagedSettingsPermissions" "types.ts#createAttributedResult"
+          "types.ts#approveAll" "session.ts#CopilotSession.permissionModeResult" "nodejs/README.md#Permission Result Kinds"]
+   :preview [github.copilot-sdk.native-callbacks/permission-result github.copilot-sdk.session-options/groups]
+   :why "Applications cannot impose managed policy or request sandbox/mode before the first tool starts. They cannot tell whether a requested mode was refused, identify a human decision, or return documented session/location/permanent approvals. Never broaden a grant as a substitute."
+   :detail "ManagedSettingsPermissions declares deny/ask/allow/limitTo and bypass/assisted settings. Unknown disableBypassPermissionsMode strings are forwarded so newer runtime policies fail closed; an empty limitTo denies all hosts. On resume, omission clears the injected layer. Attributed decisions carry result and decisionContext as siblings on the reply; userFeedback is optional. approveAll rejects managed sessions and abstains when managedApprovalRequired is set. No handler leaves work pending."}
+  {:id :pending-work :priority :release-blocker
+   :node ["types.ts#ResumeSessionOptions.continuePendingWork" "types.ts#SessionToolOptions.definitions" "types.ts#SessionPermissionOptions.onRequest"]
+   :preview [github.copilot-sdk.session-options/resume-params github.copilot-sdk.native-callbacks/invoke-request!]
+   :why "Setting continuePendingWork or registering a declaration-only tool can leave a request the application has no way to complete."
+   :detail "Expose the ability to find and answer pending tools/permissions (including error vs result and permission decision context), not a general raw-RPC escape hatch. No assumption of callback replay or a new broadcast on resume."}
+  {:id :resume-identity :priority :release-blocker
+   :node ["client.ts#CopilotClient.resumeSessionWithInitialization" "client.ts#CopilotClient.resolveSessionCallback"
+          "client.ts#CopilotClient.acquireSessionInitialization" "session.ts#CopilotSession.sessionId"]
+   :preview [github.copilot-sdk.native-client/open-session*]
+   :why "Preview rejects a runtime-provided canonical ID that differs from the requested prefix. That loses access to an otherwise valid session and its callbacks."
+   :detail "Separate strict caller-supplied create ID checking from resume rekeying, routing early callbacks, and replacement/rollback ownership. Preview refuses a second open handle to the same ID."}
+  {:id :session-credentials :priority :release-blocker
+   :node ["types.ts#GitHubTokenProvider" "client.ts#CopilotClient.validateSessionCredentials" "client.ts#CopilotClient.acquireGitHubToken"]
+   :preview [github.copilot-sdk.session-options/groups github.copilot-sdk.native-host/host-config]
+   :why "A fixed token and ambient client sign-in are not an alternative to per-session refresh or cancellation in a multitenant host."}
+  {:id :structured-wait :priority :release-blocker
+   :node ["types.ts#MessageOptions.responseSchema" "session.ts#CopilotSession.sendAndWait"]
+   :preview [github.copilot-sdk.session-options/send-params github.copilot-sdk.turn/response-outcome]
+   :why "A wait with raw JSON Schema can report success on an absent, blank, or tool-request assistant message. Node rejects these outcomes. Typed Zod parsing is separate and language-specific."}
+  {:id :model-selection :priority :high
+   :node ["client.ts#CopilotClient.listModels" "types.ts#ClientModelOptions.onListModels" "session.ts#CopilotSession.setModel"
+          "types.ts#SessionInferenceOptions.capabilities" "types.ts#CapiSessionOptions.autoTier"]
+   :why "Hosts need discoverable models and limits, overrides and in-session switching without losing conversation history. A model string at create time is not equivalent."
+   :capability-override {:status :missing
+                         :open-wire [inference capabilities] :switch-wire [modelCapabilities]
+                         :types {ModelCapabilitiesOverride [supports limits]
+                                 ModelCapabilitiesOverrideSupports [vision toolCalls reasoningEffort adaptive_thinking]
+                                 ModelCapabilitiesOverrideLimits [max_prompt_tokens max_output_tokens max_context_window_tokens vision]
+                                 ModelCapabilitiesOverrideLimitsVision [supported_media_types max_prompt_images max_prompt_image_size]}
+                         :note "These are optional non-null override fields, not the Model read shape. Preserve the mixed camelCase/snake_case wire keys. The switch envelope contains modelId and the provided high-level options; providerId is not a setModel option."}
+   :detail "listModels caches the first success for the connection, serializes concurrent misses, normalizes missing runtime capability limits, and permits a local model-list callback. setModel uses modelId, reasoningEffort, reasoningSummary, contextTier, modelCapabilities. The live autoTier/fusionTier variants are explicitly experimental; startup capi.autoTier is a provider-advertised string, not a closed enum."}
+  {:id :hooks-and-input :priority :high
+   :node ["types.ts#SessionInteractionOptions" "types.ts#SessionHooks" "types.ts#SectionTransformFn" "types.ts#SessionUiApi"]
+   :why "Preview cannot obtain a user's answers, run session/tool hooks, transform a system section or show capability-gated forms. A plain observer cannot return a reverse-request result."
+   :detail "Raw opaque arguments and metadata can cross reverse requests as well as events. Distinguish input/plan/auto/shell reverse calls from elicitation/commands/MCP OAuth broadcasts. The handler for each must already be routable before use."}
+  {:id :mcp-and-custom-agents :priority :high
+   :node ["types.ts#SessionMcpOptions" "types.ts#SessionGitHubOptions.mcp" "client.ts#toWireMcpServers"
+          "client.ts#toWireCustomAgents" "types.ts#SessionAgentOptions" "types.ts#DefaultAgentConfig"]
+   :why "Hosts cannot supply MCP servers, nested per-agent MCP settings, custom agent definitions, or authenticate MCP OAuth. Plugin/agent directory discovery is not a substitute."}
+  {:id :open-state :priority :high
+   :node ["session.ts#CopilotSession.workspacePath" "session.ts#CopilotSession.transcriptRecovery"
+          "session.ts#CopilotSession.capabilities" "types.ts#SessionStateOptions.infiniteSessions"]
+   :why "Opening handles discards all open-result fields except the ID; applications cannot see transcript repair or test UI capability. Automatic compaction and workspace retention cannot be configured."}
+  {:id :host-identity-observability :priority :high
+   :node ["client.ts#clientInfoToWire" "client.ts#CopilotClient.buildRuntimeEnv" "types.ts#ClientObservabilityOptions"
+          "types.ts#SessionOptionsBase.diagnostics" "types.ts#GetStatusResponse.hostDiagnostics" "client.ts#CopilotClient.onLifecycle"]
+   :why "Hosts cannot set application identity, session diagnostics, OpenTelemetry export, trace context or observe client-wide session lifecycle events. The status projection drops host diagnostics when present."}
+  {:id :cloud-create :priority :conditional
+   :node ["types.ts#CreateSessionOptions.cloud" "client.ts#CopilotClient.createSessionInternal" "docs/features/cloud-sessions.md"]
+   :why "Native host can request a cloud-backed session. This is not SDK TCP attachment. Preview always preassigns a local ID; cloud creation may require a server-assigned ID, late registration and bounded deletion on initialization failure."
+   :verification "Service entitlement, authentication, policies and a working remote backend are independently required. No cloud call verified."}
+  {:id :host-plugins-extensions :priority :conditional
+   :node ["types.ts#ClientPluginOptions" "types.ts#SessionExtensionOptions" "client.ts#CopilotClient.doStart"]
+   :why "Session plugin directories are not the trusted connection-wide plugin bundle. extensions.enabled/sdkPath/identity are native host options even though an extension joining its parent uses an excluded transport."}
+  {:id :isolated-tools-and-results :priority :high
+   :node ["toolSet.ts#BuiltInTools.Isolated" "types.ts#convertMcpCallToolResult" "types.ts#SessionToolOptions"]
+   :why "The curated session-bounded allowlist matters for empty-mode hosts. Accepting raw source-qualified strings is not exposing the curated list. Core MCP result conversion includes binary content as well as text."}
+  {:id :small-high-level-operations :priority :normal
+   :node ["client.ts#CopilotClient.getLastSessionId" "client.ts#CopilotClient.ping" "session.ts#CopilotSession.log"]
+   :why "Hosts lack last-session resume, health checks with an echoed message, and timeline logging with level/ephemeral controls. None requires a model call."}
+  {:id :forced-teardown :priority :conditional
+   :node ["client.ts#CopilotClient.forceStop" "client.ts#CopilotClient.doForceStop"]
+   :why "Preview close waits for graceful detach/shutdown. Retrying a quiescence barrier is not a force-stop path; forced release must never free a live native callback."}
+  {:id :ui-thread :priority :conditional
+   :node ["types.ts#InProcessRuntimeConnection.runOnUiThread" "client.ts#CopilotClient.connectViaFfi" "ffiRuntimeHost.ts#FfiRuntimeHost.runUiAction"]
+   :why "A host UI-thread scheduler is an explicit in-process ability. Its documented main use is interactive Entra on macOS, which is independently experimental. No need to expose a raw action-id API."}]
+
+ :wire-boundaries
+ [{:id :abi :authority ["ffiRuntimeHost.ts#loadLibrary" "client.ts#CopilotClient.startInProcessFfi"]
+   :mapped ["copilot_runtime_host_start" "copilot_runtime_connection_open" "copilot_runtime_connection_write"
+            "copilot_runtime_connection_close" "copilot_runtime_host_shutdown"]
+   :absent ["copilot_runtime_connection_set_ui_thread_handler" "copilot_runtime_connection_run_ui_action"]
+   :note "Rust uint32 handles, C bool, size_t lengths, borrowed outbound bytes, callback quiescence before release; JSON argv/env per host. Direct generic JNA, not a Java SDK, runtime subprocess or TCP stream."}
+  {:id :handshake :authority ["client.ts#CopilotClient.verifyProtocolVersion" "client.ts#clientInfoToWire"]
+   :note "JSON-RPC 2.0 is not SDK protocol 4. Preview sends connect {} and rejects mismatch. Node also sends supportedTaskKinds [agent, client, shell]; this is a negotiation difference, not a new public knob. Nonempty clientInfo fields map to editorName/editorVersion/extensionName/extensionVersion; omit empty identity. Do not import Node's old-host ping fallback for a pinned runtime."}
+  {:id :shape :authority ["client.ts#CopilotClient.createSessionInternal" "client.ts#CopilotClient.resumeSessionWithInitialization"
+                         "client.ts#CopilotClient.updateSessionOptionsForMode" "docs/v2-breaking-changes.md"]
+   :note "Only high-level grouped fields are input. Session root model, workingDirectory, systemMessage, clientName, configDirectory, enableConfigDiscovery and diagnostics do not move into arbitrary groups. Omission, false, empty and null differ. defaultProvider null clears, omission on resume preserves. agents.definitions[].tools permits null; optional booleans do not. The private optionsCompatibility.ts normalizeClientOptions/normalizeSessionOptions bridges erased JS shapes; not a Clojure compatibility mandate."}
+  {:id :open-defaults :authority ["client.ts#CopilotClient.resolveToolFilterOptions" "client.ts#CopilotClient.configDefaultsForMode"
+                                  "client.ts#CopilotClient.getSystemMessageConfigForMode" "client.ts#CopilotClient.updateSessionOptionsForMode"]
+   :note "Empty mode needs isolated storage and an explicit availableTools (including []). Remove environment_context unless supplied or replace is explicit. Separate post-open options.update sets skipCustomInstructions, localDiscoveryOnly, coauthorEnabled, manageScheduleEnabled, plugins.installed, includedBuiltinSkills. Only localDiscoveryOnly belongs in both requests; plugins.installed is not a public input. Wait for patch; clean up on failure. Node serializes several empty group objects even without inputs; the preview omits them. Do not assert byte equivalence or blanket semantic equivalence."}
+  {:id :open-result :authority ["client.ts#CopilotClient.createSessionInternal" "client.ts#CopilotClient.resumeSessionWithInitialization"]
+   :note "Create-only name, cloud, trustWorkingDirectory and refreshCustomInstructions differ from resume-only allowTranscriptRecovery, suppressResumeEvent and continuePendingWork. TranscriptRecovery has plannedBackupPath, invalidLineNumbers and sessionStartMoved. permissionModeResult is absent without a request, otherwise {success,mode}. Keep absence distinct from false. Resume can return a different canonical sessionId."}
+  {:id :wire-names :authority ["client.ts#toWireLargeOutput" "client.ts#toWireMcpServers" "client.ts#toWireCustomAgents"
+                              "client.ts#CopilotClient.toSessionMetadata" "session.ts#CopilotSession.createSendParams"]
+   :note "MCP workingDirectory -> cwd, including agents' nested mcpServers. largeOutput.outputDirectory -> outputDir. Metadata/list filter workingDirectory -> wire cwd (preview :cwd); timestamps -> Instants. Send responseSchema -> responseFormat {type:json_schema,jsonSchema:{name:response,strict:true,schema}}; never add a session default. requestHeaders, env, agent hook payloads, tool schema and metadata retain application keys."}
+  {:id :callback-wire :authority ["client.ts#extractTransformCallbacks" "client.ts#extractBearerTokenProviders" "client.ts#CopilotClient.createSessionInternal"]
+   :note "Register local functions; only declarations, true/false flags or opaque IDs go on wire. Handlerless tool has hasHandler=false. onEvent is local. MCP uses envValueMode=direct. hasHandlers examines actual hook callbacks. Unrelated reverse requests never share session credentials; secret values cannot enter error diagnostics."}
+  {:id :manual-response :authority ["types.ts#ResumeSessionOptions.continuePendingWork" "types.ts#SessionPermissionOptions.onRequest"
+                                   "types.ts#SessionToolOptions.definitions" "session.ts#CopilotSession._dispatchEvent"]
+   :note "The high-level options explicitly rely on pending RPCs. Use session.tools.listPendingRequests/handlePendingToolCall and session.permissions.pendingRequests/handlePendingPermissionRequest as wire evidence. Restore pending IDs without replaying callbacks; no-result means no reply. A generic low-level wrapper or observer does not prove these four capabilities."}
+  {:id :turn :authority ["session.ts#CopilotSession.sendWithCompletion" "session.ts#CopilotSession.sendAndWait"]
+   :note "Submission acknowledgment is not completion. Correlate by specific request, drain its completionEventId on success/error, reject aborted/non-root results, local timeout is not abort. No structured success for blank, missing, or tool-request responses. Raw JSON Schema returns an event, not parsed data; Zod's parse overload is language-only."}
+  {:id :opaque-history :authority ["session.ts#CopilotSession.getEvents" "session.ts#CopilotSession.getRawEvents" "taskAnalyticsJson.ts#parseTrajectoryJson"]
+   :note "Normalized history and live event payloads must preserve designated opaque fields. Unmodified raw history retains null, unknown keys, original timestamp and exact integers. Supporting raw history does not implement an exported standalone parser; successful example events do not certify every payload."}]
+
+ :legacy-experiments
+ [{:v1 [github.copilot-sdk/define-workflow github.copilot-sdk/run-workflow! github.copilot-sdk/resume-workflow!]
+   :node ["workflow.ts#defineWorkflow" "session.ts#CopilotSession.workflow" "extension.ts#JoinSessionOptions.workflows"]
+   :native :not-carried :reason "Experimental dynamic workflows; registration belongs to parent-extension join. Do not keep a v1 wire runtime merely for this feature."}
+  {:v1 [github.copilot-sdk/get-current-model github.copilot-sdk/list-tools github.copilot-sdk/get-quota
+        github.copilot-sdk/history-clear-context! github.copilot-sdk.session/mode-set! github.copilot-sdk.session/fleet-start!
+        github.copilot-sdk.session/mcp-enable! github.copilot-sdk.session/skills-reload! github.copilot-sdk.session/remote-enable]
+   :node ["client.ts#CopilotClient.rpc" "session.ts#CopilotSession.rpc" "generated/rpc.ts#createServerRpc" "generated/rpc.ts#createSessionRpc"]
+   :native :not-carried :reason "Representative experimental raw-RPC wrappers, not a requirement to port every generated namespace. High-level listModels, setModel, MCP setup and answering pending requests have separate authorities."}
+  {:v1 [github.copilot-sdk/attributed-permission-result github.copilot-sdk/handle-pending-permission-request!]
+   :node ["types.ts#createAttributedPermissionResult" "types.ts#createAttributedResult" "types.ts#ResumeSessionOptions"]
+   :native :behavior-missing :reason "Historical experimental marker is not a reason to ignore the independently documented 2.0.1 high-level behaviors."}
+  {:v1 [:providers :models :enable-mcp-apps :enable-citations :session-limits :on-github-telemetry :exp-assignments]
+   :node ["types.ts#SessionInferenceOptions" "types.ts#SessionExecutionOptions" "types.ts#SessionMcpOptions" "types.ts#SessionExperimentOptions" "types.ts#ClientGitHubOptions"]
+   :native :selective :reason "Named BYOK catalog works for a subset; bearerTokenProvider and model capabilities not in the frozen builder. Singular provider removed. MCP Apps, native citations, limits, telemetry forwarding remain experimental and unimplemented. Exp assignments explicitly internal."}
+  {:v1 [github.copilot-sdk/open-canvases :large-output]
+   :node ["canvas.ts#Canvas" "session.ts#CopilotSession.openCanvases" "types.ts#SessionToolOptions.largeOutput"]
+   :native :selective :reason "Canvas snapshots belong to the experimental subsystem. In contrast largeOutput is now a handwritten grouped field (outputDirectory -> outputDir); the stale v1 CLI-only rationale does not apply."}]
+
+ :classification-notes
+ {:backing-types {:documented-options [SessionPermissionOptions.mode SessionPermissionOptions.sandbox SessionOptionsBase.diagnostics
+                                       SessionInferenceOptions.capabilities GetStatusResponse.hostDiagnostics]
+                  :generated-types [PermissionMode SandboxConfig DiagnosticsConfiguration ModelCapabilitiesOverride HostDiagnostics]
+                  :contrast [Model GitHubTokenAcquireResult PermissionDecision]
+                  :references ["types.ts#SessionPermissionOptions" "types.ts#SessionInferenceOptions" "types.ts#GetStatusResponse"
+                               "nodejs/README.md#Permission Result Kinds" "docs/v2-breaking-changes.md#Restructured lifecycle RPC payloads"]
+                  :note "The handwritten APIs, including startup permission mode and the result, are public; the underlying generated shapes carry experimental markers. Preserve both facts. A conservative opt-out of those shapes is a scoped omission of the documented high-level behavior, not evidence of full parity."}
+  :scoped-experiments ["docs/session-management.md explicitly marks the whole management feature experimental, including the named callback setter."
+                       "providerConfiguration.ts#toSavedProviderConfiguration itself is unmarked. Its target is the credential-free projection for experimental persisted-provider configuration; see nodejs/examples/persist-discovered-model.ts#persistDiscoveredModel. Do not treat it as evidence of supported live credentials."
+                       "taskAnalyticsJson.ts#parseTrajectoryJson is experimental, while CopilotSession.getRawEvents is a separate documented lossless read."
+                       "generated/rpc.ts#createServerRpc/createSessionRpc group declarations carry experimental markers. registerClientGlobalApiHandlers, createInternalServerRpc, createInternalSessionRpc and CopilotSession's @internal register/set/_handle methods are plumbing. The absence of a Clojure raw-rpc facade is deliberate; high-level methods implemented through it still count."]
+  :runtime-selection {:mapped [RuntimeConnection.forInProcess] :excluded [RuntimeConnection.forSpawnedStdio
+                                                                          RuntimeConnection.forSpawnedTcp RuntimeConnection.forTcp]
+                      :note "forDefault may honor COPILOT_SDK_DEFAULT_CONNECTION=stdio in Node. Clojure has exactly one native host and no parent or external transport selector. Child args/env/path/workingDirectory/ports/tokens are not in-process client options; a session workingDirectory is."}
+  :language-only [Symbol.asyncDispose ZodSchema ResponseSchema.parse ToolSet.toArray]
+  :local-only [github.copilot-sdk/with-client github.copilot-sdk/with-session github.copilot-sdk/await!!]}
+
+ :proofs
+ {:fixture-run {:command "From git archive <preview tree>, with classpath v2/src:v2/test:src:test and that tree's deps.edn, run clojure.test/run-tests on github.copilot-sdk.{session-options-test,native-callbacks-test,turn-test,native-client-test}."
+                :scope :pure-and-framed-protocol-fixtures :model-calls 0 :native-image-loaded false
+                :tests 24 :assertions 250 :failures 0 :errors 0}
+  :verified
+  [{:for :option-projection :test github.copilot-sdk.session-options-test/grouped-native-options-cross-the-json-boundary
+    :covers "Selected create/resume options, false/empty, callback flags, and case-preserving opaque schema/metadata."}
+   {:for :option-presence :test github.copilot-sdk.session-options-test/absent-null-false-and-empty-are-not-interchangeable
+    :covers "In particular defaultProvider omission vs null and models []; does not cover every optional field."}
+   {:for :patch-defaults :test github.copilot-sdk.session-options-test/empty-mode-is-two-distinct-requests
+    :covers "Pure encoding of local mode defaults and post-open patch, not runtime policy enforcement."}
+   {:for :turn-publication :test github.copilot-sdk.turn-test/overlapping-rpcs-keep-their-own-response-and-publication-boundary
+    :covers "Specific overlapping native completion IDs; does not certify structured output."}
+   {:for :tool-and-permission :test github.copilot-sdk.native-callbacks-test/broadcasts-invoke-handlers-and-use-session-scoped-replies
+    :covers "Framed peer receives scoped replies; not the entire permission result union or other callback families."}
+   {:for :metadata-and-history :test github.copilot-sdk.native-client-test/metadata-and-history-preserve-their-distinct-contracts
+    :covers "Fixture metadata, nil when missing, timestamp, raw history/null/large integer, channel status, auth and deletion."}]
+  :frozen-tests-inspected-not-run
+  [github.copilot-sdk.native-offline-test/native-offline-turn
+   github.copilot-sdk.native-offline-test/native-offline-custom-tool-turn
+   github.copilot-sdk.native-fs-integration-test/named-session-resumes-from-provider-without-a-turn
+   github.copilot-sdk.native-host-test/isolated-real-native-hosts
+   github.copilot-sdk.native-fs-test/sqlite-and-write-failures-have-distinct-envelopes]
+  :limits ["No model, service, interactive UI, cloud, cross-platform ABI, or authenticated runtime verification. Offline provider fixture sources are not executions in this comparison."
+           "The separate frozen native-fs-test uses a legacy mock-server that refers to sdk/event-types. It does not load with the v2 facade first on the classpath. Do not count it as executed native-profile evidence."
+           "The optional catalog test checks symbol coverage against git objects, not wire compatibility. The Node source snapshot lacks nodejs/test; examples/docs are not passing upstream tests."
+           "The frozen facade snapshot and fdefs guard names, arities and some shapes. Open map? fdefs for session options do not prove leaf contracts, error paths or backend acceptance."
+           "Generated RPC type families and exported wildcard event types are cataloged by authority, not verified leaf-by-leaf. Do not infer support for all platforms, events, schemas, payload variants, permission scopes or service features."
+           "Statuses describe only the frozen preview. New implementations, tests, documentation and proof of runtime behavior require new evidence; do not retarget this ledger by changing its pins."]}}

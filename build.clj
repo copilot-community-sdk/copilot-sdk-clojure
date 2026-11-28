@@ -7,7 +7,7 @@
   (:import [java.io File]))
 
 (def lib 'io.github.copilot-community-sdk/copilot-sdk-clojure)
-(def version "1.0.16.0")
+(def version "2.0.3.0-SNAPSHOT")
 (def class-dir "target/classes")
 
 (defn- try-sh
@@ -41,7 +41,7 @@
 
 (defn- pom-template [version]
   (let [email (get-developer-email)]
-    [[:description "Clojure SDK for GitHub Copilot CLI."]
+    [[:description "In-process Clojure SDK for the Copilot Rust runtime."]
      [:url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"]
      [:licenses
       [:license
@@ -63,7 +63,7 @@
          :lib lib
          :version version
          :jar-file (format "target/%s-%s.jar" lib version)
-         :basis (b/create-basis {})
+         :basis (b/create-basis {:user nil})
          :class-dir class-dir
          :target "target"
          :src-dirs ["src"]
@@ -111,12 +111,21 @@
       (throw (ex-info "Credentials not found. Set CENTRAL_USERNAME/CENTRAL_PASSWORD or configure ~/.m2/settings.xml with server id 'central'" {})))
     {:username username :password password}))
 
+(defn- release-jar!
+  "Release CI tests the prepared artifact and must not rebuild it for signing."
+  [opts]
+  (if (:prepared opts)
+    (let [{:keys [jar-file]} (jar-opts opts)]
+      (when-not (.isFile (File. jar-file))
+        (throw (ex-info "No tested release JAR at the expected path" {:file jar-file}))))
+    (jar opts)))
+
 (defn bundle
   "Create bundle zip for Maven Central. Usage: clj -T:build bundle"
   [opts]
   (let [v (or (:version opts) version)]
     (when (:version opts) (alter-var-root #'version (constantly v)))
-    (jar opts)
+    (release-jar! opts)
     (let [artifact-dir (str "target/bundle/" (str/replace (namespace lib) "." "/") "/" (name lib) "/" v)
           pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
           files {:jar (format "copilot-sdk-clojure-%s.jar" v)
@@ -181,7 +190,7 @@
   [opts]
   (let [{:keys [username password]} (get-central-credentials)
         v (or (:version opts) version)]
-    (jar opts)
+    (release-jar! opts)
     (let [base-url "https://central.sonatype.com/repository/maven-snapshots"
           auth (str username ":" password)
           jar-file (format "target/%s-%s.jar" lib v)
@@ -218,23 +227,8 @@
 (defn release "Alias for deploy-central." [opts] (deploy-central opts))
 
 (def ^:private install-doc-files
-  "Docs embedding install coordinates (mvn version + git SHA), kept in sync at release time."
+  "Guides that name the community SDK version, not the runtime classifier version."
   ["README.md" "doc/getting-started.md"])
-
-(defn update-install-doc-shas "Update the git SHA in install docs to HEAD." [_opts]
-  (let [{:keys [exit out]} (shell/sh "git" "rev-parse" "HEAD")
-        sha (str/trim out)]
-    (when-not (zero? exit) (throw (ex-info "Failed to read git SHA" {})))
-    (doseq [file install-doc-files]
-      (let [content (slurp file)
-            match? (boolean (re-find #":git/sha \"[^\"]+\"" content))
-            updated (str/replace content #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
-        (when-not match? (throw (ex-info (str "git SHA pattern not found in " file) {:file file})))
-        (if (= content updated)
-          (println file "SHA already up to date:" sha)
-          (do
-            (spit file updated)
-            (println "Updated" file "SHA to" sha)))))))
 
 (defn- update-version-in-files!
   "Update version string in all files that reference it."
@@ -249,13 +243,14 @@
         (println "build.clj already at version" new-version)
         (throw (ex-info "Failed to update version in build.clj" {}))))
     (spit "build.clj" updated))
-  ;; install docs (mvn coordinate)
+  ;; Do not rewrite the independently pinned platform artifact.
   (doseq [file install-doc-files]
     (let [content (slurp file)
-          updated (str/replace content
-                               #"\{:mvn/version \"[^\"]+\"\}"
-                               (str "{:mvn/version \"" new-version "\"}"))]
-      (spit file updated)))
+          label "Community SDK version in this checkout:"
+          marker (re-pattern (str label " `[^`\\n]+`"))]
+      (when-not (re-find marker content)
+        (throw (ex-info "Community SDK version missing from installation guide" {:path file})))
+      (spit file (str/replace-first content marker (str label " `" new-version "`")))))
   (println "Updated: build.clj," (str/join ", " install-doc-files)))
 
 (def ^:private upstream-version-re

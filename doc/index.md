@@ -1,65 +1,29 @@
 # Documentation
 
-Clojure SDK for programmatic control of the GitHub Copilot CLI via JSON-RPC.
+Use the native Clojure SDK to run Copilot inside your JVM.
 
-## Getting Started
+| Task | Guide |
+|---|---|
+| Configure a platform dependency and send a model request | [Getting started](getting-started.md) |
+| Update a CLI-based application | [Migration from 1.x](guides/native-2x.md) |
+| Choose an operation, handle errors, and release resources | [Public API](reference/API.md) |
+| Run the demos | Use `./run-all-examples.sh --live` for the portable live suite, or `./run-all-examples.sh` for offline smoke tests. Add a demo name to run just one. See `examples/README.md`. |
+| Understand deployment and ownership | [Native runtime decision](adr/2026-11-24-native-only-runtime.md) |
+| Understand turn results and live session events | [Turn completion decision](adr/2026-11-27-turn-completion.md) |
+| Maintain event schemas or documentation | [Code generation](codegen.md), [documentation style](style.md) |
 
-- [Getting Started](getting-started.md) — Step-by-step tutorial building a weather assistant
-- [Examples](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md) — 20 working examples with walkthroughs
+`bb docs` generates the public namespace reference: `copilot.sdk`,
+`copilot.sdk.helpers`, `copilot.sdk.specs`, `copilot.sdk.instrument`, and
+`copilot.sdk.tool-set`. The protocol transport and generated wire
+namespaces are internal, not application APIs.
 
-## Guides
+The native decision defines the current scope. Earlier decisions in `doc/adr/`
+record why 1.x worked as it did; they are not transport or feature promises for
+2.x. See the [1.x documentation at its source revision](https://github.com/copilot-community-sdk/copilot-sdk-clojure/tree/01246672fc5fb8e8f2b50437eea6a55145e54934/doc)
+for those APIs and the [historical benchmark evidence](https://github.com/copilot-community-sdk/copilot-sdk-clojure/tree/01246672fc5fb8e8f2b50437eea6a55145e54934/benchmarks)
+for that implementation. No 2.x performance comparison follows from those measurements.
 
-- [Authentication](auth/index.md) — Session-scoped token providers, GitHub auth, OAuth, environment variables, priority order
-- [BYOK Providers](auth/byok.md) — Bring Your Own Key for OpenAI, Azure, Anthropic, Ollama
-- [Azure Managed Identity](auth/azure-managed-identity.md) — Azure BYOK with Managed Identity (no API keys)
-- [MCP Servers](mcp/overview.md) — Model Context Protocol server integration
-- [MCP Debugging](mcp/debugging.md) — Troubleshooting MCP connections
-- [Custom Agents](guides/custom-agents.md) — Define specialized agents with scoped tools for sub-agent orchestration
-- [Dynamic Workflows](guides/dynamic-workflows.md) — Reverse-executed, resumable extension workflows, **experimental**
-
-## Features
-
-Quick links to the major SDK capabilities (see the [API Reference](reference/API.md) for full detail):
-
-- [Streaming events](reference/API.md#streaming) — incremental assistant/reasoning deltas
-- [Tools](reference/API.md#tools) and [Tool Sets](reference/API.md#tool-sets) — expose and filter callable tools
-- [Session Hooks](reference/API.md#session-hooks) — pre/post tool-use and lifecycle interception
-- [UI Elicitation](reference/API.md#ui-elicitation) — `ask_user` / structured elicitation handlers
-- [File & Blob Attachments](reference/API.md#file-attachments) — image and binary input
-- [Custom Agents](guides/custom-agents.md) — specialized sub-agents with scoped tools
-- [BYOK Providers](auth/byok.md) — OpenAI, Azure, Anthropic, Ollama
-- [MCP Servers](mcp/overview.md) — Model Context Protocol integration
-- [Observability](reference/API.md#observability) — OpenTelemetry export and session telemetry. **Privacy note:** `:capture-content?` records prompt/response content and is **off by default** — enable only in trusted environments.
-- [Client Mode `:empty`](reference/API.md#client-mode-empty) — multi-tenant SaaS isolation. **Security note:** hardens sessions against local machine state; intended for hosts serving multiple users.
-- [Session Filesystem](reference/API.md#session-filesystem) — route filesystem operations through host-provided handlers. **Security note:** the host fully controls session file access.
-- Remote / cloud sessions (`:remote-session`, `:cloud`) and [fleet mode](reference/API.md#experimental-rpc-methods) — **experimental**; not covered by GA semver guarantees.
-- [Dynamic Workflows](guides/dynamic-workflows.md) — reverse-executed, resumable workflows for extensions. **experimental**; not covered by GA semver guarantees.
-
-## Reference
-
-- [API Reference](reference/API.md) — Complete API: helpers, client, session, events, tools
-- [Generated API Docs](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/api/index.html) — Codox-generated namespace documentation
-
-## Architecture Decisions
-
-- [ADR: Preserve MCP recovery and readiness contracts](adr/2026-10-19-mcp-recovery-and-readiness.md) -- Capability-gated OAuth renewal, terminal outcomes, tool readiness, and compression diagnostics.
-- [ADR: Preserve session, hook, and compaction contracts](adr/2026-10-16-session-hooks-and-compaction.md) -- Session naming/discovery, callback context, and stable event metadata without new experimental authority.
-- [ADR: Preserve transport diagnostics and opaque policy](adr/2026-10-12-transport-diagnostics-and-opaque-policy.md) -- Request compression, WebSocket fallback attribution, and passive policy/usage metadata.
-- [ADR: Preserve extensible identifiers and policy boundaries](adr/2026-10-09-extensible-routing-and-event-contracts.md) -- Dynamic Auto tiers, managed policy, write previews, accounting metadata, and bounded generated validators.
-- [ADR: Preserve callback, filesystem, and event authority boundaries](adr/2026-10-05-callback-and-event-contracts.md) -- Subagent hooks, exact binary I/O, scoped cloud cleanup, and passive response provenance.
-- [ADR: Separate BYOK configuration identity from runtime telemetry](adr/2026-10-04-byok-provider-telemetry.md) -- Closed provider keywords, extensible event strings, and shared builder translation.
-- [ADR: Expose transcript recovery and bound owned-runtime disconnection](adr/2026-10-02-transcript-recovery-and-owned-exit.md) -- Resume recovery contracts and process-exit cleanup without new experimental controls.
-- [ADR: Separate stable model policy from experimental host controls](adr/2026-09-30-model-policy-and-lifecycle-sync.md) -- Stable allowlists and lifecycle contracts without new experimental authority.
-- [ADR: Migrate the existing orchestration API to Dynamic Workflows](adr/2026-09-27-dynamic-workflow-migration.md) -- Replaces the retired experimental Factory surface without compatibility aliases or unrelated experimental additions.
-- [ADR: Defer a host-owned inference boundary](adr/2026-08-10-host-owned-inference-boundary.md) -- **Accepted.** Keeps the upstream experimental `requestHandler` / `llmInference.*` lifecycle outside the supported SDK until concrete Clojure demand or upstream stabilization/material redesign.
-- [ADR: Add scope-bound query sequences before deprecating query-seq!](adr/2026-08-08-query-seq-scoped-lifecycle.md) -- **Accepted.** Adds `with-query-seq` as the safe default for streaming/seq-style consumption; `query-seq!` deprecation and removal are deferred, separate future steps.
-
-## Contributing
-
-- [Style Guide](style.md) — Documentation authoring conventions
-- [Code Generation](codegen.md) — Schema-driven generation of clojure.spec definitions
-- [Matched Node/Clojure Benchmarks](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/benchmarks/README.md) — Deterministic cross-SDK performance evidence
-- [Upstream Doc Gap Matrix](upstream-doc-gap-matrix.md) — Per-topic coverage vs the upstream SDK docs
-- [AGENTS.md](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/AGENTS.md) — Guidelines for AI agents working on this codebase
-- [PUBLISHING.md](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/PUBLISHING.md) — Versioning, CI/CD workflows, release process, build attestation
-- [CHANGELOG](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/CHANGELOG.md) — Version history
+In `test/resources/`, `native_2_0_1_contracts.edn` is the frozen upstream and
+preview inventory. `native_2_0_1_rc_overlay.edn` maps that inventory to the
+candidate's source, tests, and outstanding gaps. A mapped symbol or a passing
+example is not a certificate of complete upstream parity.

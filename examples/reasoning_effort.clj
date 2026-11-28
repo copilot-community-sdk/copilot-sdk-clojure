@@ -1,22 +1,24 @@
 (ns reasoning-effort
-  "Demonstrates setting the reasoning effort level for a session.
-   The :reasoning-effort option accepts \"low\", \"medium\", \"high\", or \"xhigh\"
-   and controls how much reasoning the model applies to its responses."
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  "Select an advertised reasoning effort for a model that supports it."
+  (:require [basic-chat]
+            [copilot.sdk :as copilot]))
 
-;; See examples/README.md for usage
+(defn- supported? [model id effort]
+  (let [levels (:supported-reasoning-efforts model)]
+    (and (or (nil? id) (= id (:id model)))
+         (if effort (some #{effort} levels) (seq levels)))))
 
-(def defaults
-  {:prompt "What is the capital of France? Answer in one sentence."
-   :effort "low"})
-
-(defn run
-  [{:keys [prompt effort] :or {prompt (:prompt defaults) effort (:effort defaults)}}]
-  (println "Reasoning effort:" effort)
-  (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                         :model "gpt-5.4"
-                                         :reasoning-effort effort
-                                         :available-tools []}]
-    (println "Q:" prompt)
-    (println "🤖:" (h/query prompt :session session))))
+(defn run [client options prompt]
+  (let [requested (:model options)
+        requested-effort (not-empty (System/getenv "COPILOT_DEMO_REASONING_EFFORT"))
+        models (copilot/await!! (copilot/list-models client))
+        model (first (filter #(supported? % requested requested-effort) models))
+        levels (:supported-reasoning-efforts model)
+        effort (or requested-effort (some #{"low"} levels) (first levels))]
+    (when-not model
+      (throw (ex-info "No matching model advertises the requested reasoning effort"
+                      {:requested-model requested :requested-effort requested-effort})))
+    (copilot/with-session [session client options]
+      (println "Model:" (:id model) "| supported efforts:" levels "| selected:" effort)
+      (copilot/await!! (copilot/set-model! session (:id model) {:reasoning-effort effort}))
+      (basic-chat/ask session prompt))))

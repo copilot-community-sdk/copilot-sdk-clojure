@@ -52,7 +52,7 @@ jobs:
           if ! git diff --exit-code -- src/github/copilot_sdk/generated/; then
             echo
             echo "::error::Generated code is out of sync with schemas/."
-            echo "Run \`bb codegen\` locally and commit the result."
+            echo "Run \`bb codegen\` locally."
             exit 1
           fi
 

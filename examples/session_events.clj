@@ -1,143 +1,60 @@
 (ns session-events
-  "Example: Monitoring session state events.
+  (:require [clojure.core.async :as a]
+            [clojure.string :as str]
+            [copilot.sdk :as copilot]
+            [copilot.sdk.helpers :as h]))
 
-   This example demonstrates how to observe and handle session events."
-  (:require [clojure.core.async :refer [<!!]]
-            [github.copilot-sdk :as copilot :refer [evt]]))
+(defn callback-stream [client options prompt]
+  (let [text (atom "")
+        observe (fn [{:keys [type data error]}]
+                  (when error (binding [*out* *err*] (println "Live display stopped:" (:type (ex-data error)))))
+                  (when (= type :copilot/assistant.message_delta)
+                    (let [delta (:delta-content data)]
+                      (swap! text str delta)
+                      (print delta) (flush))))]
+    (copilot/with-session [session client (assoc options :events {:streaming? true :on-event observe})]
+      (println "You:" prompt)
+      (print "Live: ") (flush)
+      (let [reply (copilot/send-and-wait!! session {:prompt prompt :timeout-ms 60000})
+            answer (get-in reply [:data :content])]
+        (when (str/blank? answer) (throw (ex-info "The model returned no final answer" {})))
+        (println)
+        (println "Final:" answer)
+        {:streamed @text :final answer}))))
 
-;; See examples/README.md for usage
-(declare format-event)
+(def ^:private turn-event-types
+  [:copilot/user.message :copilot/assistant.turn_start :copilot/assistant.message_delta
+   :copilot/assistant.message :copilot/assistant.turn_end :copilot/session.idle])
 
-(defn run
-  "Run a conversation while monitoring all session state events."
-  [{:keys [prompt model reasoning-effort]
-    :or {prompt "Think hard - How many \"r\"s in strawberry?"
-         model "gpt-5.4"
-         reasoning-effort "high"}}]
-  (copilot/with-client-session
-    [client {:log-level :debug}
-     session {:on-permission-request copilot/approve-all
-              :model model
-              :streaming? true
-              :reasoning-effort reasoning-effort}]
-    (let [events-ch (copilot/subscribe-events session)
-          all-events (atom [])]
-      (copilot/send! session {:prompt prompt})
-      (loop []
-        (when-let [event (<!! events-ch)]
-          (swap! all-events conj event)
-          (println (format-event event))
-          (condp = (:type event)
-            (evt :session.idle)
-            (do
-              (println "\n=== Summary ===")
-              (println (format "Total events: %d" (count @all-events)))
-              (doseq [[evt-type cnt] (->> @all-events
-                                          (map :type)
-                                          frequencies
-                                          (sort-by val >))]
-                (println (format "  %s: %d" (name evt-type) cnt))))
+(defn- channel-stream [client options prompt show-types?]
+  (copilot/with-session [session client (assoc-in options [:events :streaming?] true)]
+    (h/with-subscription [events session]
+      (println "You:" prompt)
+      (print "Live: ")
+      (flush)
+      (let [reply (copilot/start-turn! session {:prompt prompt :timeout-ms 60000})]
+        (try
+          (loop [parts [] counts {}]
+            (let [[value port] (a/alts!! [events reply] :priority true)]
+              (when-let [error (:error value)] (throw error))
+              (when-not value (throw (ex-info "Channel closed before the turn finished" {})))
+              (if (= port reply)
+                (let [answer (get-in value [:ok :data :content])]
+                  (when (str/blank? answer) (throw (ex-info "The model returned no final answer" {})))
+                  (println)
+                  (println "Final:" answer)
+                  (when show-types?
+                    (println "Turn events observed:")
+                    (doseq [event-type turn-event-types :when (contains? counts event-type)]
+                      (println " " (name event-type) (get counts event-type))))
+                  {:streamed (apply str parts) :final answer})
+                (let [delta (when (= (:type value) :copilot/assistant.message_delta) (get-in value [:data :delta-content]))]
+                  (when delta (print delta) (flush))
+                  (recur (cond-> parts delta (conj delta)) (update counts (:type value) (fnil inc 0)))))))
+          (finally (a/close! reply)))))))
 
-            (evt :session.error)
-            (println "\n⚠️  Session ended with error")
+(defn query-async [client options prompt]
+  (channel-stream client options prompt false))
 
-            ;; Keep looping for other events
-            (recur)))))))
-
-(defn format-event
-  "Format a session event for display."
-  [event]
-  (let [event-type (:type event)
-        data (:data event)
-        ephemeral? (:ephemeral? event)]
-    (condp = event-type
-      (evt :session.start)
-      (format "🚀 Session started: %s (model: %s)"
-              (:session-id data)
-              (or (:selected-model data) "default"))
-
-      (evt :session.resume)
-      (format "🔄 Session resumed at %s (%d events)"
-              (:resume-time data)
-              (or (:event-count data) 0))
-
-      (evt :session.idle)
-      "⏸️  Session idle - ready for input"
-
-      (evt :session.error)
-      (format "❌ Error [%s]: %s"
-              (:error-type data)
-              (:message data))
-
-      (evt :session.info)
-      (format "ℹ️  Info [%s]: %s"
-              (:info-type data)
-              (:message data))
-
-      (evt :session.model_change)
-      (format "🔀 Model changed: %s → %s"
-              (or (:previous-model data) "none")
-              (:new-model data))
-
-      (evt :session.truncation)
-      (format "✂️  Context truncated: %d tokens removed (%d → %d messages)"
-              (or (:tokens-removed-during-truncation data) 0)
-              (or (:pre-truncation-messages-length data) 0)
-              (or (:post-truncation-messages-length data) 0))
-
-      (evt :session.snapshot_rewind)
-      (format "⏪ Snapshot rewind: rolled back to event %s (%d events removed)"
-              (:up-to-event-id data)
-              (or (:events-removed data) 0))
-
-      (evt :session.usage_info)
-      (format "📊 Usage: %d/%d tokens (%d messages)"
-              (or (:current-tokens data) 0)
-              (or (:token-limit data) 0)
-              (or (:messages-length data) 0))
-
-      (evt :session.compaction_start)
-      "🗜️  Compaction starting..."
-
-      (evt :session.compaction_complete)
-      (if (:success data)
-        (format "🗜️  Compaction complete: %d → %d tokens (%d removed)"
-                (or (:pre-compaction-tokens data) 0)
-                (or (:post-compaction-tokens data) 0)
-                (or (:tokens-removed data) 0))
-        (format "🗜️  Compaction failed: %s" (:error data)))
-
-      (evt :session.handoff)
-      (format "🤝 Session handoff from %s" (:source-type data))
-
-      (evt :assistant.turn_start)
-      "🎬 Assistant turn started"
-
-      (evt :assistant.intent)
-      (format "🎯 Intent: %s" (:intent data))
-
-      (evt :assistant.reasoning)
-      (format "💭 Reasoning: %s" (:content data))
-
-      (evt :assistant.reasoning_delta)
-      (format "💭 %s" (:delta-content data))
-
-      (evt :assistant.message)
-      (format "💬 Message: %s" (:content data))
-
-      (evt :assistant.message_delta)
-      (format "📝 %s" (:delta-content data))
-
-      (evt :assistant.turn_end)
-      "🏁 Assistant turn ended"
-
-      (evt :assistant.usage)
-      (format "📈 Usage: %d input, %d output tokens"
-              (or (:input-tokens data) 0)
-              (or (:output-tokens data) 0))
-
-      ;; Default
-      (format "📋 %s: %s%s"
-              (name event-type)
-              (pr-str data)
-              (if ephemeral? " (ephemeral)" "")))))
+(defn run [client options prompt]
+  (channel-stream client options prompt true))

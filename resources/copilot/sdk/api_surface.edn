@@ -1,0 +1,580 @@
+{:vars
+ {copilot.sdk/abort!
+  {:kind :fn,
+   :arglists ([session]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :session :copilot.sdk.instrument/session)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/approve-all
+  {:kind :fn,
+   :arglists ([request invocation]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :request
+     clojure.core/map?
+     :invocation
+     clojure.core/map?)
+    :ret
+    clojure.core/map?
+    :fn
+    nil)},
+  copilot.sdk/auth-status
+  {:kind :fn,
+   :arglists ([client]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :client :copilot.sdk.instrument/client)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/await!!
+  {:kind :fn,
+   :arglists ([result]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :operation
+     :copilot.sdk.instrument/result-channel)
+    :ret
+    clojure.core/any?
+    :fn
+    nil)},
+  copilot.sdk/close!!
+  {:kind :fn,
+   :arglists ([resource]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :resource
+     (clojure.spec.alpha/or
+      :client
+      :copilot.sdk.instrument/client
+      :session
+      :copilot.sdk.instrument/session))
+    :ret
+    clojure.core/nil?
+    :fn
+    nil)},
+  copilot.sdk/delete-session!!
+  {:kind :fn,
+   :arglists ([client id]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :client
+     :copilot.sdk.instrument/client
+     :id
+     :copilot.sdk.instrument/session-id)
+    :ret
+    clojure.core/nil?
+    :fn
+    nil)},
+  copilot.sdk/elicit!
+  {:kind :fn,
+   :arglists ([session form]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     :copilot.sdk.instrument/session
+     :form
+     clojure.core/map?)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/force-close!!
+  {:kind :fn,
+   :arglists ([client]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :client :copilot.sdk.instrument/client)
+    :ret
+    clojure.core/nil?
+    :fn
+    nil)},
+  copilot.sdk/history
+  {:kind :fn,
+   :arglists ([session] [session view]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     :copilot.sdk.instrument/session
+     :view
+     (clojure.spec.alpha/? #{:raw :idiom}))
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/last-session-id
+  {:kind :fn,
+   :arglists ([client]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :client :copilot.sdk.instrument/client)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/lifecycle-events
+  {:kind :fn,
+   :arglists ([client]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :client :copilot.sdk.instrument/client)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/list-models
+  {:kind :fn,
+   :arglists ([client]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :client :copilot.sdk.instrument/client)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/list-sessions
+  {:kind :fn,
+   :arglists ([client] [client filters]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :client
+     :copilot.sdk.instrument/client
+     :filters
+     (clojure.spec.alpha/? clojure.core/map?))
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/log!
+  {:kind :fn,
+   :arglists ([session message] [session message options]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     :copilot.sdk.instrument/session
+     :message
+     clojure.core/string?
+     :opts
+     (clojure.spec.alpha/? clojure.core/map?))
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/mcp-tool-result
+  {:kind :fn,
+   :arglists ([result]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :result
+     :copilot.sdk.specs/mcp-call-tool-result)
+    :ret
+    :copilot.sdk.specs/tool-result-object
+    :fn
+    nil)},
+  copilot.sdk/open-client!!
+  {:kind :fn,
+   :arglists ([options]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :options clojure.core/any?)
+    :ret
+    :copilot.sdk.instrument/client
+    :fn
+    nil)},
+  copilot.sdk/open-session!!
+  {:kind :fn,
+   :arglists ([client options]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :client
+     clojure.core/any?
+     :options
+     clojure.core/any?)
+    :ret
+    :copilot.sdk.instrument/session
+    :fn
+    nil)},
+  copilot.sdk/ping
+  {:kind :fn,
+   :arglists ([client] [client message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :client
+     :copilot.sdk.instrument/client
+     :message
+     (clojure.spec.alpha/? clojure.core/string?))
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/respond!!
+  {:kind :fn,
+   :arglists ([session kind answer]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     :copilot.sdk.instrument/session
+     :kind
+     #{:permission :tool}
+     :answer
+     clojure.core/map?)
+    :ret
+    clojure.core/any?
+    :fn
+    nil)},
+  copilot.sdk/resume-session!!
+  {:kind :fn,
+   :arglists ([client session-id options]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :client
+     clojure.core/any?
+     :id
+     clojure.core/any?
+     :options
+     clojure.core/any?)
+    :ret
+    :copilot.sdk.instrument/session
+    :fn
+    nil)},
+  copilot.sdk/send!
+  {:kind :fn,
+   :arglists ([session message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     clojure.core/any?
+     :message
+     clojure.core/any?)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/send-and-wait!!
+  {:kind :fn,
+   :arglists ([session message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     clojure.core/any?
+     :message
+     clojure.core/any?)
+    :ret
+    :copilot.sdk.specs/turn-reply
+    :fn
+    nil)},
+  copilot.sdk/session-id
+  {:kind :fn,
+   :arglists ([session]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :session :copilot.sdk.instrument/session)
+    :ret
+    :copilot.sdk.instrument/session-id
+    :fn
+    nil)},
+  copilot.sdk/session-info
+  {:kind :fn,
+   :arglists ([session]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :session :copilot.sdk.instrument/session)
+    :ret
+    (clojure.spec.alpha/nilable clojure.core/map?)
+    :fn
+    nil)},
+  copilot.sdk/session-metadata
+  {:kind :fn,
+   :arglists ([client id]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :client
+     :copilot.sdk.instrument/client
+     :id
+     :copilot.sdk.instrument/session-id)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/set-model!
+  {:kind :fn,
+   :arglists ([session model] [session model tuning]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     :copilot.sdk.instrument/session
+     :model
+     clojure.core/string?
+     :tuning
+     (clojure.spec.alpha/? clojure.core/map?))
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/start-turn!
+  {:kind :fn,
+   :arglists ([session message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     clojure.core/any?
+     :message
+     clojure.core/any?)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/status
+  {:kind :fn,
+   :arglists ([client]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :client :copilot.sdk.instrument/client)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/subscribe
+  {:kind :fn,
+   :arglists ([session]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :session :copilot.sdk.instrument/session)
+    :ret
+    :copilot.sdk.instrument/result-channel
+    :fn
+    nil)},
+  copilot.sdk/with-client
+  {:kind :macro, :arglists ([[binding options] & body])},
+  copilot.sdk/with-resumed-session
+  {:kind :macro, :arglists ([[binding client id options] & body])},
+  copilot.sdk/with-session
+  {:kind :macro, :arglists ([[binding client options] & body])},
+  copilot.sdk.helpers/decode-json
+  {:kind :fn,
+   :arglists ([text]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :text clojure.core/any?)
+    :ret
+    :copilot.sdk.specs/json-value
+    :fn
+    nil)},
+  copilot.sdk.helpers/query!!
+  {:kind :fn,
+   :arglists ([session message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     clojure.core/any?
+     :message
+     clojure.core/any?)
+    :ret
+    (clojure.spec.alpha/nilable clojure.core/string?)
+    :fn
+    nil)},
+  copilot.sdk.helpers/query-json!!
+  {:kind :fn,
+   :arglists ([session message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :session
+     clojure.core/any?
+     :message
+     clojure.core/any?)
+    :ret
+    :copilot.sdk.specs/json-value
+    :fn
+    nil)},
+  copilot.sdk.helpers/query-once!!
+  {:kind :fn,
+   :arglists ([config message]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :config
+     clojure.core/any?
+     :message
+     clojure.core/any?)
+    :ret
+    (clojure.spec.alpha/nilable clojure.core/string?)
+    :fn
+    nil)},
+  copilot.sdk.helpers/with-conversation
+  {:kind :macro, :arglists ([[session config] & body])},
+  copilot.sdk.helpers/with-subscription
+  {:kind :macro, :arglists ([[events session] & body])},
+  copilot.sdk.instrument/instrument-all!
+  {:kind :fn,
+   :arglists ([]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat)
+    :ret
+    (clojure.spec.alpha/nilable clojure.core/sequential?)
+    :fn
+    nil)},
+  copilot.sdk.instrument/unstrument-all!
+  {:kind :fn,
+   :arglists ([]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat)
+    :ret
+    (clojure.spec.alpha/nilable clojure.core/sequential?)
+    :fn
+    nil)},
+  copilot.sdk.specs/system-message-sections {:kind :value},
+  copilot.sdk.tool-set/builtin
+  {:kind :fn,
+   :arglists ([name]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :name clojure.core/string?)
+    :ret
+    clojure.core/string?
+    :fn
+    nil)},
+  copilot.sdk.tool-set/builtins
+  {:kind :fn,
+   :arglists ([names]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat
+     :names
+     (clojure.spec.alpha/coll-of clojure.core/string?))
+    :ret
+    clojure.core/vector?
+    :fn
+    nil)},
+  copilot.sdk.tool-set/custom
+  {:kind :fn,
+   :arglists ([name]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :name clojure.core/string?)
+    :ret
+    clojure.core/string?
+    :fn
+    nil)},
+  copilot.sdk.tool-set/isolated {:kind :value},
+  copilot.sdk.tool-set/isolated-builtins {:kind :value},
+  copilot.sdk.tool-set/mcp
+  {:kind :fn,
+   :arglists ([name]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :name clojure.core/string?)
+    :ret
+    clojure.core/string?
+    :fn
+    nil)},
+  copilot.sdk.tool-set/valid-name?
+  {:kind :fn,
+   :arglists ([name]),
+   :fdef
+   (clojure.spec.alpha/fspec
+    :args
+    (clojure.spec.alpha/cat :name clojure.core/any?)
+    :ret
+    clojure.core/boolean?
+    :fn
+    nil)}},
+ :spec-keys
+ (:copilot.sdk.specs/base64
+  :copilot.sdk.specs/binary-result
+  :copilot.sdk.specs/binary-results-for-llm
+  :copilot.sdk.specs/capabilities
+  :copilot.sdk.specs/client-options
+  :copilot.sdk.specs/conventions
+  :copilot.sdk.specs/conversation-config
+  :copilot.sdk.specs/error
+  :copilot.sdk.specs/initial-cwd
+  :copilot.sdk.specs/json-object
+  :copilot.sdk.specs/json-scalar
+  :copilot.sdk.specs/json-value
+  :copilot.sdk.specs/log-level
+  :copilot.sdk.specs/mcp-call-tool-result
+  :copilot.sdk.specs/non-blank-string
+  :copilot.sdk.specs/result-type
+  :copilot.sdk.specs/session-fs
+  :copilot.sdk.specs/session-fs-provider
+  :copilot.sdk.specs/session-id
+  :copilot.sdk.specs/session-idle-timeout-seconds
+  :copilot.sdk.specs/session-log
+  :copilot.sdk.specs/session-state-path
+  :copilot.sdk.specs/skip-large-output-processing?
+  :copilot.sdk.specs/structured-message
+  :copilot.sdk.specs/text-result-for-llm
+  :copilot.sdk.specs/tool-references
+  :copilot.sdk.specs/tool-result-object
+  :copilot.sdk.specs/tool-telemetry
+  :copilot.sdk.specs/turn-message
+  :copilot.sdk.specs/turn-reply
+  :copilot.sdk.specs/turn-timeout-ms
+  :copilot.sdk.specs/user-input-image-attachment
+  :copilot.sdk.specs/user-input-image-attachment-constraints)}

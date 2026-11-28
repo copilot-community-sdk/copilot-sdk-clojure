@@ -1,4287 +1,1118 @@
-# API Reference
+# Clojure SDK API
 
-## Helpers API
-
-The helpers namespace provides simple, stateless query functions with automatic client management.
-
-```clojure
-(require '[github.copilot-sdk.helpers :as h])
-```
-
-Helpers do not stop caller-supplied clients or disconnect caller-supplied
-sessions. Sessions created internally by a helper are helper-owned and release
-their local resources even if remote disconnect fails.
-
-### `query`
+Require `copilot.sdk` as `copilot` for primitives and `copilot.sdk.helpers`
+as `h` for the text, JSON and scope helpers.
 
 ```clojure
-(h/query prompt & {:keys [client session timeout-ms]})
+(require '[copilot.sdk :as copilot])
+
+(defn reply-text [session prompt]
+  (some-> (copilot/send-and-wait!! session {:prompt prompt :timeout-ms 30000})
+          :data :content))
 ```
 
-Execute a query and return the response text.
+## Resource lifetimes
 
-**Options:**
-- `:client` - Client options map (cli-path, log-level, cwd, env) OR a CopilotClient instance
-- `:session` - Session options map (model, system-prompt, tools, etc.) OR a CopilotSession instance
-- `:timeout-ms` - Timeout in milliseconds (default: 60000)
+| Call | Result and ownership |
+|---|---|
+| `(with-client [client options] body...)` | Block to open a native client; shut it down when the body exits. |
+| `(with-session [session client options] body...)` | Create a session and detach it on exit. Detach does not delete history. |
+| `(with-resumed-session [session client id options] body...)` | Resume a saved session and detach it on exit. If the body and detach both fail, the body error remains primary. |
+| `(open-client!! options)` | Open an owned client; call `close!!` if not using `with-client`. |
+| `(open-session!! client options)` | Open an owned new session; call `close!!` if not using `with-session`. |
+| `(resume-session!! client id options)` | Open an owned handle to a saved session. Use `close!!` to detach it if not using `with-resumed-session`. |
+| `(session-id session)` | Return the session ID immediately, not on a channel. Save it if the application will resume. |
+| `(session-info session)` | Return `:session-id` and `:capabilities`, plus `:workspace-path`, `:transcript-recovery`, and `:permission-mode-result` when supplied. A refused permission mode can include a string `:reason`. `:capabilities` is `nil` if the runtime supplied no capabilities at open or in a notification. Test individual flags with `true?`. |
+| `(close!! resource)` | Detach a session or shut down a client. Client close cancels session decision and event callbacks before waiting for detach acknowledgments. A refused detach does not reopen a closing client. |
+| `(force-close!! client)` | Stop waiting for detach and shutdown acknowledgments, even if graceful client close is in progress. Wait for local cleanup and the native callback safety barrier. |
+| `(delete-session!! client id)` | Permanently remove an exactly listed session from the client's default runtime store and invalidate its matching open handle. Return `nil` on success. Deletion never expands a UUID prefix. |
 
-When `:session` is a CopilotSession instance, the query uses that session directly (enabling multi-turn conversations). When `:client` is a CopilotClient instance, it uses that client directly.
+Keep scopes open until operations that use them finish. Blocking functions
+and macros do not belong inside `go`. The three scope macros retain the
+primary failure when cleanup also fails. Treat a client close failure as
+an error, not proof that the runtime released its resources.
+
+Force close cannot confirm what the runtime did with an unanswered request.
+Graceful close reports an error if force close interrupts a pending lifecycle
+transition or prevents the shutdown acknowledgment, even when local release succeeds.
+A graceful caller that joins an active force close also receives an error:
+the runtime did not acknowledge graceful shutdown. Either close is a no-op
+after successful release. Both callers receive an error if native release fails.
+
+Graceful client close gives its session detaches one shared ten-second wait.
+If a delete's inventory check fails before it sends the delete, close detaches
+that live session without waiting for the other sessions to reply. A delete
+that was already sent does not trigger another request. Close waits for the
+delete result even if `session.deleted` has already made the ID available
+again. The shared wait is not a deadline for later shutdown or native cleanup.
+
+Do not shut down a client synchronously from a worker it owns. The SDK
+rejects `close!!` and `force-close!!` before changing client state. The
+error is `:reverse-callback-client-close` for reverse requests such as
+user input or hooks, and `:callback-client-close` for tool, permission,
+form, command, MCP OAuth, and `:on-event` handlers, as well as model-list
+and trace-context providers. A decision handler cannot detach or delete
+its own session from that worker (`:callback-session-close`). This also
+applies when the SDK calls a model or trace provider on behalf of the
+active handler. An ordinary `:on-event` observer can detach or delete
+its session; it has no decision to return.
+
+To hand shutdown off from an ordinary handler, signal the client owner
+or start a separate `future` and return. Shutdown can cancel the handler
+instead of sending its answer. Filesystem operations that supply data for
+teardown must not close their own client or session, even from a
+continuation carrying the provider's bindings. They can normally detach a
+sibling session, but not during client shutdown: that call would wait
+for the very shutdown that needs their response. An independent client
+does not share these restrictions.
+
+During graceful close, the runtime can still call the session's initialized
+filesystem provider to persist data before detach or to clean up a failed
+open. If the runtime refuses to detach an open session, it can still use
+that provider during `runtime.shutdown`. This also applies if the runtime
+accepted the session but a later setup step failed: the original error
+retains the failed detach, and only the initialized filesystem stays
+available. A session-end hook becomes eligible only after all required
+setup requests succeed, not when the initial create or resume is acknowledged.
+A successful detach or shutdown acknowledgment ends this access. The SDK
+requests interruption of pending file operations without running application
+stream cleanup on the response reader. It cannot stop code that ignores
+interruption. Client close gives its reverse-request
+workers a shared 500 ms to stop. If work still runs, `close!!` reports
+`:reverse-worker-timeout` and still attempts native release. The error
+describes local cleanup, not a refusal of the runtime shutdown. Use
+interruptible or independently bounded waits in your providers.
+
+The runtime can also invoke a registered `:on-session-end` hook when
+it detaches a session that finished opening. If the detach wait expires,
+the SDK interrupts the running end hook, stops accepting new end hooks, and
+discards any unsent hook output. This does not interrupt an application
+filesystem write that the runtime still needs. An end hook can close its own
+session handle without joining the detach that is waiting for that hook.
+This applies to the hook body and continuations that convey Clojure's
+dynamic bindings (for example, `future`). If you submit a continuation to
+a Java executor, construct its task with `bound-fn` **inside the hook**.
+Do not synchronously close the session on an unbound executor and return
+its result to the hook: the SDK cannot distinguish it from an independent
+caller that must wait for detach. Do not start another lifecycle operation
+on that client from the hook. Other hooks, event observers, permission
+handlers, and token providers do not stay active. If an ordinary handler
+has finished but its reply is still being prepared when close starts,
+the SDK discards the result. This does not recall replies already submitted.
+
+When you detach a session or delete it directly, a successful acknowledgment
+stops new decisions and events for that handle before the next runtime frame.
+Events accepted before the acknowledgment still go to that handle's subscriptions
+and ordinary `:on-event` observer, not to a later handle with the same ID.
+Close waits for publication to the channels, not for user code. The observer
+can finish after close returns, subject to its queue capacity and 500 ms drain
+limit. Repeating an ordinary close on the same handle does not discard those
+events. If the observer itself initiated the detach, a later explicit close
+from another thread can cancel that observer without affecting a replacement
+session. A decision callback already running cannot submit a new decision.
+A refusal leaves the handle active. Closing the whole client cancels observers
+instead of requesting a session drain.
+
+The native image stays loaded until JVM exit. A client admits at most one
+handle for a given session ID. Closing an old handle cannot detach a new
+one. Store and resume with the **full ID** returned by `session-id`. Short
+UUID prefixes depend on the runtime's session inventory. Interrupting a
+prefix lookup releases the pending lookup without sending a resume request.
+An eight-character prefix can resolve a persisted session after a completed
+turn; opening and detaching an unused session does not guarantee discovery.
+When using a session filesystem, supply its exact ID. If the runtime refuses a session
+detach, the SDK reports the refusal instead of repeating the detach. Do not
+treat the session as closed. If a detach or delete result includes a refusal
+reason, it is available under `:reason` in the exception data. Interrupting a caller after it
+sends a detach or delete does not undo the request. The SDK waits for its
+bounded result and applies an acknowledged change to the handle before
+reporting interruption. If a sent create, resume, detach, or delete times out
+with a known ID but no acknowledgment, that client cannot reuse the ID:
+the runtime may still apply the request. A `session.deleted` notification
+received after a written delete times out does not clear this restriction.
+If the notification arrived first, the ID can be reused even if the
+delete caller later reports a timeout waiting for its own reply. That timeout
+does not reopen the old handle or discard a turn result the SDK already
+received with its matching event on a session without an observer.
+If a delete of an open session
+times out, closing the client also closes that handle's subscriptions
+before returning; this does not establish whether the data was deleted.
+For application-owned storage,
+the already initialized filesystem stays available for that ID, not for
+other sessions. A late positive detach, a late refusal or ID mismatch on
+the open, a shutdown acknowledgment, or closing the connection ends this
+access. A late positive detach or delete acknowledgment also ends any
+unfinished turn wait on the original handle. It does not undo the reported
+timeout, make the ID reusable, or trigger another release request. An explicit
+refusal of create or resume is different: the caller can retry that ID. If necessary, reconcile
+saved state from a new client. A close that cannot confirm callback
+safety reports an error and can defer cleanup. A native call with an unknown outcome can leave a host
+quarantined. Quarantined and active hosts count against the same bounded
+registry. Do not open replacement clients in a retry loop.
+
+If native shutdown succeeded but removal of the SDK-created temporary home
+failed, the host slot is already free. The SDK reports `:private-home-cleanup`
+with the generated directory in `:path`. It submits one directory-only retry
+to a bounded worker, including when startup failed before it returned a client.
+If the retry also fails, it logs the generated directory name and exception
+class. If the queue is full, the cleanup error carries the scheduling failure
+as a suppressed exception. A caller with a client can close it again to retry
+without repeating native shutdown. If the private home is already absent,
+cleanup is complete. The SDK does not remove an application-supplied
+`:base-directory`.
+
+For deletion, use a full UUID or an ordinary name such as `build-review`.
+The public runtime API can expand a short ID to a different session, so
+the SDK rejects IDs that look like abbreviated UUIDs (`:ambiguous-delete-id`),
+even if the complete custom name is `deadbeef`. For runtime-owned storage,
+a client rejects create, resume, or delete with `:session-id-case-conflict`
+if it already reserves another spelling of that ID that differs only in
+letter case. A case-insensitive store can treat the two as the same session;
+the SDK does not redirect a delete to the other spelling.
+
+**Delete targets the client's default store.** The runtime's public delete
+accepts an ID, not a directory. A handle opened with `:config-directory`
+can be deleted by that client only if the override exactly matches its
+explicit `:base-directory`. Otherwise the SDK reports
+`:session-delete-store-mismatch` without sending a delete or closing the
+handle. To delete a saved session in another directory, detach it, then use
+a client whose `:base-directory` is that directory. With `:session-fs`,
+close the session and remove its data through the application provider.
+
+Before sending a public delete, the SDK checks the default store's
+`session.list` response for one exact spelling, even when it has a handle.
+If a case variant is present, it reports `:session-id-case-conflict`.
+If the listing does not confirm one exact ID, it reports
+`:session-delete-unconfirmed` and leaves the files intact. This also
+applies to an open handle. An unnamed local session with no saved turn can
+already have workspace files but no entry in `list-sessions`. Detaching
+it preserves those files. A handle or `session-metadata` is not a spelling
+check: the runtime can echo the ID supplied by the caller.
+
+For a local session you might discard without sending a prompt, set
+`:name` **when creating it**, detach it, then delete its exact listed ID.
+The pinned runtime lists such a named session after detach without needing
+a model turn. For disposable sessions, another option is an
+application-owned filesystem or a dedicated `:base-directory` created
+solely for that workload. Close the client before the application disposes
+of its own storage. Do not remove a shared runtime home. The SDK does
+not bypass an unconfirmed listing by editing the runtime's files directly.
+
+Listing and deletion are separate runtime requests, not a transaction
+with other clients; coordinate external writers that share a store.
+Graceful client close waits for deletions already sent.
+
+## Query and scope helpers
 
 ```clojure
-;; Simple query (shared client, fresh session)
-(h/query "What is 2+2?")
-;; => "4"
+(require '[copilot.sdk.helpers :as h])
 
-;; With session options
-(h/query "Explain monads" :session {:on-permission-request copilot/approve-all :model "claude-sonnet-4.5"})
-
-;; With system prompt
-(h/query "Hello" :session {:on-permission-request copilot/approve-all :system-prompt "Be concise."})
-
-;; With explicit client
-(copilot/with-client [client {}]
-  (h/query "What is Clojure?" :client client))
-
-;; With explicit session (multi-turn conversation)
-(copilot/with-client [client {}]
-  (copilot/with-session [session client {:on-permission-request copilot/approve-all}]
-    (h/query "My name is Alice." :session session)
-    (h/query "What is my name?" :session session))) ;; context preserved!
+(defn follow-up [config prompt question]
+  (h/with-conversation [s config]
+    [(h/query!! s prompt) (h/query!! s question)]))
 ```
 
-### `with-query-seq`
+`config` has exactly `:client` and `:session`, with the same option maps
+used by `with-client` and `with-session`. Supply the client mode, storage,
+model, credentials and tool policy appropriate to the application. No
+helper chooses a shared client, a signed-in account, or a permission handler.
+The helpers check sensitive arguments themselves, including when Clojure
+spec instrumentation is enabled. `with-conversation` checks the session
+create options before opening a host, including the filesystem/provider
+pair and any static provider's operations. Preflight does not invoke a
+factory: the SDK passes it the session handle during open. `query-once!!` also checks the message
+and deadline first: malformed messages report `:invalid-message` and invalid
+deadlines report `:invalid-timeout`. These validation errors do not carry the
+input values. Direct client/session acquisition and turn submission also
+check their options and handles in the implementation: an invalid client
+or resume ID does not attach the other arguments to a spec error. Checks
+that depend on the running host still happen during open. Do not log full
+spec errors from arbitrary instrumented functions; they can contain inputs.
+
+For a structured answer, these functions are alternatives with the **same**
+message and schema. Each sends the prompt only once. Apply any application
+validation to the returned data.
 
 ```clojure
-(h/with-query-seq [events prompt & {:keys [client session max-events timeout-ms]}]
-  body)
+(require '[copilot.sdk :as copilot] '[copilot.sdk.helpers :as h])
+
+(defn structured [s message] (h/query-json!! s message))
+
+(defn structured-from-event [s message]
+  (let [reply (copilot/send-and-wait!! s message)]
+    (h/decode-json (get-in reply [:data :content]))))
 ```
 
-Execute a query, bind a bounded lazy sequence of events for the dynamic extent of `body`, and disconnect the session when the body exits.
-
-Use this as the default seq-style streaming helper. Cleanup runs when `body` returns, throws, stops after a partial realization such as `(first events)`, or consumes the sequence to a terminal event.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:client` | map or `CopilotClient` | `nil` | Client options map or caller-owned client |
-| `:max-events` | non-negative integer | `256` | Maximum number of events to emit; `0` disconnects immediately |
-| `:session` | map | `nil` | Session options map |
-| `:timeout-ms` | positive integer or nil | `60000` | One deadline starts after session creation and covers blocking `session.send` acknowledgement plus event consumption; nonterminal autopilot idle events do not reset it. `nil` disables the deadline. Expiry throws `ExceptionInfo` with `{:type :query-timeout}` before `body` begins if send exhausts the deadline, otherwise during realization |
-
-Client startup and session creation are outside the deadline. Synchronous
-subscription is not preempted. The blocking `session.send` request receives the
-remaining time. If the deadline is exhausted before or during that request,
-`with-query-seq` throws before entering `body`; once the sequence is bound, the
-same fixed deadline controls event reads.
-
-```clojure
-(h/with-query-seq [events "Tell me a story"
-                   :session {:on-permission-request copilot/approve-all
-                             :streaming? true}]
-  (->> events
-       (filter #(= :copilot/assistant.message_delta (:type %)))
-       (map #(get-in % [:data :delta-content]))
-       (run! print)))
-```
-
-Do not let `events` escape the body. The session is closed when the macro exits, like `with-open`.
-
-### `query-seq!`
-
-```clojure
-(h/query-seq! prompt & {:keys [client session max-events timeout-ms]})
-```
-
-Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported.
-Pass a client options map to use the helpers-managed client, or a started
-`CopilotClient` instance to keep client lifecycle ownership with the caller.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:client` | map or `CopilotClient` | `nil` | Client options map or caller-owned client |
-| `:max-events` | non-negative integer | `256` | Maximum number of events to emit; `0` disconnects immediately |
-| `:session` | map | `nil` | Session options map |
-| `:timeout-ms` | positive integer or nil | `60000` | One deadline starts after session creation and covers blocking `session.send` acknowledgement plus event consumption; nonterminal autopilot idle events do not reset it. `nil` disables the deadline. Expiry throws `ExceptionInfo` with `{:type :query-timeout}` before the function returns if send exhausts the deadline, otherwise during realization |
-
-The deadline has the same scope and observation semantics as
-`with-query-seq`.
-
-**Warning:** cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a
-terminal `:copilot/session.idle` / `:copilot/session.error` event, or the events channel closing (detected
-when the next read yields `nil`, the end-of-stream sentinel — not an emitted element). An idle event whose
-wire `:mode` is the string `"autopilot"` is emitted as a nonterminal turn boundary. Abandoning the seq before it
-reaches a terminal event (e.g. `(first ...)` or `(take 1 ...)` when the first element isn't already terminal),
-or hitting a positive `:max-events` bound before that end of stream, leaks
-the session and its event tap (the sole exception is `:max-events 0`, which disconnects
-immediately without emitting anything). Consume the whole seq, or use `with-query-seq` or `query` when you may stop reading early.
-
-```clojure
-(run! println
-      (h/query-seq! "Tell me a story"
-                    :session {:on-permission-request copilot/approve-all
-                              :streaming? true}))
-```
-
-### `query-chan`
-
-```clojure
-(h/query-chan prompt & {:keys [client session buffer]})
-```
-
-Execute a query and return a bounded core.async channel of events. The channel closes after a
-terminal `:copilot/session.idle` or `:copilot/session.error` event. An idle event whose wire
-`:mode` is the string `"autopilot"` is emitted without closing the channel.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:buffer` | positive integer | `256` | Maximum number of events buffered before producer backpressure |
-| `:client` | map | `nil` | Client options used for the shared client |
-| `:session` | map | `nil` | Session options map |
-
-```clojure
-(require '[clojure.core.async :refer [<! close! go-loop]])
-
-(def events
-  (h/query-chan "Tell me a story"
-               :session {:on-permission-request copilot/approve-all
-                         :streaming? true}))
-
-(go-loop [remaining 10]
-  (when-let [event (<! events)]
-    (when (= :copilot/assistant.message_delta (:type event))
-      (print (get-in event [:data :delta-content])))
-    (if (= remaining 1)
-      (close! events)
-      (recur (dec remaining)))))
-```
-
-Close the returned channel when you stop consuming before a terminal event. Closing cancels
-the hidden query and disconnects its session even when the output buffer is full. The example
-above closes after ten events instead of abandoning the channel.
-
-Values accepted into the buffer before cancellation remain readable after `close!`. An
-in-flight event whose parked put loses to cancellation may be dropped; cancellation is not a
-lossless drain.
-
-On natural completion, `query-chan` disconnects its hidden session before closing. If that
-disconnect fails after a terminal event or source closure, the channel yields a tagged
-`:copilot/session.error` map and then closes; the original failure is available at
-`[:data :cause]`. When a consumer explicitly closes the channel, cleanup still runs and logs a
-cleanup failure because it cannot be delivered through the already-closed channel. In both
-cases, local resources for the hidden session are released even when remote disconnect fails.
-
-### `shutdown!`
-
-```clojure
-(h/shutdown!)
-```
-
-Explicitly shutdown the shared client. Safe to call multiple times.
-
-### `client-info`
-
-```clojure
-(h/client-info)
-;; => {:client-opts {:log-level :info, ...} :connected? true}
-```
-
-Get information about the current shared client state. Returns `nil` if no shared client exists, otherwise a map with `:client-opts` and `:connected?` keys.
-
----
-
-## CopilotClient
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-```
-
-### Naming and shape differences vs the official SDK
-
-The Clojure SDK maintains strict API parity with the official Node.js SDK
-(`@github/copilot-sdk`), but a handful of names and return shapes are
-adapted to Clojure idioms. When translating Node.js examples, use this map:
-
-| Clojure | Official Node.js SDK | Notes |
-|---------|----------------------|-------|
-| `:disable-resume?` | `suppressResumeEvent` | Config key on `resume-session` / `join-session`. When true, skips emitting the `session.resume` event. Defaults to `true` in `join-session` (matching upstream), `false` elsewhere. |
-| `:max-input-tokens` | `maxPromptTokens` | BYOK provider/model config key (input/prompt token cap). Serialized back to `maxPromptTokens` on the wire. |
-| `:source {:agent-id "reviewer"}` | `source: "agent-reviewer"` | `send` message provenance. Fixed sources use `:user` or `:system`; identified agents use a map so the opaque ID is preserved exactly before the `agent-` wire prefix is added. |
-| `join-session` return `{:client :session}` | `joinSession()` returns `CopilotSession` | Clojure has no implicit/global client, so it returns both so the caller can own the client lifecycle. See [`join-session`](#join-session). |
-| `join-session` return `:granted-environment-variables` | `joinSession()` writes grants to `process.env` | The JVM cannot portably mutate process environment variables. When an extension requests environment access, Clojure returns approved values as a string-keyed map filtered to the exact requested names. |
-
-These are the only cases where a public Clojure key or return value does
-not map 1:1 to the upstream name. Everything else follows the standard
-kebab-case ↔ camelCase wire convention (e.g. `:working-directory` ↔
-`workingDirectory`), which is applied automatically and needs no lookup.
-
-### Constructor
-
-```clojure
-(copilot/client options)
-```
-
-**Options:**
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:cli-path` | string | `"copilot"` | Path to CLI executable. Falls back to `COPILOT_CLI_PATH` env var when not set |
-| `:cli-args` | vector | `[]` | Extra arguments prepended before SDK-managed flags |
-| `:builtin-plugin-directories` | vector of strings | `[]` | Absolute paths to trusted plugin directories bundled by the host. The complete non-empty set is registered once after the protocol handshake and before any session or session filesystem provider. A registration failure force-stops the client and fails `start!`. Distinct from the per-session `:plugin-directories` option. ([upstream PR #2330](https://github.com/github/copilot-sdk/pull/2330)) |
-| `:cli-url` | string | nil | Address of an existing CLI server (for example, `"localhost:8080"`, `"http://localhost:8080"`, or `"[::1]:8080"`). The transport is plaintext TCP, so `https://` is rejected rather than silently downgraded. Bracketed hosts must be valid IPv6 literals. When provided, no CLI process is spawned |
-| `:client-info` | map | nil | Application and integration identity sent on the `connect` handshake. Optional string keys: `:application-name`, `:application-version`, `:integration-name`, and `:integration-version`. Empty fields are omitted independently; the entire wire `clientInfo` object is omitted when no non-empty field remains. |
-| `:port` | number | `0` | Server port (0 = random) |
-| `:use-stdio?` | boolean | `true` | Use stdio transport instead of TCP |
-| `:log-level` | keyword | `:info` | One of `:none` `:error` `:warning` `:info` `:debug` `:all` |
-| `:auto-start?` | boolean | `true` | Auto-start server on first operation |
-| `:auto-restart?` | boolean | `true` | Auto-restart on crash |
-| `:notification-queue-size` | number | `4096` | Max queued protocol notifications |
-| `:router-queue-size` | number | `4096` | Max queued non-session notifications |
-| `:request-handler-threads` | number | `16` | Max reverse-RPC handlers (hooks, sessionFs, workflows, user input, etc.) executing concurrently. Handlers run on a bounded worker pool owned by the connection, never on core.async dispatch |
-| `:request-handler-queue-size` | number | `256` | Max reverse RPCs queued once every worker is busy. Beyond `threads + queue-size` outstanding requests the runtime receives an explicit `-32000` `request_handler_saturated` error |
-| `:tool-timeout-ms` | number | `120000` | Timeout for tool handlers returning channels |
-| `:cwd` | string | nil | Working directory for CLI process |
-| `:env` | map | nil | Environment variables |
-| `:github-token` | string | nil | GitHub token for authentication. Sets `COPILOT_SDK_AUTH_TOKEN` env var and passes `--auth-token-env` flag |
-| `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
-| `:copilot-home` | string | nil | Base directory for Copilot data files. Sets `COPILOT_HOME` env var on the spawned CLI. (upstream PR #1191) |
-| `:tcp-connection-token` | string | nil | Connection token for the headless CLI server (TCP only). When the SDK spawns its own CLI in TCP mode and this is omitted, a UUID is generated automatically so the loopback listener is safe by default. The token is sent to the CLI via `COPILOT_CONNECTION_TOKEN` and forwarded over the wire on the new `connect` handshake. Rejected when combined with `:use-stdio? true`. (upstream PR #1176) |
-| `:remote?` | boolean | `false` | When `true`, append `--remote` to the spawned CLI args so the CLI exposes the session over a GitHub-hosted remote endpoint. Ignored when `:cli-url` is set. (upstream PR #1192) |
-| `:session-idle-timeout-seconds` | integer | `0` (disabled) | Server-wide session idle timeout in seconds. When `> 0`, append `--session-idle-timeout <n>` to the spawned CLI so idle sessions are cleaned up after the given duration. |
-| `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
-| `:telemetry` | map | nil | OpenTelemetry export config, applied as environment variables to the **spawned** CLI (ignored when connecting to an existing server via `:cli-url` or a parent process via `:is-child-process?`, since no CLI is spawned). When present, enables OTel. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:otlp-protocol` (`"http/json"` or `"http/protobuf"` — sets `OTEL_EXPORTER_OTLP_PROTOCOL`), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785, [PR #1648](https://github.com/github/copilot-sdk/pull/1648)) |
-| `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}`, called per request (session create/resume and each message send) to propagate a distributed-trace context. Only `:traceparent` and `:tracestate` are forwarded. See [Observability](#observability) |
-| `:on-github-telemetry` | fn | nil | **@experimental / Internal.** One-arg callback receiving each forwarded GitHub telemetry notification. Registering it adds `enableGitHubTelemetryForwarding: true` to the `connect` handshake (so the first session's un-replayable `session.start` telemetry is forwarded — upstream PR #1909) as well as to the wire params of `session.create` and `session.resume`; the runtime then emits connection-global `gitHubTelemetry.event` notifications. A throwing handler is caught and logged (WARN) and cannot corrupt dispatch. Not a stable public SDK surface. See [Observability](#observability). ([PR #1835](https://github.com/github/copilot-sdk/pull/1835)) |
-| `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
-| `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
-| `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 10 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
-
-SDK-spawned runtimes in `:copilot-cli` mode receive
-`COPILOT_RUNTIME_PROCESS_FILE_LOGGING=1`, overriding inherited or `:env` values.
-The runtime writes redacted `process-<timestamp>-<pid>.log` files under
-`COPILOT_HOME/logs`, or the directory selected with `:cli-args ["--log-dir" path]`.
-`:empty` mode leaves this setting unchanged: an inherited or explicit value can
-still enable logging. Existing-server and child-process connections do not
-spawn or reconfigure a runtime. An older explicitly selected CLI may ignore
-the setting.
-
-For a native standalone runtime, `:env {"COPILOT_GITHUB_TELEMETRY_DISABLED"
-"true"}` disables direct GitHub telemetry uploads for the entire host.
-The value must be exactly `"true"` before startup; restart the runtime after
-changing it. Authentication, SDK telemetry forwarding, and user-configured
-OpenTelemetry exports are unaffected. This is distinct from
-`:enable-session-telemetry? false`, which disables one session's telemetry
-pipeline. The Node CLI host does not use this environment variable.
-
-### Methods
-
-#### `start!`
-
-```clojure
-(copilot/start! client)
-```
-
-Start the CLI server and establish connection. Blocks until connected.
-Concurrent calls share one startup attempt and all return the same success or
-throw the same failure. Calling `start!` and `stop!` concurrently remains
-unsupported. A client using `:cli-url` can reconnect to its configured endpoint
-after either `stop!` or `force-stop!`.
-
-#### `with-client`
-
-```clojure
-(copilot/with-client [client {:log-level :info}]
-  ;; use client
-  )
-```
-
-Create a client, start it, and ensure `stop!` runs on exit.
-
-#### `stop!`
-
-```clojure
-(copilot/stop! client)
-```
-
-Stop the server and close all sessions gracefully.
-
-For SDK-spawned processes (not `:external-server?`), `stop!` issues a
-`runtime.shutdown` RPC before closing the connection, giving the CLI a chance to
-flush state and exit cleanly. The RPC has a 10-second timeout. After a successful
-response, owned stdio receives stdin EOF so host finalizers can flush telemetry;
-stdin closure and natural process exit share a 10-second window before
-termination (SIGTERM, then SIGKILL). A blocked writer cannot indefinitely delay
-stdin closure: the exit deadline runs independently and termination releases the
-pipe. A failed shutdown RPC skips the graceful exit wait. Connecting to an external server (`:cli-url`) skips the shutdown RPC and
-the process is left running. (upstream [PR #1667](https://github.com/github/copilot-sdk/pull/1667))
-
-Returns a vector of any errors encountered during cleanup — a failed session
-disconnect, a failed `runtime.shutdown`, or a transport resource that could not
-be released. An empty vector means everything shut down cleanly. Errors are
-reported rather than thrown, so a single failure never leaves the rest of the
-teardown undone.
-
-#### `force-stop!`
-
-```clojure
-(copilot/force-stop! client)
-```
-
-Force stop the CLI server without graceful RPCs. It closes local session event
-subscriptions and releases in-flight session work before closing the transport
-and terminating an SDK-owned process. Use when `stop!` takes too long.
-
-The forced kill is confirmed rather than assumed: the child is signalled and
-then waited on for a bounded window. A child that survives is logged with its
-resource identity, and its handle is kept in client state so the host is never
-left holding no reference to a live process. The wait ends as soon as the child
-dies, so it is a worst-case bound, not a fixed delay. `force-stop!` still
-returns `nil`.
-
-Unexpected owned-runtime exit also ends the connection, rejects unanswered
-RPCs, releases session resources, and clears the model cache. For stdio, the SDK
-allows up to ten seconds for buffered output to reach EOF before ending input;
-a descendant holding the pipe open cannot keep the client connected indefinitely.
-An owned TCP runtime's exit ends its connection without waiting for the peer.
-Already accepted notifications drain before session cleanup. A subsequent
-`start!` establishes a new connection; late cleanup from the old connection
-cannot disconnect it. External runtimes and surviving descendants remain
-outside the SDK's process ownership.
-
-#### `client-options`
-
-```clojure
-(copilot/client-options client)
-;; => {:log-level :info, :use-stdio? true, :auto-start? true, ...}
-```
-
-Get the options that were used to create this client.
-
-#### `create-session`
-
-```clojure
-(copilot/create-session client config)
-```
-
-Create a new conversation session.
-
-```clojure
-(require '[github.copilot-sdk.client :as copilot])
-
-(copilot/with-client [client {}]
-  (copilot/with-session [session client {:name "Plan review"}]
-    (:session-id session)))
-```
-
-A name allows a local session to survive disconnect and runtime restart
-without sending a prompt. Resume it by ID; `:name` is not a rename option.
-
-Explicit skill, agent, hook, and instruction directories are discovery roots,
-not general filesystem grants. Relative paths resolve once against the
-request's effective `:working-directory`; retained roots do not move when that
-directory changes. Create, resume, and join preserve omission and `[]`
-separately: omission leaves the explicit SDK contribution unchanged, while
-`[]` clears it. Directory strings are forwarded unchanged; the runtime trims
-surrounding whitespace and ignores blank entries. `nil` is invalid. Active SDK
-skills may receive read-only access to their resources under the runtime's
-skill-resource policy, not general filesystem access.
-
-#### `with-session`
-
-```clojure
-(copilot/with-session [session client {:model "gpt-5.4"
-                                       :on-permission-request copilot/approve-all}]
-  ;; use session
-  )
-```
-
-Create a session and ensure `disconnect!` runs on exit. If the body and
-`disconnect!` both fail, the body failure remains primary and the cleanup
-failure is attached as a suppressed exception. A cleanup-only failure is
-thrown.
-
-#### `with-client-session`
-
-```clojure
-;; Form 1: [session session-opts] - anonymous client with default options
-(copilot/with-client-session [session {:model "gpt-5.4"
-                                       :on-permission-request copilot/approve-all}]
-  ;; use session
-  )
-
-;; Form 2: [client-opts session session-opts] - anonymous client with custom options
-(copilot/with-client-session [{:log-level :debug} session {:model "gpt-5.4"
-                                                           :on-permission-request copilot/approve-all}]
-  ;; use session
-  )
-
-;; Form 3: [client session session-opts] - named client with default options
-(copilot/with-client-session [client session {:model "gpt-5.4"
-                                              :on-permission-request copilot/approve-all}]
-  ;; use client and session
-  )
-
-;; Form 4: [client client-opts session session-opts] - named client with custom options
-(copilot/with-client-session [client {:log-level :debug} session {:model "gpt-5.4"
-                                                                  :on-permission-request copilot/approve-all}]
-  ;; use client and session
-  )
-```
-
-Create a client and session together, ensuring both are asked to clean up on
-exit. A thrown session cleanup failure follows the `with-session` contract:
-body failures remain primary and the session cleanup failure is attached as a
-suppressed exception. Client `stop!` failures are returned in its error vector
-rather than thrown, so this macro cannot attach them as suppressed exceptions.
-Use explicit lifecycle management when the caller must inspect client cleanup
-failures.
-
-**Config:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:session-id` | string | Custom session ID (optional) |
-| `:name` | string | Name a local session at creation. The runtime requires a non-empty name with no surrounding whitespace, control characters, or double quotes, and at most 100 UTF-16 code units. Naming makes a session persistable without a model turn; metadata publication need not be synchronous with the create response. Disconnect before relying on completed persistence. Not accepted on resume/join; cloud creation rejects it. |
-| `:client-name` | string | Client name to identify the application (included in User-Agent header) |
-| `:model` | string | Model to use (`"gpt-5.4"`, `"claude-sonnet-4.5"`, etc.) |
-| `:allowed-models` | vector of strings | Exact model IDs permitted by the host on create, resume, and join. Omission preserves runtime policy; an explicit `[]` is forwarded unchanged rather than treated as omission. The runtime validates the allowlist and its intersection with repository policy. Order, duplicates, and string spelling are preserved on the wire as `allowedModels`; `nil` is invalid. This does not expose the experimental live model-policy setter. |
-| `:tools` | vector | Custom tools exposed to the CLI |
-| `:system-message` | map | System message customization (see below) |
-| `:available-tools` | vector | List of allowed tool names |
-| `:excluded-tools` | vector | List of excluded tool names |
-| `:tool-search` | map | Configure runtime tool search for `create-session`, `resume-session`, and `join-session`. Optional keys: `:enabled` (boolean) and `:defer-threshold` (integer). This session-level configuration is distinct from a tool definition's `:defer` policy; omit it to use runtime defaults. |
-| `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`; Azure accepts either a resource host or a full Azure AI Foundry project URL. The SDK forwards an Azure project URL unchanged, including its optional trailing slash; the connected Copilot CLI runtime constructs the final provider endpoint. Copilot CLI `1.0.86-0` is a known supporting runtime for project URLs. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options`, `:headers` (map of HTTP header name→value, sent with each provider request — upstream PR #1094), `:model-id` (string — the model identifier to send to the provider; overrides session `:model`), `:wire-model` (string — model name as sent on the provider wire when it differs from `:model-id`), `:max-input-tokens` (integer — input/prompt token cap; serialized as wire `maxPromptTokens`), `:max-output-tokens` (integer — output token cap), `:transport` (`:http`/`:websockets` — provider transport; serialized as wire `transport` — upstream PR #1711), `:bearer-token-provider` (fn — dynamic bearer-token callback, see [BYOK docs](../auth/byok.md#dynamic-bearer-tokens) — upstream PR #1748). The four override fields were added in upstream PR #966 |
-| `:providers` | vector | (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of `:provider` — `:base-url` (required), `:provider-type`, `:wire-api`, `:api-key`, `:bearer-token`, `:azure-options`, `:headers`, `:bearer-token-provider` — and optional `:model-provider` telemetry identity, plus a required `:name` (the registry key, no `/`). Unlike the singular `:provider`, a named provider does **not** accept `:transport` or the inline model-override fields (`:model-id`, `:wire-model`, `:max-input-tokens`, `:max-output-tokens`); model overrides are declared in `:models` instead. Pairs with `:models` to declare a model catalog. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
-| `:models` | vector | (Experimental) Model catalog referencing the `:providers` registry. Each entry: `:id` (required, provider-local model id), `:provider` (required, a `:name` in `:providers`), and optional override fields (`:model-id`, `:wire-model`, `:capabilities`, `:max-input-tokens`, `:max-context-window-tokens`, `:max-output-tokens`). Prefer the canonical `:capabilities` idiom documented for `:model-capabilities`; exact string-keyed wire maps remain accepted as a deprecated compatibility escape hatch. The full model selection id is `"providerName/id"`. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
-| `:capi` | map | CAPI (Copilot API) session options. Optional keys: `:enable-web-socket-responses` (boolean) and `:auto-tier` (extensible keyword identifier). Known tiers include `:efficiency`, `:balance`, `:intelligence`, and the integrator-only latency preset `:fast`; provider-defined identifiers such as `:premium-v2` are also accepted. The complete keyword spelling, including a namespace, is preserved as `capi.autoTier`. Identifiers cannot be empty or contain whitespace/control characters; `nil` is invalid. Omission uses or restores the persisted preference. The runtime validates explicit create/resume preferences against its enabled catalog; it preserves a removed historical preference on resume rather than silently replacing it. WebSocket responses default to `true`; set `:enable-web-socket-responses false` to force HTTP. `COPILOT_CLI_DISABLE_WEBSOCKET_RESPONSES` has the opposite polarity. Experimental discovery, live setters, nullable reset, and recommendation APIs are not exposed. |
-| `:feature-flags` | map | Host-resolved feature flag overrides as string keys and boolean values. Omission sends no wire key; an explicit `{}` is forwarded and remains distinct from omission. Valid on create, resume, and join. ([upstream PR #2451](https://github.com/github/copilot-sdk/pull/2451)) |
-| `:excluded-builtin-agents` | vector | Names of built-in agents to hide/exclude from the session. Serialized as wire `excludedBuiltinAgents`. (upstream PR #1865) |
-| `:enable-citations` | boolean | (Experimental) Opt into native model citations. Gated on `some?` — an explicit `false` is forwarded; an absent key is omitted. Serialized as wire `enableCitations`. (upstream PR #1865) |
-| `:enable-file-change-tracking?` | boolean | Opt into file-change capture for cumulative session diffs. Omission sends no key; explicit `false` and `true` are preserved as `enableFileChangeTracking` on create, resume, and join. On resume, tracking starts only when the runtime still has a valid baseline and cannot reconstruct earlier untracked turns. Observe stable file-change and snapshot events through the normal event APIs; experimental low-level rewind RPCs are intentionally not exposed. |
-| `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
-| `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
-| `:enforce-managed-model-defaults?` | boolean | Enforce locked managed model controls. Locked startup values replace conflicting session options, and conflicting model changes are rejected; overridable defaults remain mutable. Forwarded as `enforceManagedModelDefaults` on create, resume, and join, never through mutable options updates. Omission and explicit `false` are distinct; `nil` is invalid. |
-| `:interactive-user?` | boolean | Declare that a human drives the conversation, enabling user-message analysis telemetry for human-authored messages, not automated messages. Defaults to false for SDK sessions; re-supply it on cold resume. Ignored for cloud sessions and already-active resumes. Forwarded as `interactiveUser` on create, resume, and join. Omission and explicit false are distinct; `nil` is invalid. |
-| `:enable-github-cache-store?` | boolean | Request the read-only GitHub cache capability. The runtime registers `github_sql` only when its `GITHUB_CACHE_STORE` flag is also enabled. Defaults to disabled; false and omission remain distinct on create, resume, and join. `nil` is invalid. This is not a mutable settings API. |
-| `:managed-settings` | map | Host-injected enterprise policy, supplied instead of or alongside `:enable-managed-settings?`. Optional `:permissions` accepts `:disable-bypass-permissions-mode`, `:disable-assisted-permissions-mode?`, `:deny`, `:ask`, `:allow`, and `:limit-to`. Bypass policy accepts a wire string or simple keyword; known values are `:disable` and `:allow-auto-only`. Explicit `:disable-assisted-permissions-mode? true` prevents Assisted Permissions; false imposes no restriction. Rule lists are vectors of non-blank strings. `:limit-to` restricts hosts through `Domain(hostname)`, `Domain(IP)`, or `Domain(*.example.com)` rules; an explicit `[]` denies all hosts. The runtime validates rules and intersects managed layers. Optional values cannot be `nil`. Valid on create, resume, and join, not mutable updates. Policy is not persisted: re-supply it on resume; omission clears the injected layer. Presence sets the permission-handler context's `:managed-settings-enabled?` to true; see [`approve-all`](#approve-all). |
-| `:request-extensions?` | boolean | Opt into extension management tools and per-extension dispatch for this connection. Explicit `false` is preserved as `requestExtensions: false`; omission sends no wire key. Valid on create, resume, and join. Explicit `nil` is invalid. ([upstream PR #1401](https://github.com/github/copilot-sdk/pull/1401)) |
-| `:extension-sdk-path` | string | Override the `copilot-sdk/` folder injected into extension subprocesses. The runtime falls back to its bundled SDK when the path is invalid. Serialized as `extensionSdkPath` on create and resume; not accepted by `join-session` because the extension process has already started. Explicit `nil` is invalid. ([upstream PR #1494](https://github.com/github/copilot-sdk/pull/1494)) |
-| `:extension-info` | map | Stable extension identity `{:source string :name string}`. Serialized exactly as `extensionInfo.{source,name}` on create, resume, and join. Both strings are required; unknown nested keys and explicit `nil` are invalid. This config shape is distinct from the richer `session.extensions_loaded` event items. ([upstream PR #1401](https://github.com/github/copilot-sdk/pull/1401)) |
-| `:canvas-provider` | map | Canvas provider identity only. `{:id "..." :name "..."}` (`:name` optional) — serialized as wire `canvasProvider.{id,name}`. This does not implement the upstream experimental canvas authoring/provider callbacks. (upstream PR #1847) |
-| `:exp-assignments` | map | (`@internal`) Exact `CopilotExpAssignmentResponse` contract using PascalCase string keys. Required: `"Features"` (string vector), `"Flights"` (string-to-string map), `"Configs"` (vector of closed maps containing exactly `"Id"` (string) and `"Parameters"` (map of string keys to string, number, boolean, or `nil` values)), and `"AssignmentContext"` (string). Optional: `"ParameterGroups"` (opaque), `"FlightingVersion"` (number), and `"ImpressionId"` (string). The Clojure spec rejects unknown top-level and config-entry keys. The map is forwarded unchanged on `create-session`, `resume-session`, and `join-session` (`join-session` delegates to resume). Serialized as `expAssignments`. ([upstream PR #2033](https://github.com/github/copilot-sdk/pull/2033)) |
-| `:mcp-servers` | map | MCP server configs keyed by opaque string or keyword server IDs; keyword IDs preserve their full spelling without the leading colon (for example, `:srv-1` becomes `"srv-1"` and `:team/srv-1` becomes `"team/srv-1"`). See [MCP docs](../mcp/overview.md). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
-| `:enable-mcp-apps` | boolean | **Experimental (SEP-1865).** Opt into MCP Apps UI passthrough only when the host can render `ui://` MCP App bundles. Explicit `true` sends `requestMcpApps: true` on `session.create` and `session.resume` (`join-session` delegates to resume). `false` and omission leave the wire key absent; explicit `nil` is invalid. The runtime may still decline the capability when its MCP Apps gate is off. ([upstream PR #1335](https://github.com/github/copilot-sdk/pull/1335)) |
-| `:disabled-mcp-servers` | vector | Names of configured MCP servers (from `:mcp-servers` or on-disk `.mcp.json`) to suppress for this session. Vector of non-blank strings. Serialized as wire `disabledMcpServers`. ([upstream PR #2260](https://github.com/github/copilot-sdk/pull/2260)) |
-| `:github-mcp-tool-config` | map | Configures the built-in GitHub MCP server's tool surface. Optional keys: `:enable-all-tools?` (boolean, gated on `some?`), `:additional-toolsets` (vector of strings), `:additional-tools` (vector of strings), `:enable-insiders-mode?` (boolean, gated on `some?`), `:disable-form-deferral?` (boolean, gated on `some?`). Serialized as wire `githubMcpToolConfig.{enableAllTools,additionalToolsets,additionalTools,enableInsidersMode,disableFormDeferral}`. ([upstream PR #2112](https://github.com/github/copilot-sdk/pull/2112)) |
-| `:commands` | vector | Command definitions (slash commands). An omitted command `:description` is sent as `""`. See [Commands](#commands) |
-| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"`), `:mcp-servers`, and `:agent-hooks`. Declarative `:agent-hooks` maps exact string event names to vectors of string-keyed JSON objects; recursive keys and values are preserved without case conversion. Empty maps/vectors are preserved; `nil`, functions, keyword keys, and non-JSON values are invalid. These actions run only for that agent and are separate from session callback `:hooks`. The disambiguating Clojure prefixes are removed on the wire (`:agent-name` becomes `name`, `:agent-prompt` becomes `prompt`, and so on); `:agent-reasoning-effort` becomes `reasoningEffort`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. When reasoning effort is omitted, the runtime resolves it from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
-| `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
-| `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). On create, omission sends `requestPermission: false`; providing a handler sends `true`. Resolve surfaced pending requests manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
-| `:streaming?` | boolean | Enable streaming deltas. Explicit `false` is forwarded; omission leaves the runtime default unchanged. |
-| `:config-directory` | string | Override the CLI config directory. `:config-dir` remains accepted as a deprecated alias. |
-| `:skill-directories` | vector | Explicit discovery-only skill roots. Available without `:enable-config-discovery`; skill and managed-policy disables still apply. |
-| `:agent-directories` | vector | Explicit discovery-only agent roots, separate from `:custom-agents`. Available without `:enable-config-discovery`; source and managed-policy disables still apply. |
-| `:hook-directories` | vector | Explicit discovery-only file-hook roots, separate from callback `:hooks`. Available without `:enable-config-discovery` or `:enable-file-hooks`; the latter controls repository-origin hooks only. Hook and managed-policy disables still apply. |
-| `:instruction-directories` | vector | Explicit discovery-only instruction roots, using the existing SDK instruction formats. Available without `:enable-config-discovery`; instruction and managed-policy disables still apply. |
-| `:additional-directories` | vector | Extra trusted directories the runtime may access outside the working directory. Startup directories also authorize repository-origin hooks from their containing Git roots. Supply only trusted repositories; see [Session Hooks](#session-hooks). Vector of non-blank strings, sent as `additionalDirectories`; re-supply on cold resume. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
-| `:disabled-skills` | vector | Disable specific skills by name |
-| `:included-builtin-skills` | vector | Allowlist of runtime-bundled skill names, applied through `session.options.update` after create/resume. `:empty` client mode defaults this to `[]`; an explicit vector overrides that default. `:copilot-cli` mode omits it unless explicitly supplied, including an explicit `[]`. Custom skill loading remains controlled separately. ([upstream PR #2410](https://github.com/github/copilot-sdk/pull/2410)) |
-| `:large-output` | map | Tool output handling config. Supports `:enabled`, `:max-size-bytes`, and `:output-directory` (`:output-dir` remains a deprecated alias). The official SDK exposes the same config as `largeOutput`. |
-| `:working-directory` | string | Working directory for the session (tool operations relative to this) |
-| `:infinite-sessions` | map | Infinite session config (see below) |
-| `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"` ([upstream PR #2228](https://github.com/github/copilot-sdk/pull/2228)) |
-| `:github-token` | string | Static GitHub token for this session. Sent as `gitHubToken`; mutually exclusive with `:github-token-provider`. |
-| `:github-token-provider` | fn | Session-scoped, refreshable GitHub credential callback. Receives `{:host string :session-id string? :reason keyword}` where `:reason` is exactly `:initial` or `:refresh`. Returns `{:kind :token :access-token string :expires-in integer>=3601 :token-type string?}` or `{:kind :cancelled}`, directly or on a core.async channel. Both result variants are open to additional extension fields. Create, resume, and join configuration carries only an opaque registration ID; the callback remains local, while acquired credentials cross the JSON-RPC connection to the CLI when requested. Managed child-process stdio, SDK-managed TCP, and explicit `:cli-url` connections are supported; the Clojure-only caller-supplied testing-stream transport is rejected. Explicit `:cli-url` uses raw TCP; `http://` is accepted as an explicit plaintext spelling and `https://` is rejected. Use a trusted runtime and an authenticated, protected tunnel for nonlocal connections. Provider work runs on a bounded client-owned executor with a fixed 120-second deadline per callback. Callback failure, an invalid result, or timeout is returned directly to the runtime without an SDK retry. Failed create/resume/join calls roll back provisional registrations; session and client teardown remove committed registrations and cancel in-flight work. Mutually exclusive with `:github-token`. See [Authentication](../auth/index.md#session-scoped-token-provider). ([upstream PR #2412](https://github.com/github/copilot-sdk/pull/2412)) |
-| `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
-| `:ask-user-variant` | keyword | Selects the built-in `ask_user` tool shape: `:legacy` or `:elicitation`. Omission preserves the runtime default; explicit values serialize as `askUserVariant` on create/resume/join. The `:elicitation` variant requires an `:on-elicitation-request` handler when the host must answer requests. ([upstream PR #2432](https://github.com/github/copilot-sdk/pull/2432)) |
-| `:hooks` | map | Lifecycle hooks (see below) |
-| `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
-| `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
-| `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
-| `:on-mcp-auth-request` | fn | Handler for interactive MCP OAuth requests. When provided, the SDK registers interest in `mcp.oauth_required` (on both create and resume) so the runtime delegates browser-based OAuth to this handler instead of silently using a cached token. 2-arg handler `(fn [request ctx])` receives an `McpAuthRequest` map and `{:session-id ...}`; may return a channel. See [MCP OAuth Handler](#mcp-oauth-handler). (upstream PR #1669) |
-| `:on-exit-plan-mode` | fn | Handler for `exitPlanMode.request` RPCs — invoked when the agent asks to leave plan mode. When provided, advertises `requestExitPlanMode=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
-| `:on-auto-mode-switch` | fn | Handler for `autoModeSwitch.request` RPCs — invoked when the agent asks to switch autonomy mode. When provided, advertises `requestAutoModeSwitch=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
-| `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set; defaulted to `false` in `:mode :empty` (caller can override). Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
-| `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
-| `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
-| `:refresh-custom-instructions?` | boolean | Create-only opt-in to invalidate the runtime's process-wide custom-instruction discovery cache before session creation. Other sessions using that runtime may observe updated instructions on later turns or discovery. Explicit `false` preserves the cache; omission sends no wire key; `nil` is invalid. This does not watch files or enable disabled instruction loading. Not accepted on resume or join, and never forwarded in mutable option updates. |
-| `:enable-experimental-mode?` | boolean | Opt into CLI-side experimental features. Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `isExperimentalMode`. Defaulted to `false` in `:empty` mode. ([upstream PR #1600](https://github.com/github/copilot-sdk/pull/1600)) |
-| `:model-capabilities` | map | Deep-partial model capability override forwarded verbatim (upstream `SessionConfig.modelCapabilities`, a stable public SDK field). Canonical shape: `{:supports {:vision boolean :reasoning-effort boolean :adaptive-thinking :unsupported\|:optional\|:required} :limits {:max-prompt-tokens int :max-output-tokens int :max-context-window-tokens int :vision {:supported-media-types [...] :max-prompt-images int :max-prompt-image-size int}}}`. The stable public-SDK fields are `:supports {:vision :reasoning-effort}` and `:limits {:max-prompt-tokens :max-output-tokens :max-context-window-tokens :vision {...}}`; only `:adaptive-thinking` remains an **experimental** CLI-protocol extension. The wire keeps `reasoningEffort` camelCase but uses `adaptive_thinking`, `max_prompt_tokens`, `max_output_tokens`, `max_context_window_tokens`, and the nested vision leaves in snake_case. The published `:model-supports` / `:model-limits` aliases remain accepted for outbound compatibility and normalize to the canonical wire shape; do not combine an alias with its canonical branch. ([upstream PR #1029](https://github.com/github/copilot-sdk/pull/1029), [upstream PR #2569](https://github.com/github/copilot-sdk/pull/2569)) |
-| `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
-| `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
-| `:cloud` | map | (create-session only) Creates a remote cloud session. Shape: `{:repository {:owner "octocat" :name "hello-world" :branch "main"}}` — `:owner` and `:name` are required non-blank strings; `:branch` is optional. Forwarded as `cloud.repository.*` on `session.create`. Not accepted on `resume-session` (matches upstream `ResumeSessionConfig`). When `:cloud` is set and `:session-id` is omitted, the SDK defers id assignment to the server and registers the session under the server-returned id (upstream PR #1479). (upstream PR #1306) |
-| `:mcp-oauth-token-storage` | keyword | Controls where MCP OAuth tokens are persisted. `#{:persistent :in-memory}`. Default is server-side (persistent). Set to `:in-memory` in multi-tenant hosts that must not leak tokens to disk. Wire-encoded as `mcpOAuthTokenStorage`. (upstream PR #1326) |
-| `:auth-client-id-metadata-url` | string | OAuth Client ID Metadata Document URL identifying the host during MCP authorization. Omission sends no host identity; empty strings are forwarded because the official SDK exposes a plain optional string. Valid on create, resume, and join; explicit `nil` is invalid. Serialized as `authClientIdMetadataUrl`. ([upstream PR #2258](https://github.com/github/copilot-sdk/pull/2258)) |
-| `:embedding-cache-storage` | keyword | `#{:persistent :in-memory}`. Controls where the embedding cache lives. Wire-encoded as `embeddingCacheStorage`. (upstream PR #1474) |
-| `:skip-embedding-retrieval` | boolean | Skip embedding-based context retrieval. (upstream PR #1474) |
-| `:organization-custom-instructions` | string | Organization-wide instructions injected by the host. (upstream PR #1474) |
-| `:enable-on-demand-instruction-discovery` | boolean | Auto-discover instruction files on demand. (upstream PR #1474) |
-| `:enable-file-hooks` | boolean | Controls repository-origin hooks from the primary repository and eligible additional startup directories. `false` suppresses them; explicit `:hook-directories` and SDK callback `:hooks` are independent. Omission preserves the runtime default; `nil` is invalid. See [Session Hooks](#session-hooks). |
-| `:enable-host-git-operations` | boolean | Allow the CLI to run git operations through the host. (upstream PR #1474) |
-| `:enable-session-store` | boolean | Enable the disk-backed session store. (upstream PR #1474) |
-| `:enable-skills` | boolean | Enable skills discovery and loading. (upstream PR #1474) |
-| `:plugin-directories` | vector | Per-session plugin directories sent in `session.create` and `session.resume`, including to externally managed runtimes, and loaded even when `:enable-config-discovery` is `false`. Relative paths resolve against `:working-directory`, or the runtime working directory when unset; absolute paths are recommended. Missing entries are logged and skipped without failing session creation. These sources take precedence over personal/home plugins but not project plugins. Wire-encoded as `pluginDirectories`. ([upstream PR #1482](https://github.com/github/copilot-sdk/pull/1482), [upstream PR #2581](https://github.com/github/copilot-sdk/pull/2581)) |
-| `:reasoning-summary` | string | `"none"` / `"concise"` / `"detailed"`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. String-valued for consistency with `:reasoning-effort`. |
-| `:context-tier` | keyword | `#{:default :long-context}` selects the model context tier. On create/resume, omit the key to leave the runtime default unchanged; explicit `nil` is invalid because the official session config does not expose `null`. `switch-model!` / `set-model!` retain their existing `nil` option, which omits `contextTier` from that RPC. Wire values are `"default"` / `"long_context"`. |
-| `:skip-custom-instructions` | boolean | Skip loading user-level custom instruction files. Forwarded via `session.options.update` (NOT `session.create`). Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
-| `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`, and — since ([upstream PR #1899](https://github.com/github/copilot-sdk/pull/1899)) — also sent directly (gated on `some?`) on `session.create` and `session.resume` as wire `custom-agents-local-only`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
-| `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
-| `:manage-schedule-enabled` | boolean | Enable the built-in schedule-management tools. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
-| `:open-canvases` | vector | (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry requires `:instance-id`, `:extension-id`, and `:canvas-id`; optional keys are `:extension-name`, `:title`, `:status`, `:url`, `:input`, and `:icon` (a host-local PNG path). Caller-defined `:input` keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See [`open-canvases`](#open-canvases). ([upstream PR #1604](https://github.com/github/copilot-sdk/pull/1604)) |
-| `:memory` | map | Persistent-memory configuration. Shape: `{:enabled boolean}`. Sent on **both** `session.create` and `session.resume`; omitted entirely when the key is absent (never wire `null`). Wire-encoded as `memory`. In `:mode :empty` it is defaulted to `{:enabled false}` (caller can override). (upstream [PR #1617](https://github.com/github/copilot-sdk/pull/1617)) |
-
-BYOK provider maps also accept optional `:model-provider` telemetry identity
-on create, resume, and join: `:openai`, `:anthropic`, `:azure-openai`, `:ollama`,
-`:lm-studio`, `:foundry-local`, or `:llama-cpp`. The SDK preserves omission,
-rejects `nil`, and serializes the keyword as wire `modelProvider` using
-underscore-separated values. It does not change the API provider, transport,
-authentication, or selected model, and is not sent through mutable session
-options. See [Provider telemetry](../auth/byok.md#provider-telemetry).
-
-#### `resume-session`
-
-```clojure
-(copilot/resume-session client session-id config)
-```
-
-Resume an existing session by ID. The `config` map accepts the same options as
-`create-session` except `:session-id`, `:cloud`, and `:refresh-custom-instructions?`,
-including per-session `:github-token`, plus:
-
-| Option | Type | Description |
+| Call | Result and ownership |
+|---|---|
+| `(h/query!! session message)` | Block for this turn's text, or `nil` when there is no text. Borrow the session; never close it. |
+| `(h/query-once!! config message)` | The same text result, with one new client and session. Release both before returning or throwing. Use an application-owned client instead of repeatedly opening hosts in a service. |
+| `(h/with-conversation [s config] body...)` | Open one client and session, bind `s`, then detach the session and close the client on exit. Keep work that needs either handle inside the scope. |
+| `(h/query-json!! session message)` | Send one message with `:prompt` and a `:response-schema` map. Decode **one** JSON value from the final assistant text, on the caller's thread. A JSON `null` returns `nil`; a missing structured reply is an error. |
+| `(h/decode-json text)` | Decode JSON without sending a request. Object keys remain strings and decimals remain exact. Malformed input, trailing non-whitespace or more than 128 nested objects/arrays is an error. A schema requests an output shape; the decoder does not validate application rules. |
+| `(h/with-subscription [events session] body...)` | Subscribe for the body; close **only** that subscription on exit. It observes the whole conversation. It does not start, wait for, or abort a turn. |
+
+The blocking queries accept the turn's `:timeout-ms` in the message map and
+throw on failure. A timeout does not undo accepted work. Use the
+[turn primitives](#operations) if you need the final event or want to
+choose when to wait.
+
+## Operations
+
+A **turn** is one prompt and its outcome. Choose **one** of these calls per
+prompt; each starts a request. A message can be a prompt string or a
+[message options map](#message-options).
+
+| Call | Completes when | What the caller gets |
 |---|---|---|
-| `:allow-transcript-recovery?` | boolean | Allow repair when loading a damaged transcript. Omission uses the runtime default, `true` in every client mode; explicit `false` rejects recovery. `nil` is invalid. Also accepted by async resume and `join-session`, but not create or mutable option updates. |
-| `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false). Explicit `false` is forwarded as `disableResume: false`; omission leaves the runtime default unchanged. |
-| `:continue-pending-work?` | boolean | When true, the runtime re-emits any pending `permission.requested` and external tool calls so handlers can re-respond on resume; default false treats pending work as interrupted. Durably recorded, completed tool results are preserved either way. Forwarded as `continuePendingWork` on `session.resume`. |
-| `:large-output` | map | Tool output handling config. Forwarded on `session.resume` as the official SDK's `largeOutput` field. |
+| `(copilot/send! session message)` | The runtime accepts the submission. | A result channel for the message ID, not the answer. |
+| `(copilot/start-turn! session message)` | The runtime returns this turn's result and the SDK receives the completion event if the reply names one. | A result channel without waiting for the answer. On success it delivers `{:ok event}` for the main assistant's final message, or `{:ok nil}` for an ordinary turn with no reply. |
+| `(copilot/send-and-wait!! session message)` | The same turn completion as `start-turn!`. | The caller blocks and gets the event or `nil` directly, or an exception on failure. Do not call it inside `go`. |
 
-Inspect [`transcript-recovery`](#transcript-recovery) on the returned session for
-the repair report. Recovery policy applies when loading from storage, not when
-reconnecting to history already resident in the runtime. Disabling recovery
-rejects damaged records or a misplaced `session.start` with JSON-RPC error
-`-32075`, without rewriting the transcript; an intact final record missing only
-its newline is still accepted. The error's original opaque data is preserved.
+With `start-turn!`, keep the session open until you take the result or close
+the channel to abandon your wait. Use `await!!` on an application thread or
+`<!` on the already-started channel inside `go`. Preparation and lock
+acquisition can happen before `start-turn!` returns. Both forms use the
+same deadline and [event callback rules](#events-and-history); neither waits
+for a subscription reader to consume events or for all session work to stop.
 
-When `:mcp-servers` is present, the SDK sends the converted server configuration
-as `mcpServers` in the `session.resume` request. This applies to blocking and
-async resume, and therefore to `join-session`. Omitting the key omits
-`mcpServers`; an empty map sends an empty configuration.
+A result channel delivers **one** `{:ok value}`
+or `{:error exception}` and closes. `(copilot/await!! result)` blocks a caller
+thread, returns the value (including `nil`), or throws. Inside `go`, take the
+result with `<!` and inspect it. An event subscription is not an operation.
 
-When `:on-permission-request` is set to `default-join-session-permission-handler`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends `requestPermission: true`.
+Interrupting a direct `await!!` does not cancel the operation. If interruption
+withdraws its take, it throws `InterruptedException` with the ordinary Java
+cleared interrupt status. You may await the same channel again on the same
+thread; do not resend the prompt. If the take already claimed the result, it
+delivers that result and preserves the interrupt flag instead.
+`send-and-wait!!` owns its result channel instead: if interrupted before
+it takes the result, it closes that wait and throws `InterruptedException`.
+It also checks for interruption at submission, including after waiting for
+the client lock. It can withdraw a prompt the connection writer has not yet
+claimed; it does not abort a turn already sent to the runtime. Interruption
+leaves the calling thread's interrupt flag set.
 
-```clojure
-;; Resume with a different model and reasoning effort
-(copilot/resume-session client "session-123"
-  {:model "claude-sonnet-4"
-   :reasoning-effort "high"
-   :on-permission-request copilot/approve-all})
+For the other one-result operations, each channel waits for the condition in
+the middle column. Querying state does not wait for that state to change.
 
-;; Resume without handling permissions (join-style)
-(copilot/resume-session client "session-123"
-  {:on-permission-request copilot/default-join-session-permission-handler})
-```
-
-#### `<create-session`
-
-```clojure
-(copilot/<create-session client config)
-```
-
-Async version of `create-session`. Returns a channel that delivers a `CopilotSession`.
-
-Configuration validation, connection setup, and local session preparation happen
-before the result channel is returned. For standard local creates and cloud
-creates with a caller-supplied `:session-id`, this includes constructing the
-session filesystem handler. A failure in any of those steps throws
-synchronously. A cloud create with `:cloud` and no `:session-id` must defer
-filesystem-handler construction until the server assigns an ID; that failure,
-RPC failures, and later setup failures are delivered as a `Throwable` on the
-channel. The RPC wait parks instead of blocking, making the returned channel
-safe to consume inside `go` blocks. In the deferred cloud case, the
-`:create-session-fs-handler` factory runs on the JSON-RPC reader thread before
-the response can complete. It must return promptly and must not issue SDK RPCs
-or wait for session events.
-
-If local initialization of a newly assigned cloud session fails, the SDK deletes
-that remote session with a 10-second cleanup timeout. The initialization error
-remains primary; cleanup failures are logged and attached as suppressed
-exceptions. A failure after initialization still detaches the session instead
-of deleting persisted state. Local create/resume validation failures roll back
-their provisional registration before issuing the session RPC.
-
-```clojure
-(require '[clojure.core.async :refer [go <!]])
-
-(go
-  (let [result (<! (copilot/<create-session client {:model "gpt-5.4"
-                                                    :on-permission-request copilot/approve-all}))]
-    (if (instance? Throwable result)
-      (println "Error:" (ex-message result))
-      (let [answer (<! (copilot/<send! result {:prompt "Hello"}))]
-        (println answer)))))
-```
-
-#### `<resume-session`
-
-```clojure
-(copilot/<resume-session client session-id config)
-```
-
-Async version of `resume-session`. Returns a channel that delivers a
-`CopilotSession`.
-
-Same config options as `resume-session`. Configuration validation, connection
-setup, and local session preparation — including construction of any session
-filesystem handler — happen before the result channel is returned and throw
-synchronously on failure. RPC and later setup failures are delivered as a
-`Throwable` on the channel. The RPC wait parks, so the returned channel is safe
-to consume inside `go` blocks.
-
-```clojure
-(go
-  (let [result (<! (copilot/<resume-session
-                    client
-                    "session-123"
-                    {:on-permission-request copilot/approve-all}))]
-    (if (instance? Throwable result)
-      (throw result)
-      (<! (copilot/<send! result {:prompt "Continue"})))))
-```
-
-#### `join-session`
-
-```clojure
-(copilot/join-session config)
-```
-
-Join the current foreground session from an extension running as a child process of the Copilot CLI. Reads the `SESSION_ID` environment variable, creates a child-process client, and resumes the session with `:disable-resume?` defaulting to `true`. It accepts `:request-extensions?`, `:extension-info`, and the join-only `:requested-environment-variables`, but rejects the create/resume-only `:extension-sdk-path`. Session-scoped `:github-token` and `:github-token-provider` authentication are supported; the provider uses the same callback contract, lifecycle, and transport-security requirements as `resume-session`.
-
-Returns a map with `:client` and `:session` keys. When the request vector is
-non-empty, the map also contains `:granted-environment-variables`. Its string
-keys preserve the requested environment names, and it contains only values the
-parent CLI granted for those exact names. The map may be empty when none were
-approved. The caller is responsible for stopping the client when done.
-
-Throws if `SESSION_ID` is not set in the environment.
-
-In addition to the `resume-session` config options, `join-session` accepts:
-
-| Option | Type | Description |
+| Call | Completes when | Successful value |
 |---|---|---|
-| `:workflows` | vector | `define-workflow` handles to register as [Dynamic Workflows (Experimental)](#dynamic-workflows-experimental) for this session. Join-only — not accepted by `create-session` or `resume-session`. |
-| `:requested-environment-variables` | vector of non-blank strings | Names the extension asks the parent CLI to grant. Omission and `[]` send no wire field; explicit `nil` is invalid. Approved values are returned under `:granted-environment-variables`, filtered to these exact names. ([upstream PR #2348](https://github.com/github/copilot-sdk/pull/2348)) |
-
-```clojure
-(let [{:keys [client session granted-environment-variables]}
-      (copilot/join-session
-       {:on-permission-request copilot/approve-all
-        :requested-environment-variables ["GITHUB_TOKEN"]
-        :tools [my-tool]})]
-  (when-let [token (get granted-environment-variables "GITHUB_TOKEN")]
-    ;; Supply token to extension-owned code without logging it.
-    (use-token token))
-  ;; use session...
-  (copilot/stop! client))
-```
-
-> **Return-shape difference vs the official SDK.** The Node.js
-> `joinSession(config)` returns the `CopilotSession` directly and hides the
-> client it creates internally. Clojure has no implicit/global client, so
-> `join-session` returns **both** the `:client` and the `:session`: the
-> caller owns the client's lifecycle and must call [`stop!`](#stop) on it
-> when finished. Bind the returned map's `:session` where a Node.js caller
-> would use the awaited return value, and keep the `:client` for cleanup.
-> Node.js also installs approved environment grants into `process.env`; the JVM
-> cannot portably do that, so Clojure returns the filtered
-> `:granted-environment-variables` map instead.
-> See [Naming and shape differences vs the official SDK](#naming-and-shape-differences-vs-the-official-sdk).
-
-#### `ping`
-
-```clojure
-(copilot/ping client)
-(copilot/ping client message)
-```
-
-Ping the server to check connectivity. Returns `{:message "..." :timestamp ... :protocol-version ...}`.
-
-#### `get-status`
-
-```clojure
-(copilot/get-status client)
-```
-
-Get CLI status including version and protocol information. Returns `{:version "0.0.389" :protocol-version 2}`.
-
-#### `get-auth-status`
-
-```clojure
-(copilot/get-auth-status client)
-```
-
-Get current authentication status. Returns:
-```clojure
-{:authenticated? true
- :auth-type :user        ; :user | :env | :gh-cli | :hmac | :api-key | :token
- :host "github.com"
- :login "username"
- :status-message "Authenticated as username"}
-```
-
-#### `list-models`
-
-```clojure
-(copilot/list-models client)
-```
-
-List available models with their metadata. Results are cached per client connection.
-When `:on-list-models` handler is provided in client options, calls the handler
-instead of the RPC method (no connection required).
-Requires authentication (unless `:on-list-models` is provided). Returns a vector of model info maps:
-```clojure
-[{:id "gpt-5.4"
-  :name "GPT-5.4"
-  :vendor "openai"
-  :family "gpt-5.4"
-  :version "gpt-5.4"
-  :max-input-tokens 128000
-  :max-output-tokens 16384
-  :preview? false
-  :model-capabilities {:supports {:vision true
-                                  :reasoning-effort false
-                                  :adaptive-thinking :optional}
-                       :limits {:max-prompt-tokens 128000
-                                :max-output-tokens 16384
-                                :max-context-window-tokens 128000
-                                :vision
-                                {:supported-media-types ["image/png" "image/jpeg"]
-                                 :max-prompt-images 10
-                                 :max-prompt-image-size 20971520}}}
-  :model-policy {:policy-state "enabled"
-                 :terms "..."}
-  :model-billing {:multiplier 1.0
-                  :token-prices {:input-price 0.00000125
-                                 :output-price 0.00001
-                                 :cache-price 0.0000003125
-                                 :long-context {:input-price 0.0000025
-                                                :output-price 0.00002}}
-                  :promo {:ends-at "2026-08-01T00:00:00Z"
-                          :id "summer-promo"
-                          :discount-percent 25
-                          :message "25% off until August"}}
-  ;; Model picker categorization (CLI 1.0.46+):
-  :model-picker-category "powerful"            ;; "lightweight" | "versatile" | "powerful"
-  :model-picker-price-category "very_high"     ;; "low" | "medium" | "high" | "very_high"
-  ;; For models supporting reasoning:
-  :supported-reasoning-efforts ["low" "medium" "high" "xhigh"]
-  :default-reasoning-effort "medium"}
- ...]
-```
-
-The optional `:promo` billing map contains:
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `:ends-at` | string | yes | Promotion end time |
-| `:id` | string | no | Promotion identifier |
-| `:discount-percent` | number from 0 through 100 | no | Percentage discount |
-| `:message` | string | no | Display message |
-
-List all models with their billing multiplier:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/with-client [client]
-  (doseq [m (copilot/list-models client)]
-    (println (:id m) (str "x" (get-in m [:model-billing :multiplier])))))
-;; prints:
-;; gpt-5.4 x1.0
-;; claude-sonnet-4.5 x1.0
-;; o1 x2.0
-;; ...
-```
-
-#### `list-tools`
-
-```clojure
-(copilot/list-tools client)
-(copilot/list-tools client "gpt-5.4")
-```
-
-List available tools with their metadata. Pass an optional model string to get model-specific tool overrides.
-
-```clojure
-(copilot/list-tools client)
-;; => [{:name "read_file"
-;;      :namespaced-name "builtin.read_file"
-;;      :description "Read a file from disk"
-;;      :parameters {...}
-;;      :instructions "..."}
-;;     ...]
-
-;; Print all tool names
-(doseq [tool (copilot/list-tools client)]
-  (println (:name tool) "-" (:description tool)))
-```
-
-Each tool info map contains:
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `:name` | string | yes | Short tool name |
-| `:namespaced-name` | string | no | Fully qualified tool name |
-| `:description` | string | yes | Human-readable description |
-| `:parameters` | map | no | JSON Schema of tool parameters |
-| `:instructions` | string | no | Usage instructions for the tool |
-
-#### `get-quota`
-
-```clojure
-(copilot/get-quota client)
-```
-
-Get account quota information. Returns a map of quota type (string) to quota snapshot maps.
-
-```clojure
-(copilot/get-quota client)
-;; => {"chat" {:entitlement-requests 1000
-;;             :used-requests 42
-;;             :remaining-percentage 95.8
-;;             :overage 0
-;;             :overage-allowed-with-exhausted-quota? false
-;;             :reset-date "2025-02-01T00:00:00Z"}}
-
-(let [quotas (copilot/get-quota client)]
-  (doseq [[type snapshot] quotas]
-    (println type ":" (:remaining-percentage snapshot) "% remaining")))
-```
-
-Each quota snapshot map contains:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:entitlement-requests` | number | Total allowed requests |
-| `:used-requests` | number | Requests used so far |
-| `:remaining-percentage` | number | Percentage of quota remaining |
-| `:overage` | number | Number of requests over quota |
-| `:overage-allowed-with-exhausted-quota?` | boolean | Whether overage is allowed when quota is exhausted |
-| `:reset-date` | string (optional) | ISO 8601 date when quota resets |
-
-#### `mcp-config-list` / `mcp-config-add!` / `mcp-config-update!` / `mcp-config-remove!`
-
-> **Experimental:** These wrap server-level MCP configuration RPCs and may change.
-
-```clojure
-;; List configured MCP servers
-(copilot/mcp-config-list client)
-;; => {:servers [...]}
-
-;; Add a new MCP server config
-(copilot/mcp-config-add! client {:name "my-server"
-                                  :command "npx"
-                                  :args ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]
-                                  :tools ["*"]})
-
-;; Update an existing config
-(copilot/mcp-config-update! client {:name "my-server" :tools ["read_file"]})
-
-;; Remove a config
-(copilot/mcp-config-remove! client {:name "my-server"})
-```
-
-#### `state`
-
-```clojure
-(copilot/state client)
-```
-
-Get current connection state: `:disconnected` | `:connecting` | `:connected` | `:error`
-
-#### `notifications`
-
-```clojure
-(copilot/notifications client)
-```
-
-Get a channel that receives non-session notifications. The channel is buffered; notifications are dropped if it fills.
-
-#### `on-lifecycle-event`
-
-```clojure
-;; Subscribe to all lifecycle events
-(def unsub (copilot/on-lifecycle-event client
-             (fn [event]
-               (println (:lifecycle-event-type event) (:session-id event)))))
-
-;; Subscribe to a specific event type
-(def unsub (copilot/on-lifecycle-event client :session.created
-             (fn [event]
-               (println "New session:" (:session-id event)))))
-
-;; Unsubscribe
-(unsub)
-```
-
-Subscribe to session lifecycle events dispatched by the CLI server. The handler receives an event map with:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:lifecycle-event-type` | keyword | One of `:session.created`, `:session.deleted`, `:session.updated`, `:session.foreground`, `:session.background` |
-| `:session-id` | string | The session ID |
-| `:metadata` | map (optional) | Contains `:start-time`, `:modified-time`, and optionally `:summary` |
-
-**Two arities:**
-- `(on-lifecycle-event client handler)` — wildcard, receives all lifecycle events
-- `(on-lifecycle-event client event-type handler)` — receives only events matching `event-type`
-
-Returns an unsubscribe function. Call it with no arguments to remove the handler.
-
-Handlers are called synchronously on the notification router's go-loop. Keep handlers fast; offload heavy work to another thread or channel.
-
-#### `list-sessions`
-
-```clojure
-(copilot/list-sessions client)
-(copilot/list-sessions client {:repository "owner/repo" :branch "main"})
-```
-
-List available sessions. Pass an optional filter map to narrow results by context fields.
-
-**Filter options:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:cwd` | string | Filter by working directory |
-| `:git-root` | string | Filter by git repository root |
-| `:repository` | string | Filter by repository (e.g., `"owner/repo"`) |
-| `:branch` | string | Filter by branch name |
-
-Returns a vector of session metadata maps with `:start-time` and `:modified-time` as `java.time.Instant`. Sessions may include a `:context` map with the session's working directory and repository info.
-
-```clojure
-(copilot/list-sessions client)
-;; => [{:session-id "abc-123"
-;;      :start-time #inst "2025-01-15T10:00:00Z"
-;;      :modified-time #inst "2025-01-15T10:05:00Z"
-;;      :summary "Refactoring auth module"
-;;      :remote? false
-;;      :context {:cwd "/home/user/project"
-;;                :git-root "/home/user/project"
-;;                :repository "owner/repo"
-;;                :branch "main"}}
-;;     ...]
-```
-
-#### `get-session-metadata`
-
-```clojure
-(copilot/get-session-metadata client session-id)
-```
-
-Get metadata for a specific session by ID. Returns the session metadata map if found, or `nil` if the session does not exist. Provides an efficient O(1) lookup instead of calling `list-sessions` and filtering client-side.
-
-The returned map has the same shape as entries returned by `list-sessions`:
-- `:session-id` — session ID string
-- `:start-time` — `java.time.Instant` when the session was created
-- `:modified-time` — `java.time.Instant` of last modification
-- `:remote?` — boolean, true if the session is remote
-- `:summary` — optional summary string
-- `:context` — optional map with `:cwd` and optional `:git-root`, `:repository`, `:branch`
-
-```clojure
-(def metadata (copilot/get-session-metadata client "session-abc123"))
-;; => {:session-id "session-abc123"
-;;     :start-time #object[java.time.Instant 0x... "2025-01-15T10:00:00Z"]
-;;     :modified-time #object[java.time.Instant 0x... "2025-01-15T10:05:00Z"]
-;;     :remote? false
-;;     :summary "Refactoring auth module"
-;;     :context {:cwd "/home/user/project"}}
-
-(copilot/get-session-metadata client "non-existent-id")
-;; => nil
-```
-
-#### `delete-session!`
-
-```clojure
-(copilot/delete-session! client session-id)
-```
-
-Delete a session and its data from disk. Unlike `disconnect!` (which gracefully closes an active session), `delete-session!` removes persisted session data by ID.
-
-#### `get-last-session-id`
-
-```clojure
-(copilot/get-last-session-id client)
-```
-
-Get the ID of the most recently updated session.
-
-#### `get-foreground-session-id`
-
-```clojure
-(copilot/get-foreground-session-id client)
-```
-
-Get the foreground session ID. Returns the session ID or nil. Only applicable in TUI+server mode.
-
-#### `set-foreground-session-id!`
-
-```clojure
-(copilot/set-foreground-session-id! client session-id)
-```
-
-Set the foreground session. Requests the TUI to switch to displaying the specified session. Only applicable in TUI+server mode.
-
----
-
-## CopilotSession
-
-Represents a single conversation session.
-
-### Methods
-
-#### `send!`
-
-```clojure
-(copilot/send! session options)
-```
-
-Send a message to the session. Returns immediately with the message ID.
-
-**Options:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:prompt` | string | The message/prompt to send |
-| `:attachments` | vector | File attachments (see below) |
-| `:mode` | keyword | `:enqueue` or `:immediate` |
-| `:agent-mode` | keyword | `#{:interactive :plan :autopilot :shell}`. Per-message agent mode. Wire-encoded as `agentMode`. (upstream PR #1438) |
-| `:display-prompt` | string | Alternate prompt shown in the timeline UI instead of `:prompt`. Useful when the model-facing prompt contains machinery or context that should not be surfaced to the end user. Wire-encoded as `displayPrompt`. (upstream PR #1470) |
-| `:request-headers` | map | Extra HTTP headers (string→string) forwarded to the model provider for this request. Merged with provider-level `:headers`. (upstream PR #1094) |
-| `:response-schema` | JSON Schema map or parsed schema map | Request a strict JSON Schema response. A parsed schema is `{:to-json-schema fn :parse fn}`. Omission sends no `responseFormat`; explicit `nil` is invalid. Caller-defined schema keys are preserved. ([upstream PR #2590](https://github.com/github/copilot-sdk/pull/2590)) |
-| `:source` | keyword or map | Optional message provenance. Use `:user`, `:system`, or `{:agent-id "..."}`. Agent IDs are opaque strings, including the empty string, and serialize as `agent-<id>`. Omission sends no wire key; explicit `nil` is invalid. Remote backends may echo the source locally without forwarding it end to end. ([upstream PR #2573](https://github.com/github/copilot-sdk/pull/2573)) |
-
-```clojure
-(copilot/send! session
-  {:prompt "Review this change"
-   :source {:agent-id "reviewer"}})
-```
-
-**Attachment types:**
-
-| Type | Required Keys | Optional Keys | Description |
-|------|--------------|---------------|-------------|
-| `:file` | `:type`, `:path` | `:display-name`, `:line-range` | File attachment |
-| `:directory` | `:type`, `:path` | `:display-name`, `:line-range` | Directory attachment |
-| `:selection` | `:type`, `:file-path`, `:display-name` | `:selection-range`, `:text` | Code selection attachment |
-| `:github-reference` | `:type`, `:number`, `:title`, `:reference-type`, `:state`, `:url` | — | GitHub issue, PR, or discussion reference |
-| `:blob` | `:type`, `:data`, `:mime-type` | `:display-name` | Inline base64-encoded data (e.g. images) |
-| `:extension-context` | `:type`, `:extension-id`, `:title`, `:captured-at` | `:canvas-id`, `:instance-id`, `:payload` | Context captured by an extension. Payload keys are opaque and retain their source spelling. ([upstream PR #2590](https://github.com/github/copilot-sdk/pull/2590)) |
-
-`:line-range` is a map with `:start` and `:end` line numbers (zero-based) to restrict the attachment to a range of lines:
-
-```clojure
-(copilot/send! session
-  {:prompt "Explain this function"
-   :attachments [{:type :file
-                  :path "/path/to/file.clj"
-                  :line-range {:start 10 :end 25}}]})
-```
-
-Selection range is a map with `:start` and `:end` positions, each containing `:line` and `:character`:
-
-```clojure
-(copilot/send! session
-  {:prompt "Explain this code"
-   :attachments [{:type :selection
-                  :file-path "/path/to/file.clj"
-                  :display-name "my-fn"
-                  :selection-range {:start {:line 10 :character 0}
-                                   :end {:line 25 :character 0}}
-                  :text "(defn my-fn [...] ...)"}]})
-```
-
-#### `send-and-wait!`
-
-```clojure
-(copilot/send-and-wait! session options)
-(copilot/send-and-wait! session options timeout-ms)
-(copilot/send-and-wait! session options parsed-response-schema)
-(copilot/send-and-wait! session options parsed-response-schema timeout-ms)
-```
-Send a message and block until the session becomes idle. The ordinary and raw
-schema forms return the final assistant message event. The parsed schema forms
-return the parser result.
-Default timeout is `60000` ms (60 seconds), matching the upstream Node.js SDK. The timeout controls how long to wait for `session.idle`; it does not abort in-flight agent work.
-An idle event whose wire `:mode` is the string `"autopilot"` is a turn boundary,
-not a terminal event, so the wait continues. Keyword `:autopilot` is not a
-supported event payload value. Ordinary waits are serialized per session;
-structured waits correlate by originating message ID and may run concurrently
-with one another. Serialization covers active local waits, not remote work
-surviving cancellation or timeout. Ordinary waits observe the session-wide root
-stream and can see late replies or terminal events from earlier work.
-Structured waits provide originating-message correlation for assistant output;
-they do not make session-wide errors request-specific.
-
-Only root-agent messages supply the result. Messages, errors, and idle events
-with a non-empty envelope `:agent-id` do not complete the wait or replace its
-reply. An absent or empty `:agent-id` identifies the root. Child events remain
-visible to ordinary event subscriptions; blocking wait subscriptions filter them
-before their bounded buffers rather than letting child traffic consume that
-capacity.
-
-#### Structured Output
-
-Use `:response-schema` in the options map when the caller needs the normal
-assistant message event:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def answer-json-schema
-  {"type" "object"
-   "properties" {"answer-value" {"type" "integer"}}
-   "required" ["answer-value"]
-   "additionalProperties" false})
-
-(def response
-  (copilot/send-and-wait!
-   session
-   {:prompt "What is 2 + 2?"
-    :response-schema answer-json-schema}))
-
-(get-in response [:data :content])
-;; => "{\"answer-value\":4}"
-```
-
-Pass a parsed response schema as the third argument to decode the final
-correlated assistant response and return the parser result:
-
-```clojure
-(def parsed-answer-schema
-  {:to-json-schema (constantly answer-json-schema)
-   :parse #(get % "answer-value")})
-
-(copilot/send-and-wait!
- session
- {:prompt "What is 2 + 2?"}
- parsed-answer-schema
- 60000)
-;; => 4
-```
-
-The schema map must provide `:to-json-schema` and `:parse`, both functions.
-Additional adapter metadata is ignored. `:to-json-schema` must return a JSON
-object.
-Caller-defined keys in JSON Schemas and extension-context payloads are opaque:
-keyword keys serialize by their full literal name rather than camel case.
-JSON arrays must use sequential Clojure values; unordered collections such as
-sets are rejected.
-
-The parsed form rejects `:response-schema` in `options` and rejects
-`:mode :immediate`. It ignores subagent messages, correlates the root assistant
-message to the message ID returned by `send!`, ignores assistant messages with
-pending tool requests, decodes JSON, then invokes `:parse` on the calling
-thread. It throws with the source event attached when the run is aborted or the
-response is not valid JSON, and throws if the run completes without a final
-structured assistant message. Its timeout starts before the underlying send
-request, so send admission and event collection share one deadline.
-
-#### `send-async`
-
-```clojure
-(copilot/send-async session options)
-```
-
-Send a message and return a core.async channel observing the session's event
-stream, closing on a root-agent terminal idle or error event. Autopilot idle
-and child-agent events are emitted without closing the channel. The same rule
-applies to `send-async-with-id`, `query-seq!`, and `query-chan`; `<send!` and
-`<send-and-wait!` select only root-agent replies.
-Protocol waits use parking operations. Input validation, schema conversion, and
-trace-context capture happen on the calling thread before the channel is returned.
-Prepare the call outside `go` when those callbacks can block.
-Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
-On timeout, the channel emits a final `:copilot/session.error` event whose data
-includes `:timeout-ms`, releases the local event receiver and send lock, then
-closes.
-
-Intermediate frames use a bounded 1024-event best-effort buffer; overflow is
-logged. The latest root reply and first terminal outcome reaching session intake
-are retained separately, before the shared observer fan-out. A full output buffer
-therefore cannot silently remove the final result. Once completion is selected,
-the SDK releases its send lock before waiting to deliver final events; an expired
-deadline cannot replace that outcome. Earlier protocol-level notification overflow
-still follows the client's notification-queue policy.
-An early session terminal does not substitute for RPC acknowledgement. The async
-deadline still covers admission and an unclaimed pending send RPC; immunity from
-an expired deadline applies only to final publication after successful ACK and
-completion selection.
-
-Close the returned channel to abandon local waiting and pending delivery. This
-does not abort remote work. Explicit local teardown also cancels delivery, including
-when `:timeout-ms` is `nil`. These cancellation and completion guarantees apply
-to `send-async-with-id`, `<send!`, and `<send-and-wait!` as well.
-Unexpected connection closure preserves a captured completion and final reply
-for the result consumer, even when its output buffer is full. Transport and
-session resources are released independently; close the returned channel if
-you will not consume the remaining result.
-Local cancellation does not drain outstanding remote work. A following ordinary
-wait can observe that work's late events. `send-async-with-id` returns the request
-ID but does not automatically filter the stream by it.
-
-#### `send-async-with-id`
-
-```clojure
-(copilot/send-async-with-id session options)
-```
-
-Send a message and return `{:message-id :events-ch}` for correlating responses.
-Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
-The event channel follows `send-async`, including its final timeout event.
-
-#### `<send!`
-
-```clojure
-(copilot/<send! session options)
-```
-
-Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final content string.
-Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
-Session errors and timeouts close the channel after delivering the latest
-assistant content, if any; otherwise the channel closes without a value.
-
-Combined with `<create-session`, enables fully non-blocking pipelines:
-
-```clojure
-(go
-  (let [session (<! (copilot/<create-session client {:model "gpt-5.4"
-                                                     :on-permission-request copilot/approve-all}))
-        answer  (<! (copilot/<send! session {:prompt "Explain monads"}))]
-    (println answer)))
-```
-
-#### `<send-and-wait!`
-
-```clojure
-(copilot/<send-and-wait! session options)
-```
-
-Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final assistant message **event** — the same shape as `send-and-wait!`'s successful return value (content lives under `[:data :content]`), or closes with nothing if no assistant message was received.
-Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
-Autopilot idle events do not terminate the wait.
-
-Error semantics differ from `send-and-wait!`: where `send-and-wait!` throws on `:copilot/session.error` or timeout, this variant never surfaces those — the channel closes (delivering the last assistant message if one arrived, otherwise nothing), consistent with `<send!`.
-
-```clojure
-(go
-  (let [session (<! (copilot/<create-session client {:on-permission-request copilot/approve-all}))
-        event   (<! (copilot/<send-and-wait! session {:prompt "Explain monads"}))]
-    (println (get-in event [:data :content]))))
-```
-
-Use `<send!` when you only need the content string; use `<send-and-wait!` when you need the full event (metadata, id, etc.).
-
-#### `events`
-
-```clojure
-(copilot/events session)
-```
-
-Get the core.async `mult` for session events. Use `tap` to subscribe:
-
-```clojure
-(let [ch (chan 100)]
-  (tap (copilot/events session) ch)
-  (go-loop []
-    (when-let [event (<! ch)]
-      (println event)
-      (recur))))
-```
-
-This borrowed mult requires caller-owned tap cleanup. Retrieving it after
-disconnection throws `ExceptionInfo`; prefer `subscribe-events` or
-`events->chan` for lifecycle-aware subscription admission.
-All three event APIs require the handle's current registration. Use the handle
-returned by `resume-session`: reusing a session ID does not let a superseded
-handle observe the replacement's events. A failed resume restores the original
-registration and its event access.
-
-#### `events->chan`
-
-```clojure
-(copilot/events->chan session {:buffer 256
-                               :xf (filter #(= :copilot/assistant.message (:type %)))})
-```
-
-Subscribe to session events with optional buffer size and transducer.
-Subscribing after disconnection throws `ExceptionInfo`.
-
-#### `subscribe-events`
-
-```clojure
-(copilot/subscribe-events session)
-```
-
-Subscribe to session events. Returns a channel (sliding buffer, size 1024) that receives events.
-Subscribing after disconnection throws `ExceptionInfo`. If teardown wins while
-a subscription is being registered, the SDK closes the provisional channel
-and rejects the subscription rather than returning a channel that cannot close.
-
-##### Event Drop Behavior
-
-Session events are delivered via core.async `mult` to a per-subscriber **sliding-buffer**
-channel. Because a sliding buffer never blocks on `put!`, `mult` is never stalled by a slow
-subscriber. **If a subscriber falls behind and its buffer fills, the oldest buffered events
-are dropped for that subscriber only** to make room for new ones.
-
-Key points:
-- **Per-subscriber**: Each subscriber is independent. A slow subscriber drops its own oldest
-  events without affecting delivery to other subscribers.
-- **Oldest-first**: When the buffer is full, the oldest buffered events are dropped, not the
-  newest — subscribers always see the most recent events.
-- **Silent**: No error, warning, or indication that a drop occurred.
-- **Not recoverable**: Dropped events are gone for that subscriber.
-
-With the default 1024 buffer, drops are unlikely unless a subscriber completely stops
-reading. For most use cases, this is not a concern.
-
-#### `unsubscribe-events!`
-
-```clojure
-(copilot/unsubscribe-events! session ch)
-```
-
-Unsubscribe and close the channel. This remains safe after session teardown.
-
-#### `abort!`
-
-```clojure
-(copilot/abort! session)
-```
-
-Abort the currently processing message.
-
-#### `get-messages`
-
-```clojure
-(copilot/get-messages session)
-```
-
-Get all events/messages from this session.
-
-#### `handle-pending-tool-call!` / `<handle-pending-tool-call!`
-
-```clojure
-(copilot/handle-pending-tool-call! session
-                                   {:request-id "tool-req-7"
-                                    :result "STATUS_OK"})
-;; or async:
-(copilot/<handle-pending-tool-call! session {:request-id "tool-req-7"
-                                             :error "lookup failed"})
-```
-
-Resolve a tool call that was not auto-handled (because `:handler` was omitted
-from `define-tool`). The args map accepts `:request-id` plus either `:result`
-(string or full result map) or `:error` (string). Sent on the wire as
-`session.tools.handlePendingToolCall`. (upstream PR #1308)
-
-#### `handle-pending-permission-request!` / `<handle-pending-permission-request!`
-
-```clojure
-(copilot/handle-pending-permission-request! session
-                                            {:request-id "perm-req-3"
-                                             :result {:kind :approve-once}})
-```
-
-Resolve a permission request that was not auto-handled (because
-`:on-permission-request` was omitted from the session config). The result map
-must contain a `:kind` other than `:no-result`. Sent on the wire as
-`session.permissions.handlePendingPermissionRequest`. These helpers are
-experimental, matching their upstream annotation. (upstream PR #1308)
-
-#### `get-current-model`
-
-```clojure
-(copilot/get-current-model session)
-;; => "gpt-5.4"
-```
-
-Get the current model for this session. Returns the model ID string, or nil if none set.
-
-#### `switch-model!`
-
-```clojure
-(copilot/switch-model! session "claude-sonnet-4.5")
-;; => "claude-sonnet-4.5"
-
-;; With model capabilities override (upstream PR #1029):
-(copilot/switch-model! session "gpt-5.4"
-  {:model-capabilities {:supports {:vision true}
-                        :limits {:max-prompt-tokens 128000}}})
-```
-
-Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
-
-Optional opts map:
-- `:reasoning-effort` — Reasoning effort level ("low", "medium", "high", "xhigh", or "max")
-- `:reasoning-summary` — Reasoning summary mode ("none", "concise", "detailed"). Wire-encoded as `reasoningSummary`.
-- `:context-tier` — Context window tier for models that support it: `:default` or `:long-context` (upstream PR #1522). Wire-encoded as `contextTier` with values `"default"` / `"long_context"`.
-- `:model-capabilities` — Model capabilities override map, e.g. `{:supports {:vision true} :limits {:max-prompt-tokens 128000}}`
-
-#### `set-model!`
-
-```clojure
-(copilot/set-model! session "claude-sonnet-4.5")
-;; => "claude-sonnet-4.5"
-```
-
-Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
-
-```clojure
-(copilot/with-client-session [session {:model "gpt-5.4"
-                                       :on-permission-request copilot/approve-all}]
-  (println "Before:" (copilot/get-current-model session))
-  (copilot/set-model! session "claude-sonnet-4.5")
-  (println "After:" (copilot/get-current-model session)))
-;; prints:
-;; Before: gpt-5.4
-;; After: claude-sonnet-4.5
-```
-
-#### `log!`
-
-```clojure
-(copilot/log! session "Processing started")
-(copilot/log! session "Something went wrong" {:level "error"})
-(copilot/log! session "Temporary note" {:ephemeral? true})
-```
-
-Log a message to the session timeline. Returns the event ID string.
-
-**Options (optional map):**
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:level` | string | `"info"` | Log severity: `"info"`, `"warning"`, or `"error"` |
-| `:ephemeral?` | boolean | `false` | When `true`, the message is transient and not persisted to disk |
-
-#### `disconnect!`
-
-```clojure
-(copilot/disconnect! session)
-```
-
-Disconnect the SDK from the session without destroying the runtime session.
-The runtime is detached before local resources are released. An unsuccessful
-response is retried exactly once; a second unsuccessful response throws and
-keeps the local session connected for an explicit retry.
-
-Transport exceptions are not retried automatically. A timeout, interruption,
-or other detach failure leaves local resources connected only while the client
-transport remains live. Actual connection loss performs client-wide local
-cleanup, so retry requires reconnecting and resuming the runtime session.
-`disconnect!` intentionally applies no client-side timeout because an ambiguous
-timeout cannot determine whether runtime ownership was detached. Use
-`force-stop!` when a wedged transport prevents graceful client shutdown.
-Interrupted threads retain their interrupted status.
-While one disconnect is in progress, concurrent callers wait for that operation
-without sending another runtime request, then observe the same result or
-exception instance.
-
-#### `destroy!` *(deprecated)*
-
-```clojure
-(copilot/destroy! session)
-```
-
-**Deprecated.** Use `disconnect!` instead. `destroy!` delegates to `disconnect!` and will be removed in a future release.
-
-#### `session-id`
-
-```clojure
-(copilot/session-id session)
-```
-
-Get the session's unique identifier.
-
-#### `workspace-path`
-
-```clojure
-(copilot/workspace-path session)
-```
-
-Get the session workspace path when provided by the CLI (may be nil).
-
-#### `transcript-recovery`
-
-```clojure
-(copilot/transcript-recovery session)
-;; => {:planned-backup-path "/session/events.jsonl.backup-before-recovery-..."
-;;     :invalid-line-numbers [2 7]
-;;     :session-start-moved? false}
-```
-
-Get the report returned by resume, or `nil` for a newly created session or a
-resume that reports no repair. The report has three required fields:
-
-| Key | Type | Meaning |
-|-----|------|---------|
-| `:planned-backup-path` | string | Planned byte-exact backup of the damaged transcript. The runtime writes it on the next durable append; returning the report does not itself create the backup. |
-| `:invalid-line-numbers` | vector of positive integers | One-based physical lines removed from the transcript. An empty vector is valid. |
-| `:session-start-moved?` | boolean | Whether an existing `session.start` record was moved to the beginning. |
-
-The report describes the load that repaired history, not a new validation of
-storage on every resident reconnect. See [`resume-session`](#resume-session)
-for `:allow-transcript-recovery?`.
-
-#### `session-config`
-
-```clojure
-(copilot/session-config session)
-;; => {:model "gpt-5.4", :streaming? true, :reasoning-effort "high", ...}
-```
-
-Get the configuration that was used to create this session.
-
-#### `client`
-
-```clojure
-(copilot/client session)
-```
-
-Get the client that owns this session.
-
----
-
-### Experimental RPC Methods
-
-> **Note:** These are experimental APIs wrapping emerging CLI RPC methods. They may change in future releases.
-
-```clojure
-(require '[github.copilot-sdk.session :as session])
-
-;; List available skills
-(session/skills-list my-session)
-;; => {:skills [{:name "update-docs" :source-location "project" ...} ...]}
-
-;; Enable/disable MCP servers
-(session/mcp-enable! my-session "my-server")
-(session/mcp-disable! my-session "my-server")
-
-;; Get/set agent mode
-(session/mode-get my-session)
-;; => {:mode "interactive"}
-(session/mode-set! my-session "plan")
-
-;; Read/update session plan
-(session/plan-read my-session)
-;; => {:exists? true :content "# Plan\n..." :file-path "/path/to/plan.md"}
-(session/plan-update! my-session "# Updated Plan\n...")
-(session/plan-delete! my-session)
-
-;; Workspace file operations
-(session/workspace-list-files my-session)
-;; => {:files ["notes.md" "data.json"]}
-(session/workspace-read-file my-session "notes.md")
-;; => {:content "..."}
-(session/workspace-create-file! my-session "output.txt" "result data")
-
-;; Custom agent management
-(session/agent-list my-session)
-;; => {:agents [{:name "researcher" ...} ...]}
-(session/agent-select! my-session "researcher")
-(session/agent-get-current my-session)
-;; => {:name "researcher"}
-(session/agent-deselect! my-session)
-```
-
-**Skills**
-
-| Function | Description |
-|----------|-------------|
-| `session/skills-list` | List available skills. Returns map with `:skills`. |
-| `session/skills-enable!` | Enable a skill by name. |
-| `session/skills-disable!` | Disable a skill by name. |
-| `session/skills-reload!` | Refresh the catalog after adding, editing, or removing skill files. Returns the runtime's reload result, including `:errors`. |
-
-**Queued commands**
-
-The CLI emits `:copilot/command.queued` events when a slash-command is
-dispatched for client-side execution. Each event carries a `:request-id`
-and `:command`. Clients respond via `respond-to-queued-command!`:
-
-```clojure
-;; Inside an event handler that observes :copilot/command.queued
-(session/respond-to-queued-command! session
-                                    {:request-id (:request-id event-data)
-                                     :handled? true
-                                     :stop-processing-queue? false})
-
-;; Or, to let the CLI fall back to default handling:
-(session/respond-to-queued-command! session
-                                    {:request-id (:request-id event-data)
-                                     :handled? false})
-```
-
-| Function | Description |
-|----------|-------------|
-| `session/respond-to-queued-command!` | Acknowledge a `command.queued` event (experimental). |
-
-**MCP Servers**
-
-| Function | Description |
-|----------|-------------|
-| `session/mcp-list` | List configured MCP servers. |
-| `session/mcp-enable!` | Enable an MCP server by name. |
-| `session/mcp-disable!` | Disable an MCP server by name. |
-| `session/mcp-reload!` | Reload all MCP servers. |
-
-**Extensions**
-
-| Function | Description |
-|----------|-------------|
-| `session/extensions-list` | List extensions. |
-| `session/extensions-enable!` | Enable an extension by ID. |
-| `session/extensions-disable!` | Disable an extension by ID. |
-| `session/extensions-reload!` | Reload all extensions. |
-
-**Mode**
-
-| Function | Description |
-|----------|-------------|
-| `session/mode-get` | Get current agent mode. Returns `{:mode "interactive"\|"plan"\|"autopilot"}`. |
-| `session/mode-set!` | Set agent mode. Accepts `"interactive"`, `"plan"`, or `"autopilot"`. |
-
-**Plan**
-
-| Function | Description |
-|----------|-------------|
-| `session/plan-read` | Read the session plan file. Returns `{:exists? :content :file-path}`. |
-| `session/plan-update!` | Update the plan file content. |
-| `session/plan-delete!` | Delete the plan file. |
-
-**Workspace**
-
-| Function | Description |
-|----------|-------------|
-| `session/workspace-list-files` | List files in the session workspace. Returns `{:files [...]}`. |
-| `session/workspace-read-file` | Read a workspace file by relative path. Returns `{:content "..."}`. |
-| `session/workspace-create-file!` | Create a file in the workspace with given path and content. |
-
-**Agents**
-
-| Function | Description |
-|----------|-------------|
-| `session/agent-list` | List available custom agents. Returns `{:agents [...]}`. |
-| `session/agent-get-current` | Get the currently selected agent. Returns `{:name "..."}` or `{:name nil}`. |
-| `session/agent-select!` | Select a custom agent by name. |
-| `session/agent-deselect!` | Deselect the current custom agent. |
-| `session/agent-reload!` | Reload all custom agents. |
-
-**Fleet**
-
-| Function | Description |
-|----------|-------------|
-| `session/fleet-start!` | Start parallel sub-sessions. Accepts a params map. |
-
-**Other**
-
-| Function | Description |
-|----------|-------------|
-| `session/plugins-list` | List plugins. |
-| `session/compaction-compact!` | Trigger manual context compaction (uses `session.history.compact` RPC). |
-| `session/history-truncate!` | Trigger manual context truncation. |
-| `session/history-clear-context!` | Clear conversation context and start a new one with a given prompt. Also available as the top-level `copilot/history-clear-context!` facade wrapper. |
-| `session/sessions-fork!` | Fork the current session. |
-| `session/shell-exec!` | Execute a shell command. |
-| `session/shell-kill!` | Kill a running shell process. |
-
-```clojure
-;; session/history-clear-context! or copilot/history-clear-context!
-(session/history-clear-context! my-session "Let's start fresh: focus on the auth module.")
-;; => {:messages-cleared 42}
-```
-
-([upstream PR #2129](https://github.com/github/copilot-sdk/pull/2129))
-
-**Session Name**
-
-| Function | Description |
-|----------|-------------|
-| `session/session-name-get` | Get the session name (or auto-generated summary). Returns `{:name "..."}`. |
-| `session/session-name-set!` | Set the session name (1–100 characters). |
-
-```clojure
-(session/session-name-get my-session)
-;; => {:name "My debugging session"}
-
-(session/session-name-set! my-session "Refactoring auth module")
-```
-
-**Workspace (Extended)**
-
-| Function | Description |
-|----------|-------------|
-| `session/workspace-get-workspace` | Get current workspace metadata. Returns `{:workspace {...}}`. |
-
-```clojure
-(session/workspace-get-workspace my-session)
-;; => {:workspace {:path "/home/user/project" ...}}
-```
-
-**MCP Discovery**
-
-| Function | Description |
-|----------|-------------|
-| `session/mcp-discover` | Discover MCP servers in a directory. Accepts optional opts map with `:working-directory`. |
-
-```clojure
-(session/mcp-discover my-session)
-
-(session/mcp-discover my-session {:working-directory "/path/to/project"})
-```
-
-**Usage Metrics**
-
-| Function | Description |
-|----------|-------------|
-| `session/usage-get-metrics` | Get usage metrics for the session. |
-
-```clojure
-(session/usage-get-metrics my-session)
-```
-
-**Remote Sessions** (experimental, upstream PR #1192)
-
-| Function | Description |
-|----------|-------------|
-| `session/remote-enable` | Enable remote steerability for the session. Returns `{:url <string?> :remote-steerable <boolean>}`. Optional 2-arity `opts` map accepts `:mode` set to `:off`, `:export`, or `:on` (upstream CLI 1.0.48-1). |
-| `session/remote-disable` | Disable remote steerability for the session. Returns `nil`. |
-
-```clojure
-(session/remote-enable my-session)
-;; => {:url "https://copilot-remote.test/abc" :remote-steerable true}
-
-;; Optional per-session mode (upstream CLI 1.0.48-1):
-;; - :off    — disable remote
-;; - :export — export session events to Mission Control without remote steering
-;; - :on     — export + enable remote steering
-(session/remote-enable my-session {:mode :export})
-;; => {:remote-steerable false}
-
-(session/remote-disable my-session)
-;; => nil
-```
-
----
-
-## UI Elicitation
-
-Request structured user input via interactive dialogs. Check host support before calling.
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-```
-
-### `capabilities`
-
-```clojure
-(copilot/capabilities session)
-;; => {:ui {:elicitation true}}
-```
-
-Get the host capabilities map reported when the session was created or resumed.
-
-### `open-canvases`
-
-```clojure
-(copilot/open-canvases session)
-;; => [{:instance-id "i1" :canvas-id "diff" :extension-id "ext.x"
-;;      :icon "/tmp/diff.png"}]
-```
-
-Get the current open-canvases snapshot for `session`. Returns a vector of
-canvas-instance maps. The snapshot is initialized from `session.resume` and
-updated by `:copilot/session.canvas.opened` / `:copilot/session.canvas.closed`
-events. `session.create` does NOT populate it (matches upstream Node.js).
-
-> **Parity exclusion:** The upstream experimental `Canvas` / `createCanvas`
-> authoring and provider API is intentionally absent. This SDK can observe and
-> restore open canvases, but cannot declare canvases or handle provider
-> open/close/action callbacks. `:canvas-provider` supplies provider identity
-> only.
-
-Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`,
-and optional `:extension-name`, `:title`, `:status`, `:url`, `:input`, and
-`:icon` (a host-local PNG path). Closing an instance that's not in the snapshot
-is a silent no-op (idempotent); malformed payloads (missing required field or
-wrong type) log a warning and leave the snapshot unchanged.
-
-The `:input` map (caller-defined opaque data on each canvas) is preserved
-verbatim through wire conversion. Keys you receive (e.g. via the canvas
-opened event or after a resume) round-trip back to the CLI without
-camelCasing — including `snake_case` and nested keys.
-
-#### Seeding `open-canvases` on resume
-
-To restore canvases after reconnecting, pass `:open-canvases` to
-[`resume-session`](#resume-session) or [`join-session`](#join-session). The
-shape mirrors what `(open-canvases session)` returned previously:
-
-```clojure
-(let [snap (copilot/open-canvases old-session)]
-  (copilot/resume-session client session-id
-                          {:on-permission-request copilot/approve-all
-                           :open-canvases snap}))
-```
-
-The SDK preserves caller-defined `:input` keys verbatim on the wire (they are
-sent as JSON object fields with the original key names, unchanged by Clojure's
-kebab-case conversion).
-
-### `elicitation-supported?`
-
-```clojure
-(copilot/elicitation-supported? session)
-;; => true
-```
-
-Return `true` if the CLI host supports interactive elicitation dialogs.
-
-### `confirm!`
-
-```clojure
-(copilot/confirm! session message)
-```
-
-Show a confirmation dialog. Returns `true` if the user confirms, `false` if they decline or cancel. Throws if elicitation is not supported.
-
-```clojure
-(when (copilot/elicitation-supported? session)
-  (when (copilot/confirm! session "Deploy to production?")
-    (println "Deploying...")))
-```
-
-### `select!`
-
-```clojure
-(copilot/select! session message options)
-```
-
-Show a selection dialog with the given options. Returns the selected value as a string, or `nil` if the user declines or cancels. Throws if elicitation is not supported.
-
-```clojure
-(when-let [env (copilot/select! session "Choose environment" ["staging" "production"])]
-  (println "Selected:" env))
-```
-
-### `input!`
-
-```clojure
-(copilot/input! session message)
-(copilot/input! session message opts)
-```
-
-Show a text input dialog. Returns the entered text as a string, or `nil` if the user declines or cancels. Throws if elicitation is not supported.
-
-**Options:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:title` | string | Title for the input field |
-| `:description` | string | Description text |
-| `:min-length` | integer | Minimum input length |
-| `:max-length` | integer | Maximum input length |
-| `:format` | string | Input format (`"email"`, `"uri"`, `"date"`, `"date-time"`) |
-| `:default` | string | Default value |
-
-```clojure
-(when-let [name (copilot/input! session "Enter your name"
-                  {:min-length 1
-                   :max-length 100})]
-  (println "Hello," name))
-```
-
-### `ui-elicitation!`
-
-```clojure
-(copilot/ui-elicitation! session params)
-```
-
-Raw elicitation request for custom JSON schemas. `params` is a map with `:message` and `:requested-schema` keys. Returns a map with `:action` (`"accept"`, `"decline"`, or `"cancel"`) and `:content`. Throws if elicitation is not supported.
-
-```clojure
-(copilot/ui-elicitation! session
-  {:message "Configure deployment"
-   :requested-schema {:type "object"
-                      :properties {"env" {:type "string" :enum ["staging" "production"]}
-                                   "replicas" {:type "number" :default 3}}
-                      :required ["env"]}})
-;; => {:action "accept", :content {:env "staging", :replicas 3}}
-```
-
----
-
-## MCP OAuth Handler
-
-Register an `:on-mcp-auth-request` handler to supply MCP OAuth credentials or
-hand supported refresh requests back to the runtime. Without a handler,
-authorization remains runtime-owned, including cached-credential handling.
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/with-client-session
-  [session {:on-mcp-auth-request
-            (fn [request _context]
-              (if (true? (:runtime-refresh-supported request))
-                {:kind :runtime-refresh}
-                {:kind :cancelled}))}]
-  (copilot/session-id session))
-```
-
-When the handler is provided, the SDK registers interest in the
-`mcp.oauth_required` event after `session.create`, and before `session.resume`
-on resume or join. Registration failures fail the session operation rather than
-silently falling back. The handler is invoked with two arguments:
-
-1. An `McpAuthRequest` map (the event data).
-2. A context map `{:session-id "..."}`.
-
-The handler may return the result directly or a `core.async` channel yielding it.
-
-**`McpAuthRequest` fields:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:request-id` | string | Opaque id correlating the request with its response. |
-| `:server-name` | string | Configured name of the MCP server. |
-| `:server-url` | string | URL of the MCP server requiring auth. |
-| `:reason` | string | Why authentication is needed. |
-| `:runtime-refresh-supported` | boolean | Optional, non-null capability for noninteractive runtime renewal. Omission or `false` means unsupported. |
-| `:www-authenticate-params` | map | (optional) Parsed `WWW-Authenticate` challenge params. |
-| `:resource-metadata` | string | (optional) Raw OAuth protected-resource metadata document. |
-| `:static-client-config` | map | (optional) Pre-registered OAuth client config. |
-
-`:static-client-config` requires string `:client-id` and permits string
-`:client-secret`, boolean `:public-client`, `:grant-type "client_credentials"`,
-and string `:scope`. The configured scope is used when the server challenge
-omits scope or supplies an empty scope. It is forwarded to the handler unchanged;
-absence and `""` remain distinct, and explicit `nil` is invalid. The same shape
-appears in live `:copilot/mcp.oauth_required` events and `get-messages` history.
-This does not add CLI-only `oauthScopes` to SDK MCP server configuration.
-
-**Result mapping, in precedence order:**
-
-| Handler result | Response |
-|----------------|----------|
-| `nil` or `{:kind :cancelled}` | Cancel, even when the map also contains a token. |
-| Nonempty string `:access-token`, with optional `:token-type` and `:expires-in` | Supply a token, including bare-token maps. A token takes precedence over a refresh handoff. Empty optional values and zero are preserved; `nil` optional values are omitted. |
-| `{:kind :runtime-refresh}` | Send wire kind `"runtimeRefresh"` only when the request's capability is exactly `true`; otherwise cancel. |
-| Malformed result or thrown exception | Log the failure and cancel, without leaving the host request unanswered. |
-
-A supported handoff renews the runtime's saved grant within the original
-authorization attempt; it does not start an independent refresh or consent flow.
-**Acceptance is not reconnect or tool completion.** The persisted
-`:copilot/mcp.oauth_recovery_completed` event carries the same `:request-id`,
-plus `:server-name` and `:outcome` (`"succeeded"`, `"cancelled"`, or `"failed"`).
-For an accepted handoff, `mcp.oauth_completed` is emitted once at that terminal
-outcome: `"token"` on success, `"cancelled"` otherwise.
-
-The runtime owns grant storage, reconnect, and cancellation. A stopped
-invocation cannot later resume, but an already-issued token exchange may still
-settle its storage work. Neither handoff acceptance nor cancellation proves
-that storage settlement has finished. Ordinary cancellation without an accepted
-handoff retains its existing meaning; it is not reclassified as stopping a turn.
-
----
-
-## Event Types
-
-Sessions emit various events during processing. All event types are namespaced keywords prefixed with `copilot/`.
-
-### Exported Constants
-
-```clojure
-;; All event types
-copilot/event-types
-;; => #{:copilot/session.idle :copilot/assistant.message ...}
-
-;; Session lifecycle events
-copilot/session-events
-;; => #{:copilot/session.start :copilot/session.idle ...}
-
-;; Assistant response events  
-copilot/assistant-events
-;; => #{:copilot/assistant.message :copilot/assistant.message_delta ...}
-
-;; Tool execution events
-copilot/tool-events
-;; => #{:copilot/tool.execution_start :copilot/tool.execution_complete ...}
-
-;; Interaction flow events (permission, user input, elicitation)
-copilot/interaction-events
-;; => #{:copilot/permission.requested :copilot/permission.completed
-;;      :copilot/user_input.requested :copilot/user_input.completed
-;;      :copilot/elicitation.requested :copilot/elicitation.completed
-;;      :copilot/external_tool.requested :copilot/external_tool.completed
-;;      :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
-;;      :copilot/mcp.oauth_recovery_completed
-;;      :copilot/command.queued :copilot/command.execute
-;;      :copilot/command.completed :copilot/commands.changed
-;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
-```
-
-For schema 1.0.92-0, `:copilot/assistant.server_tool_progress` also belongs to
-`copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
-`:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
-`:copilot/session.permission_recovery`, and `:copilot/session.model_deselected`
-belong to `copilot/session-events`.
-`:copilot/tool_search.activated` intentionally belongs only to the master
-`copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
-`:copilot/session.mcp_server_tools_loaded` belongs to `copilot/session-events`;
-`:copilot/mcp.oauth_recovery_completed` belongs to `copilot/interaction-events`.
-
-The generated wire schemas also contain internal events such as
-`assistant.turn_retry`, `model.call_start`, `model.call_final_result`,
-`session.request_body_compression_disabled`, and the durable skill-context
-reference events. They are wire-only and intentionally excluded from every
-curated public event set. Experimental HydraFusion routing events likewise
-remain generated wire evidence and are not curated as public idiom events.
-The experimental `reasoningBlocks` field on `assistant.message` and
-`:shell-execution` field on `tool.execution_complete` also remain generated
-wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.92-0` additionally carries experimental workflow pause/checkpoint,
-permission, workspace, and managed-catalog protocol declarations that are not
-part of the stable Clojure API. The new experimental permission declarations
-include `permission.assentDetected`, `permission.contextualAuthorization`, and
-the `activatesExtraction` field on `permission.messageAuthorizationRead`.
-Experimental extension launch-provider declarations and structured task-blocker
-payloads also remain generated wire evidence only.
-Connector management and command-enqueue APIs are not exposed by the Clojure
-SDK. [Dynamic Workflows](#dynamic-workflows-experimental) remain a supported
-experimental surface; pause/checkpoint mutation and `argsSchema` authoring
-remain excluded.
-Diagnostics configuration and diagnostic read/configure RPCs also remain
-experimental, even though the Node session config references the experimental
-`DiagnosticsConfiguration` type. Connector type re-exports do not make that
-subsystem stable. Fusion hints and steering attribution remain experimental;
-the runtime-only `session.fusion_change_checkpoint` event is internal and
-absent from the curated public event sets.
-Runtime-supervised AHP hosts, installation-confirmation callbacks and skill
-installation management, sandbox configuration/provenance and path grants,
-and read-only session permission decisions remain excluded. Passive
-`permission.completed` events can still carry the runtime's
-`"approved-read-only-for-session"` result and its directory vector; observing
-that result does not add permission-granting authority to the SDK.
-New AHP transport-selection and Connector-account type exports, sessionless
-managed-settings composition/resolution, environment management, and provider
-withdrawal also remain outside the stable API.
-Session-scoped skill providers, image-generation consent, tool-invocation
-agent/request identity, compute-scoped AHP catalogs, provider quota observations,
-managed-plugin progress/retry, and configured-MCP inventory remain excluded.
-Passive experimental provider accounting and internal accounting snapshots
-retain their wire data without becoming curated stable APIs.
-Fast remains an integrator-only Auto preset and does not require dynamic tier
-catalog discovery. Runtime rejection is propagated without substituting another
-tier. A skill's `:allowed-tools` metadata does not automatically approve tools
-in SDK sessions; the permission handler still decides.
-
-### `evt` — Event Keyword Helper
-
-```clojure
-(copilot/evt :session.info)      ;; => :copilot/session.info
-(copilot/evt :assistant.message) ;; => :copilot/assistant.message
-```
-
-Convert an unqualified event keyword to a namespace-qualified `:copilot/` keyword. Throws `IllegalArgumentException` if the keyword is not a valid event type.
-
-### Event Reference
-
-`:copilot/assistant.usage` and `:copilot/model.call_failure` may carry optional
-BYOK `:model-provider` and `:byok-kind` metadata. These are extensible strings,
-not configuration keywords. Missing fields remain absent, empty and future
-strings are preserved, and explicit `nil` is invalid. Provider families are
-runtime-defined, not caller-supplied registry names. Known kinds describe local
-Copilot-managed, local user-managed, or remote user-managed models as
-`"local_managed"`, `"local_user"`, and `"remote_user"`. Both fields are absent
-for Copilot-served models. Live and historical events use the same conversion.
-
-Start, resume, model-change, and assistant-message events may carry a non-null
-string `:provider-id`; model changes may also carry `:previous-provider-id`.
-This is the identity captured for that selection or response, not an identity
-inferred from the current model. Matching model IDs alone do not establish that
-opaque reasoning state is portable between providers. Start, resume, and model
-changes may also carry boolean `:auto-tier-managed`, `:context-tier-managed`,
-and `:reasoning-effort-managed`; omission and explicit false remain distinct.
-Malformed non-null Auto-tier values trigger the existing logged coercion-failure
-path. Live and historical event delivery retains the original raw payload
-instead of manufacturing an invalid keyword.
-
-Usage and compaction token details may include `:ai-credits-status`:
-`"complete"` means every observed call supplied an amount, `"partial"` means
-the amount is only a reported subtotal, and `"unavailable"` means none was
-reported. Missing billing is not a zero-cost claim. Optional
-`:model-display-name` is captured at call time.
-
-Usage events may include `:accounting {:source-session-id string,
-:sequence positive-integer, :usage-id string}`. The sequence is at most
-9007199254740991. Shutdown and usage-checkpoint events may include
-`:usage-accounting-watermarks`, mapping source-session keywords to non-negative
-integer sequence watermarks; source-defined key spelling is preserved.
-Legacy `:total-premium-requests` is a non-negative, potentially fractional
-premium-request cost, not an integer count of calls.
-
-Compaction start and completion events may share `:compaction-attempt-id` and
-report `:switch-target-model` / `:target-prompt-token-limit` when compacting
-for a different destination model or prompt budget. Completion may also
-include `:model`, `:initial-model`, `:outcome`, `:outcome-reason`,
-`:failure-reason`, and `:token-accounting-basis`. Outcome, reason, and accounting
-basis are extensible strings; preserve unknown future values rather than
-guessing a result from `:success` alone. Nested `:compaction-tokens-used` may
-include non-negative integer `:request-count`, the number of aggregated model
-requests. Token limits and request counts preserve zero; all these fields are
-optional and non-null.
-
-Usage and model-call failures expose content-free transport diagnostics:
-
-```clojure
-(require '[clojure.spec.alpha :as s]
-         '[github.copilot-sdk.specs])
-
-(def usage
-  {:model "example-model"
-   :request-body-bytes 4096
-   :request-body-wire-bytes 4096
-   :request-body-encoding "identity"
-   :request-body-compression-fallback "retried"
-   :request-body-compression-fallback-from "gzip"
-   :request-body-compression-rejected-status 415
-   :websocket-fallback-error-kind "http_status"
-   :websocket-fallback-status-code 503
-   :websocket-fallback-reconnect-attempted false
-   :websocket-fallback-started-this-call true})
-
-(s/valid? :github.copilot-sdk.specs/assistant.usage-data usage)
-;; => true
-```
-
-All fields below are optional and non-null. Omission means unreported, not zero
-or false; explicit zero and false are preserved on both live and historical
-paths. The enum values remain strings, not configuration keywords.
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `:request-body-bytes` | Non-negative integer | Serialized request size before compression. |
-| `:request-body-wire-bytes` | Non-negative integer | Body bytes sent for the attempt that produced this outcome, after compression. Equal to `:request-body-bytes` when uncompressed. |
-| `:request-body-encoding` | `"identity"`, `"gzip"`, or `"zstd"` | Encoding of that attempt's body; `"identity"` means uncompressed, including WebSocket requests. |
-| `:request-body-compression-fallback` | `"retried"` or `"disabled"` | `"retried"` describes the single uncompressed resend after HTTP 400/415 rejected compression. `"disabled"` means an earlier rejection already disabled compression for this session. |
-| `:request-body-compression-fallback-from` | `"identity"`, `"gzip"`, or `"zstd"` | Requested encoding before fallback; reported with the fallback outcome. |
-| `:request-body-compression-rejected-status` | Integer, 0-999 | Status that rejected compression; reported for the `"retried"` outcome. |
-| `:websocket-fallback-after-ms` | Non-negative integer | Time spent on the WebSocket attempt before HTTP fallback. |
-| `:websocket-fallback-reason` | String | `"connect_failed"`, `"connection_unavailable"`, `"send_failed"`, `"api_error"`, or `"transport_failed"`. |
-| `:websocket-fallback-error-kind` | String | Normalized cause: `"dns"`, `"tls"`, `"timeout"`, `"connection_refused"`, `"connection_reset"`, `"closed_by_peer"`, `"closed_locally"`, `"not_connected"`, `"http_status"`, `"protocol"`, `"configuration"`, or `"other"`. |
-| `:websocket-fallback-status-code` | Integer, 0-999 | HTTP status of the rejected WebSocket upgrade or API request. |
-| `:websocket-fallback-close-code` | Integer, 0-4999 | WebSocket close code received before fallback. |
-| `:websocket-fallback-reconnect-attempted` | Boolean | Whether the runtime attempted a WebSocket reconnect before falling back. |
-| `:websocket-fallback-started-this-call` | Boolean | True when this call initiated fallback; false when it inherited fallback from an earlier call. |
-
-Fallback descriptors can persist across calls. Do not count every event with
-fallback metadata as a new transport failure. Missing error-kind or status/close
-codes do not establish that no failure occurred.
-Compression fallback follows the same rule: `"disabled"` is retained session
-state, including after resume, not a new rejection on each call.
-
-Failures may also include non-negative `:retry-attempt` and request-fingerprint
-`:encrypted-content-bytes`, `:image-bytes`, and `:reasoning-item-count`.
-These are content-free diagnostics, not copies of the request.
-
-Experimental monthly quota readings are not per-call or session spending.
-Their amounts, availability, and cycle timestamps pass through without deriving
-missing consumption from balances. Managed-policy event contexts preserve the
-runtime-owned opaque `:permissions` JSON verbatim; they are snapshots, not
-approval tokens. Monthly quota APIs and managed-browser policy evaluation
-remain outside the stable Clojure API.
-Provider-type telemetry remains internal. Experimental skill-provider supporting
-files, Azure ML acquisition, catalog category filters, and hosting discovery
-controls do not add stable Clojure APIs.
-
-Curated `::specs/result` and `::specs/error` values accept recursive JSON:
-`nil`, strings, booleans, finite non-ratio numbers, vectors, and maps whose keys
-are strings or keywords and whose values recursively satisfy the same contract.
-Event-specific specs may impose a narrower shape. Generated event envelopes
-remain open at the top-level data map for forward-compatible fields, while
-nested schema objects marked closed by upstream reject unknown keys.
-
-| Event Type | Description |
-|------------|-------------|
-| `:copilot/session.start` | Session created; optional `:auto-tier` is coerced to an extensible keyword identifier, retaining its full spelling. Optional string `:reasoning-effort-model` identifies the model that owns effort embedded in an authored selection. |
-| `:copilot/session.resume` | Session resumed; optional `:auto-tier` uses the same idiomatic keyword domain as session start. Optional `:reasoning-effort-model` retains the authored effort owner. |
-| `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:provider-error-type`, `:provider-error-param`, `:url`, and `:remediation`. Provider error strings retain sanitized structured provider details. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, `"allow_sandbox_outbound"`, and `"rewind_conversation"`. The latter asks the host to discard history through a blocked request; it does not add a rewind API. |
-| `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
-| `:copilot/session.info` | Informational session update |
-| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, `:reasoning-effort-model`, and `:source`. The effort owner is an optional non-null string, omitted for independent effort overrides and legacy events; empty strings remain distinct from omission. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, `"changeboarding_shortcut"` and `"auto_tier_recommendation"`. |
-| `:copilot/session.model_deselected` | The host withdrew the selected model. Data requires string `:previous-model` and `:reason "provider_withdrawn"`. Clear the displayed model selection; the next turn resolves a default. Reasoning effort, verbosity, and other session preferences remain unchanged. This durable event is also returned by `get-messages`. |
-| `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
-| `:copilot/session.usage_info` | Token usage information |
-| `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
-| `:copilot/session.title_changed` | Session title updated |
-| `:copilot/session.warning` | Session warning; data requires `:warning-type` and `:message`, with optional `:url` and the same `:remediation` values as `session.error`. |
-| `:copilot/session.shutdown` | Session is shutting down. Optional `:agent-metrics` maps agent keywords to `{:model-metrics {...} :total-api-duration-ms N :total-nano-aiu N}` plus optional `:agent-name` and `:agent-display-name`, enabling per-agent accounting alongside the session totals. |
-| `:copilot/session.truncation` | Context window truncated |
-| `:copilot/session.snapshot_rewind` | Session state rolled back. Data requires string `:up-to-event-id` and non-negative integer `:events-removed`. Optional `:event-ids` is an ordered vector of the removed event IDs; later events not listed remain, including interleaved background-agent events. Without `:event-ids`, `:up-to-event-id` and every later event were removed. Empty vectors are preserved; explicit `nil` is invalid. |
-| `:copilot/session.context_cleared` | Conversation context cleared and restarted with a new prompt (via `history-clear-context!`); data: `{:messages-cleared N}` (required) with optional `:initial-message` (the prompt used to start the new context) (upstream PR #2129) |
-| `:copilot/session.compaction_start` | Context compaction started (infinite sessions); optional `:model`, `:current-tokens`, `:token-limit`, `:compaction-attempt-id`, `:switch-target-model`, and `:target-prompt-token-limit`. `:trigger` is one of `"threshold"`, `"context_limit_retry"`, `"manual"`, `"memory_pressure"`, `"model_switch"`. |
-| `:copilot/session.compaction_complete` | Context compaction completed; requires `:success`. Optional fields include the correlation, model, outcome, reason, and accounting fields described above, plus `:error`, `:status-code`, `:token-limit`, `:trigger`, `:behavior-model-id`, `:responses-reasoning`, and `:compaction-tokens-used`. |
-| `:copilot/session.indexed_search` | Transient indexed-search lifecycle and diagnostics. `:kind` is `"status"`, `"startup"`, `"server_error"`, or `"incremental"`; each variant carries its corresponding state, outcome, error, count, or duration fields. |
-| `:copilot/session.permission_recovery` | Authoritative snapshot of a bounded Autopilot permission-recovery episode, including `:episode-id`, lifecycle `:status`, `:on-blocked` policy, transition `:reason`, `:max-attempts`, and ordered privacy-safe `:attempts`. Optional string `:owner-session-id` and `:owner-agent-id` identify the execution session and delegated agent that own recovery, not the observer's session. Permission-request events may carry the same ownership metadata. |
-| `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
-| `:copilot/session.mode_notice_delivered` | A mode notice was delivered to the model; data requires `:mode` (`"interactive"`, `"plan"`, or `"autopilot"`) and may include string `:content`. The payload remains open for additive runtime fields. |
-| `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
-| `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"/"update"}` |
-| `:copilot/session.task_complete` | Task completed by the session agent; data (all optional): `:summary "..."`, `:aborted? false`, `:outcome` (`"completed"`, `"continue"`, or `"blocked"`), `:objective-id`, `:reason`, `:success` (upstream schema 1.0.79-5/6) |
-| `:copilot/session.todos_changed` | Signal-only: the agent's todos / todo-deps table was written. **No payload.** Events arrive in order; debounce on arrival if needed (upstream schema 1.0.63) |
-| `:copilot/session.schedule_created` | Scheduled prompt registered via `/every`; data: `{:id <pos-int> :interval-ms <pos-int> :prompt "..."}` (upstream schema 1.0.42) |
-| `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
-| `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
-| `:copilot/session.permissions_changed` | **Experimental.** Per-session permission mode changed; data: `{:mode <mode> :previous-mode <mode>}` with optional `:assisted-approval-model`, where mode is one of `"manual"`, `"assisted"`, or `"allow-all"` (upstream schema 1.0.81-5). |
-| `:copilot/session.session_limits_changed` | Session limits changed; data: `{:session-limits {:max-ai-credits <number>}}`, where a `nil` `:session-limits` clears the active limits (upstream schema 1.0.67) |
-| `:copilot/session.usage_checkpoint` | Durable accounting checkpoint; data requires non-negative `:total-nano-aiu` and may include `:total-premium-requests` and `:usage-accounting-watermarks`. Internal accounting snapshots and experimental provider/model aggregates remain wire-only. |
-| `:copilot/session.auto_mode_resolved` | Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes `:chosen-model`, optional `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`, `:reasoning-bucket` (experimental; upstream schema 1.0.70-0) |
-| `:copilot/session.managed_settings_enforced` | Experimental ephemeral enforcement of enterprise managed settings for a concrete user- or host-initiated governed action. Data: `{:action "bypass_permissions_blocked" :setting <string> :fail-closed <boolean> :message <string>}` with optional `:escalation` in `#{"allow_all" "approve_all" "auto_approval" "unrestricted_paths" "unrestricted_urls"}`. |
-| `:copilot/session.managed_settings_resolved` | Experimental ephemeral snapshot of effective enterprise managed settings and their authority, emitted when policy is applied or reapplied at session start, on resume, or on account switch. Data: `{:source #{"server" "device" "none"} :server-managed <boolean> :device-managed <boolean> :fail-closed <boolean> :bypass-permissions-disabled <boolean> :managed-keys [<string> ...]}` with optional opaque JSON `:settings`. |
-| `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
-| `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
-| `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |
-| `:copilot/skill.invoked` | Skill invocation triggered; data requires `:name`, `:path`, and `:content`, with optional `:invoked-at-turn`, `:description`, `:allowed-tools`, `:plugin-name`, `:plugin-version`, `:disable-model-invocation`, and string `:source`. Known source values include `"project"`, `"inherited"`, `"personal-copilot"`, `"personal-agents"`, `"plugin"`, `"custom"`, `"builtin"`, `"remote"`, and `"sdk"`; the field remains open for additional runtime-provided identifiers. SDK-provided skills may use an empty path. |
-| `:copilot/user.message` | User message added; data requires `:content` and may include correlation fields `:message-id`, `:turn-id`, and `:interaction-id`, plus `:source`, `:transformed-content`, `:is-autopilot-continuation`, and `:responses-reasoning {:model "..." :initial-effort "..." :effort "..."}`. |
-| `:copilot/pending_messages.modified` | Pending message queue updated |
-| `:copilot/assistant.turn_start` | Assistant turn started; data requires `:turn-id` and may include `:model`, `:interaction-id`, and string `:parent-tool-call-id` for a subagent's parent task invocation. Omission and empty strings are preserved; `nil` is invalid. |
-| `:copilot/assistant.intent` | Assistant intent update |
-| `:copilot/assistant.reasoning` | Model reasoning (if supported); optional data: `:rte` (opaque round-trip encrypted reasoning token, for providers that require it to be replayed back) (upstream schema 1.0.79-5/6) |
-| `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
-| `:copilot/assistant.message_start` | Streaming assistant message start metadata |
-| `:copilot/assistant.message` | Complete assistant response; optional data includes `:originating-message-id`, the logical primary user message that initiated the run, plus `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:citations` (see [Citations](#citations-experimental)), and `:rte` (upstream schema 1.0.79-5/6). Each `:tool-requests` entry may include `:type` (`"function"` or `"custom"`) and hosted-program attribution as `:caller {:caller-id "..." :type "program"}`. Its `:arguments` is validated only as recursive JSON (`nil`, strings, booleans, finite non-ratio numbers, vectors, and maps with string or keyword keys); source-defined keys are preserved verbatim rather than kebab-cased. |
-| `:copilot/assistant.message_delta` | Streaming response chunk |
-| `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
-| `:copilot/assistant.turn_end` | Assistant turn completed; data requires `:turn-id` and may include `:model` and string `:parent-tool-call-id`, with the same omission and non-null contract as turn start. |
-| `:copilot/assistant.usage` | Token usage and cost for an individual API call. Required: `:model` (string). Optional: `:input-tokens`, `:output-tokens`, `:reasoning-tokens`, `:accepted-prediction-tokens`, `:rejected-prediction-tokens`, `:cache-read-tokens`, `:cache-write-tokens`, `:cache-expires-at` (`java.time.Instant` — when the prompt cache expires), `:service-request-id` (string — `x-copilot-service-request-id` for CAPI log correlation), `:api-endpoint`, `:api-call-id`, `:provider-call-id`, `:content-filter-triggered` (boolean), `:finish-reason` (string), `:cost`, `:duration`, `:time-to-first-token-ms`, `:ttft-ms`, `:output-ttft-ms` (finite non-negative number, time to first *output* token, distinct from `:ttft-ms`; upstream schema 1.0.83-1), `:inter-token-latency-ms`, `:reasoning-effort`, `:reasoning-summary` (`"none"`, `"concise"`, or `"detailed"`), `:initiator`, `:parent-tool-call-id` (deprecated), `:copilot-usage`, `:quota-snapshots`, `:interaction-type`, `:is-auto`, `:is-byok`, `:max-output-tokens`, `:max-prompt-tokens`, `:transport` (`"http"` or `"websocket"`), `:rte`. `:copilot-usage` requires non-negative `:total-nano-aiu`, may identify its default billing `:model`, and may include internal itemized `:token-details`; each detail may identify its own billing `:model`. ([upstream PR #2074](https://github.com/github/copilot-sdk/pull/2074); runtime schema `1.0.84-4`) |
-| `:copilot/assistant.idle` | Main agent's processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) |
-| `:copilot/assistant.tool_call_delta` | Streaming tool-call argument input chunk; data includes `:tool-call-id`, `:input-delta`, optional `:tool-name`, `:tool-type` (upstream schema 1.0.69-3) |
-| `:copilot/assistant.server_tool_progress` | Ephemeral live progress for a provider-hosted server tool before the finalized `serverTools` envelope arrives on the terminal `assistant.message`. Data: `{:output-index <integer> :kind <string> :status <string>}`; only `"web_search"` is currently emitted for `:kind`, and `:status` is `"in_progress"`, `"searching"`, or `"completed"`. |
-| `:copilot/model.call_failure` | Failed LLM API call metadata for telemetry; data requires `:source` (`"top_level"`, `"subagent"`, or `"mcp_sampling"`) and may include string `:interaction-type`, `:parent-tool-call-id`, `:model-provider`, and `:byok-kind`. The parent ID links a subagent call to its parent task. BYOK metadata has the same extensible-string contract as `assistant.usage`; omitted and empty values remain distinct, and `nil` is invalid. |
-| `:copilot/model.call_finished` | Completed model dispatch metadata; data requires `:turn-id`, non-negative `:dispatch-duration-ms`, `:outcome` (`"success"`, `"error"`, `"cancelled"`, or `"rejected"`), and positive `:edit-classifier-version`. Optional fields: `:interaction-id` and `:contains-built-in-file-edit-request`. The payload remains open for additive runtime fields. |
-| `:copilot/abort` | Current message aborted |
-| `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started; data requires `:tool-call-id` and `:tool-name`. Optional fields are `:tool-title` (human-readable display title), `:arguments` (opaque JSON with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, `"managed"`, or `"account"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. Account-contributed servers remain subject to enablement and organization policy. An absent title stays absent; the spec accepts any string, including empty, but not `nil`. |
-| `:copilot/tool.execution_progress` | Tool execution progress update |
-| `:copilot/tool.execution_partial_result` | **Deprecated.** Bounded cumulative replacement snapshot of merged shell output, not an append-only chunk. Use `tool.shell_output` for live output. |
-| `:copilot/tool.shell_output` | Live-only append-only shell output. Data requires string `:tool-call-id`, string `:text`, and non-negative integer `:sequence`. Optional `:stream` is `"stdout"`, `"stderr"`, or `"terminal"`; omission means stdout. See [Shell output](#shell-output). |
-| `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. Successful skill invocations may keep concise model-facing `:detailed-content`; the authoritative skill body remains on the corresponding `:copilot/skill.invoked` event. |
-| `:copilot/tool_search.activated` | Persisted generic client-side tool activations restored when a session resumes. Data: `{:strategy <string> :tool-names [<string> ...]}`. |
-| `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and `:agent-description`, with optional `:workflow-run-id` (string; legacy `:factory-run-id` is retained for history), `:model`, `:resumable` (boolean), `:agent-type` (string), `:execution-mode` (string), `:parent-id` (string — task-registry id of the spawning subagent; unrelated to the envelope-level `:parent-id`), `:task-model-source` (`"task_argument"`, `"subagent_configuration"`, `"custom_agent_definition"`, or `"unset"`), and `:model-selection-source` using the same values as `subagent.completed`. |
-| `:copilot/subagent.configured` | Effective subagent execution configuration; data requires string `:model` and boolean `:multi-turn`, with optional string `:reasoning-effort` and `:context-tier`. The payload remains open for additive runtime fields. |
-| `:copilot/subagent.completed` | Subagent completed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and optional `:cancelled`, `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`, `:first-dispatched-model`, `:configured-model-preference`, `:explicit-model-override`, `:model-override-reason` (strings), `:explicit-model-matches-preference`, `:configured-model-matches-actual` (booleans), and `:model-selection-source` (`"explicit_override"`, `"configured_required"`, `"configured_preference"`, `"complementary_default"`, `"session_inheritance"`, `"agent_definition_default"`, or `"runtime_policy"`). `:cancelled true` means cancellation tore down the subagent; cancellation still reports completion rather than failure. |
-| `:copilot/subagent.failed` | Subagent failed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, `:error`, optional `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`, `:first-dispatched-model`, `:configured-model-preference`, `:explicit-model-override`, `:model-override-reason` (strings), `:explicit-model-matches-preference`, `:configured-model-matches-actual` (booleans), and the same `:model-selection-source` values as `subagent.completed`. |
-| `:copilot/subagent.selected` | Subagent selected |
-| `:copilot/subagent.deselected` | Subagent deselected |
-| `:copilot/hook.start` | Hook invocation started; data requires `:hook-invocation-id`, `:hook-type`, with optional `:parent-tool-call-id` (upstream schema 1.0.83-1). Durable or resumed `postToolUse` copies may elide duplicated tool and successful skill payloads; canonical output remains on the adjacent tool and skill events. |
-| `:copilot/hook.progress` | Ephemeral progress update from a long-running hook; data: `{:message "..."}` (upstream schema 1.0.56). |
-| `:copilot/hook.end` | Hook invocation finished; data requires `:hook-invocation-id`, `:hook-type`, and `:success`, with optional `:parent-tool-call-id` and closed `:error` map. The error requires string `:message`, permits optional string `:stack` and `:source`, and rejects other keys (upstream schema 1.0.83-1). Durable or resumed `postToolUse` receipts may elide unchanged successful skill output while preserving hook-modified values. |
-| `:copilot/system.message` | System or developer prompt emitted; data requires string `:content` and `:role "system"` or `"developer"`. Optional `:content-blocks` is an ordered vector of closed maps with required string `:content` and optional boolean `:cache-breakpoint` and `:is-static`. A true cache breakpoint places one after that block; false suppresses it; omission preserves the provider default. Empty strings and an empty vector are valid; explicit `nil` is not. Live notifications and `get-messages` preserve block order and the distinction between omission and false. |
-| `:copilot/system.notification` | System notification with a structured `:kind` discriminator: `agent_completed`, `agent_idle`, `new_inbox_message`, `shell_completed`, `shell_detached_completed`, `instruction_discovered`, `workflow_completed`, or `unclassified`. Each known kind validates its required and optional fields; agent kinds may include `:display-name`. Workflow notifications identify `:workflow-name`, allow `"paused"` status, and may carry `:pause-info` as `{:type "user"}` or `{:type "checkpoint" :key string}`. |
-| `:copilot/permission.requested` | Permission request initiated; optional `:agent-mode` identifies the requesting mode (`"interactive"`, `"plan"`, or `"autopilot"`), and `:resolved-by-hook` indicates a hook already handled it. For the MCP tool-permission variant (`:server-name`/`:tool-name`/`:tool-title` present), optional `:can-offer-server-wide-approval` indicates the host may offer a server-wide approval option. Shell requests may include `:request-sandbox-bypass`, `:request-sandbox-bypass-reason`, and `:request-sandbox-permissive`; the permissive form remains sandboxed while recording otherwise-blocked file and process access. |
-| `:copilot/permission.completed` | Permission request resolved. Approved nested `:result` values may include `:managed-approval-handled`, indicating that managed policy handled the request. |
-| `:copilot/user_input.requested` | User input requested from agent |
-| `:copilot/user_input.completed` | User input received |
-| `:copilot/elicitation.requested` | Elicitation request initiated |
-| `:copilot/elicitation.completed` | Elicitation request resolved |
-| `:copilot/external_tool.requested` | External tool call requested (v3); data includes `:request-id`, `:session-id`, `:tool-call-id`, `:tool-name`, and optional string-or-nil `:provider-id` for host routing. |
-| `:copilot/external_tool.completed` | External tool call completed (v3) |
-| `:copilot/mcp.oauth_required` | MCP server requests OAuth credentials; optional boolean `:runtime-refresh-supported` permits a noninteractive runtime handoff. |
-| `:copilot/mcp.oauth_completed` | OAuth host request completed. For an accepted runtime handoff, emitted once at the authorization terminal outcome: `"token"` on success, `"cancelled"` otherwise. |
-| `:copilot/mcp.oauth_recovery_completed` | Persisted terminal result of an accepted runtime refresh, including reconnect. Required `:request-id`, `:server-name`, and `:outcome` (`"succeeded"`, `"cancelled"`, or `"failed"`). |
-| `:copilot/mcp.headers_refresh_required` | Dynamic headers refresh request for a remote MCP server. Data requires `:request-id`, `:server-name`, `:server-url`, and `:reason` (`"auth-failed"`, `"startup"`, or `"ttl-expired"`). |
-| `:copilot/mcp.headers_refresh_completed` | MCP headers refresh request completed. Data requires `:request-id` and `:outcome` (`"headers"`, `"none"`, `"error"`, or `"timeout"`); `"error"` was added in runtime schema `1.0.84-6`. |
-| `:copilot/mcp.tools.list_changed` | Remote MCP server signalled its tool list changed; data includes `:server-name` (upstream schema 1.0.70) |
-| `:copilot/mcp.resources.list_changed` | Remote MCP server signalled its resource list changed; data includes `:server-name` (upstream schema 1.0.70) |
-| `:copilot/mcp.prompts.list_changed` | Remote MCP server signalled its prompt list changed; data includes `:server-name` (upstream schema 1.0.70) |
-| `:copilot/command.queued` | Command queued for execution |
-| `:copilot/command.execute` | Command execution started |
-| `:copilot/command.completed` | Command execution completed |
-| `:copilot/commands.changed` | Available commands list changed |
-| `:copilot/exit_plan_mode.requested` | Exit from plan mode requested; data includes `:summary`, `:actions`, `:recommended-action`, and may identify the active `:model`. |
-| `:copilot/exit_plan_mode.completed` | Exit from plan mode completed |
-| `:copilot/human_response.recorded` | Durable request/response provenance emitted by the runtime. Requires string `:request-id`, `:actor`, and a typed `:response`; optional string `:tool-call-id` links the originating tool. See [Response provenance](#response-provenance). |
-| `:copilot/auto_mode_switch.requested` | Auto mode switch request requiring user approval |
-| `:copilot/auto_mode_switch.completed` | Auto mode switch completed |
-| `:copilot/session.tools_updated` | Session tools list updated (e.g., after model change) |
-| `:copilot/session.background_tasks_changed` | Background tasks status changed |
-| `:copilot/session.skills_loaded` | Skills loaded for the session |
-| `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session. Each server may include a managed-catalog `:display-name`, `:source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), plugin identity, `:error`, and `:server-metadata {:instructions <string-or-nil>}`. |
-| `:copilot/session.mcp_server_status_changed` | MCP server status changed. Optional `:error`, `:config-source`, and `:error-classification` are non-null strings. `:config-source` describes connected or failed servers. Provenance and failure classifications are extensible strings, not closed enums; omission, empty strings, and future runtime values remain distinct in live events and history. |
-| `:copilot/session.mcp_server_tools_loaded` | Ephemeral notification that an MCP connection's initial tool list is available. Requires string `:server-name` and integer `:tool-count`, including zero. Emitted once per connection, possibly before `"connected"` when using a cached snapshot. |
-| `:copilot/session.mcp_server_removed` | MCP server was removed; data: `{:server-name "..."}` |
-| `:copilot/session.mcp_server_needs_reconnect` | MCP server requires reconnection; data: `{:server-name "..."}` |
-| `:copilot/session.extensions_loaded` | Extensions loaded for the session |
-| `:copilot/session.custom_agents_updated` | Custom agents list updated. Agent entries may include ordered `:models` preferences, `:model-policy` (`"preferred"` or `"required"`), and boolean `:disable-model-invocation`. |
-| `:copilot/session.custom_notification` | Custom Skill notification (Notify block); ephemeral. Data: `{:source "<ext-id>" :name "<event>" :payload <any> :subject {<k> <v>} :version <pos-int>}` (`:subject` and `:version` are optional; `:subject` keys are preserved verbatim — see PR #1292, CLI 1.0.48) |
-| `:copilot/sampling.requested` | MCP sampling request initiated; ephemeral |
-| `:copilot/sampling.completed` | MCP sampling request completed; ephemeral |
-| `:copilot/session_limits_exhausted.requested` | Session AI-credit limit reached; the runtime requests a limit decision (add/set/unset/cancel); ephemeral observable event (upstream schema 1.0.67) |
-| `:copilot/session_limits_exhausted.completed` | Session-limit decision completed; ephemeral observable event (upstream schema 1.0.67) |
-| `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |
-| `:copilot/capabilities.changed` | Session capabilities dynamically changed (e.g., elicitation support); ephemeral. Data: `{:ui {:elicitation true/false}}` |
-| `:copilot/mcp_app.tool_call_complete` | An MCP App tool call completed (upstream schema 1.0.52-4, SEP-1865); ephemeral. Data: `{:server-name ... :tool-name ... :duration-ms ... :success bool :arguments {...} :result {...}}` — `:arguments` and `:result` are opaque source-defined maps whose keys are preserved verbatim (not kebab-cased). |
-| `:copilot/session.canvas.opened` | A canvas (auxiliary UI surface) was opened in the session; ephemeral. Data: `{:instance-id ... :canvas-id ... :extension-id ... :reopen bool :availability "ready"|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}`. The SDK upserts the entry into the [`open-canvases`](#open-canvases) snapshot before publishing. |
-| `:copilot/session.canvas.closed` | A canvas was closed; ephemeral. Data: `{:instance-id ... :canvas-id ... :extension-id ...}`. The SDK removes the matching entry from the [`open-canvases`](#open-canvases) snapshot before publishing. (upstream PR #1604) |
-| `:copilot/session.canvas.registry_changed` | The set of canvases the host can offer changed; ephemeral. |
-| `:copilot/session.canvas.unavailable` | An open canvas instance's provider dropped (e.g. the extension is reloading mid-session); ephemeral. The host should keep the panel mounted and surface a reconnecting state. (upstream schema 1.0.66) |
-| `:copilot/session.canvas.recorded` | Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient `:url` and `:availability`. |
-| `:copilot/workflow.run_updated` | An [Dynamic Workflow](#dynamic-workflows-experimental) run's status changed; data: `{:run-id "..." :revision N}` (both required). Consumed internally by `wait-for-run!`/`<wait-for-run!` to detect terminal status. (upstream PR #2114) |
-| `:copilot/session.canvas.removed` | Durable record that a canvas instance was closed, superseding a prior `canvas.recorded` during resume replay. |
-
-### Shell output
-
-Append `:text` from `:copilot/tool.shell_output` by tool call and stream.
-`:sequence` starts at zero and increases across streams for a tool call; a late
-subscriber may first observe a larger value. It identifies publication order,
-not byte offsets or exact ordering between independent operating-system writes.
-`"terminal"` is merged terminal output without recoverable stdout/stderr attribution.
-
-These events are ephemeral: history and resumed subscriptions do not replay
-them. An asynchronously continuing command may emit more chunks after
-`tool.execution_complete`, using the same tool call ID and sequence. Chunks need
-not contain complete lines; apply normal terminal-text handling before display.
-Redaction is per decoded chunk, not cross-chunk secret reconstruction.
-Subscribe to either this event or the deprecated replacement snapshots, not
-both, to avoid duplicate display.
-
-### Response provenance
-
-`:copilot/human_response.recorded` preserves the exact runtime-owned question or
-reviewed plan alongside the response that settled it. `:actor` is
-`"human_response"`, `"host_automation"`, or `"unknown"`. Only `"human_response"`,
-established by a trusted direct-interaction ingress, is human authorization
-evidence. Ordinary SDK input and elicitation callbacks do not mint these
-receipts or acquire human authority. The Clojure SDK observes the event; it does
-not expose trusted-human submission APIs.
-
-| `[:response :response-kind]` | Required response fields | Optional response fields |
-|-----------------------------|--------------------------|--------------------------|
-| `"ask_user"` | `:message`, `:content` (JSON object), `:requested-schema` | None |
-| `"user_input"` | `:question`, `:answer`, `:was-freeform` (boolean) | `:choices` (vector of strings), `:allow-freeform` (boolean) |
-| `"exit_plan_mode"` | `:summary`, `:plan-content`, `:actions`, `:recommended-action`, `:approved` (boolean) | `:feedback`, `:selected-action`, `:auto-approve-edits` (boolean) |
-
-Plan actions are `"exit_only"`, `"interactive"`, `"autopilot"`, or
-`"autopilot_fleet"`. The requested form schema requires `:type "object"` and
-`:properties`, with an optional vector of `:required` field names. Content,
-field names, and nested schema JSON keep their source spelling in live events
-and history. Optional false values, empty strings, and empty vectors remain
-present; explicit `nil` is invalid except within opaque JSON values.
-
-### Citations (Experimental)
-
-Read citations from the final `:copilot/assistant.message` event. The
-`:citations` key is optional even when `:enable-citations` is true.
-
-```clojure
-{:type :copilot/assistant.message
- :data {:message-id "message-1"
-        :content "Clojure was created by Rich Hickey."
-        :citations
-        {:sources [{:id "source-1"
-                    :provider "client"
-                    :title "Language notes"
-                    :path "docs/languages.md"}]
-         :spans [{:start-index 23
-                  :end-index 34
-                  :references [{:source-id "source-1"
-                                :cited-text "Rich Hickey"
-                                :location {:type "char"
-                                           :start-index 100
-                                           :end-index 111}
-                                :provider-metadata
-                                {:search-result-index 0}}]}]}}}
-```
-
-`:sources` contains deduplicated source maps. Each source requires `:id` and
-`:provider` (`"anthropic"`, `"openai"`, or `"client"`); `:title`, `:url`, and
-`:path` are optional.
-
-Each span requires `:start-index`, `:end-index`, and `:references`. Span offsets
-index the final message `:content` in UTF-16 code units: start is zero-based and
-inclusive, end is exclusive. Clojure strings are Java strings, so these offsets
-can be passed directly to `.substring`.
-
-Each reference requires `:source-id`; `:cited-text`, `:location`, and
-`:provider-metadata` are optional. `:provider-metadata` accepts any JSON value
-(`nil`, scalar, vector, or map). It follows normal recursive `wire->clj`
-conversion: map keys are normalized to kebab-case keywords, including maps
-nested in vectors (`search_result_index` becomes `:search-result-index`).
-Citation metadata is not an opaque-key preservation surface.
-
-Location maps use a string `:type`: `"char"` with `:start-index` /
-`:end-index`, `"page"` with `:start-page` / `:end-page`, or `"block"` with
-`:start-block` / `:end-block`.
-
-### Example: Handling Events
-
-```clojure
-(copilot/with-client-session [session {:streaming? true
-                                       :on-permission-request copilot/approve-all}]
-  (let [ch (chan 256)]
-    (tap (copilot/events session) ch)
-    (go-loop []
-      (when-let [event (<! ch)]
-        (case (:type event)
-          :copilot/assistant.message_delta
-          (print (get-in event [:data :delta-content]))
-          
-          :copilot/session.usage_info
-          (println "Tokens:" (get-in event [:data :current-tokens]))
-          
-          :copilot/session.idle
-          (println "\nDone!")
-          
-          nil)
-        (recur)))
-    (copilot/send! session {:prompt "Hello"})))
-```
-
----
-
-## Streaming
-
-Enable streaming to receive assistant response chunks as they're generated:
-
-```clojure
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :streaming? true
-                :on-permission-request copilot/approve-all}))
-
-(let [ch (chan 100)]
-  (tap (copilot/events session) ch)
-  (go-loop []
-    (when-let [event (<! ch)]
-      (case (:type event)
-        :copilot/assistant.message_delta
-          ;; Streaming chunk - print incrementally
-          (print (get-in event [:data :delta-content]))
-
-        :copilot/assistant.reasoning_delta
-          ;; Streaming reasoning (model-dependent). Send to stderr.
-          (binding [*out* *err*]
-            (print (get-in event [:data :delta-content])))
-
-        :copilot/assistant.reasoning
-          (binding [*out* *err*]
-            (println "\n--- Final Reasoning ---")
-            (println (get-in event [:data :content])))
-
-        :copilot/assistant.message
-          ;; Final complete message
-          (println "\n--- Final ---")
-          (println (get-in event [:data :content]))
-
-        nil)
-      (recur))))
-
-(copilot/send! session {:prompt "Solve a logic puzzle and show your reasoning."})
-```
-
-When `:streaming? true`:
-- `:copilot/assistant.message_delta` events contain incremental text in `:delta-content`
-- `:copilot/assistant.reasoning_delta` events contain incremental reasoning in `:delta-content` (model-dependent)
-- Accumulate delta values to build the full response progressively
-- The final `:copilot/assistant.message` event always contains the complete content
-
----
-
-## Observability
-
-The SDK supports two independent telemetry mechanisms.
-
-### OpenTelemetry export (client `:telemetry`)
-
-Pass a `:telemetry` map in the **client** options to enable OpenTelemetry export on the
-spawned CLI. Presence of the map enables OTel; all sub-keys are optional:
-
-```clojure
-(def client
-  (copilot/client
-    {:telemetry {:otlp-endpoint "http://localhost:4318"
-                 :exporter-type "otlp"
-                 :source-name   "my-app"
-                 :capture-content? false}}))
-```
-
-| Key | Type | Description | CLI env var |
-|-----|------|-------------|-------------|
-| `:otlp-endpoint` | string | OTLP HTTP endpoint to export spans to | `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| `:otlp-protocol` | string | OTLP wire protocol: `"http/json"` or `"http/protobuf"` | `OTEL_EXPORTER_OTLP_PROTOCOL` |
-| `:file-path` | string | Write spans to a local file instead of/alongside OTLP | `COPILOT_OTEL_FILE_EXPORTER_PATH` |
-| `:exporter-type` | string | Exporter selection | `COPILOT_OTEL_EXPORTER_TYPE` |
-| `:source-name` | string | Service / source name attached to spans | `COPILOT_OTEL_SOURCE_NAME` |
-| `:capture-content?` | boolean | Capture prompt/response content in spans. **Defaults to off** — only enable in trusted environments, as it records message content | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` |
-
-When `:telemetry` is present the SDK sets `COPILOT_OTEL_ENABLED=true` on the CLI process.
-(upstream PR #785, [PR #1648](https://github.com/github/copilot-sdk/pull/1648))
-
-The runtime's skill spans use `gen_ai.skill.name` and
-`gen_ai.skill.resource.name`; descriptions and `gen_ai.skill.source.uri` require
-content capture. Local source identities are file URIs, not bare paths.
-`process.executable.name` identifies the actual launcher, while executable
-paths require content capture. Exit codes are integers, including zero; missing
-or pre-spawn results are omitted. Custom tools overriding built-in names do not
-inherit native skill/process attributes. These evolving semantic conventions
-replace the older `github.copilot.skill.name`, `github.copilot.skill.path`, and
-`github.copilot.tool.parameters.skill_name` attributes.
-
-#### Distributed trace propagation (`:on-get-trace-context`)
-
-To stitch CLI spans into a caller-managed distributed trace, provide a zero-arg
-`:on-get-trace-context` function in the **client** options. The SDK calls it **per request**
-to capture a fresh trace context — on session create, session resume, and every message
-send — forwarding only `:traceparent` and `:tracestate`:
-
-```clojure
-(def client
-  (copilot/client
-    {:on-get-trace-context
-     (fn [] {:traceparent "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
-             :tracestate  "rojo=00f067aa0ba902b7"})}))
-```
-
-### GitHub telemetry forwarding (`:on-github-telemetry`)
-
-> **@experimental / Internal.** This mirrors the official SDK's option set but is
-> not a stable public surface. Shapes may change upstream.
-
-Register a one-arg `:on-github-telemetry` callback in the **client** options to
-receive the runtime's forwarded GitHub telemetry. Registering the callback is what
-opts in: the SDK adds `enableGitHubTelemetryForwarding: true` to the `connect`
-handshake — so the first session's un-replayable `session.start` telemetry is
-forwarded (upstream PR #1909) — as well as to the wire params of both
-`session.create` and `session.resume` (the flag is omitted entirely when no
-callback is set — `false` is never sent). The runtime then emits connection-global
-`gitHubTelemetry.event` notifications, each passed to the callback:
-
-```clojure
-(def client
-  (copilot/client
-    {:on-github-telemetry
-     (fn [notification]
-       ;; notification => {:session-id "..." :restricted false :event {...}}
-       (tap> notification))}))
-```
-
-The callback runs on the client's notification loop. A throwing callback is caught
-and logged (WARN) — it cannot corrupt JSON-RPC dispatch. No reply is sent (these are
-notifications, not requests).
-
-**Notification shape:**
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:session-id` | string | Session the event originated from |
-| `:restricted` | boolean | Whether the event is restricted |
-| `:event` | map | The telemetry event (see below) |
-
-**Event shape** — scalar keys are kebab-cased from the wire (`:kind`, `:created-at`,
-`:model-call-id`, `:session-id`, `:copilot-tracking-id`, `:exp-assignment-context`),
-plus an optional `:client` map of client-info scalars (`:cli-version`, `:os-platform`,
-`:os-version`, `:os-arch`, `:node-version`, `:copilot-plan`, `:client-type`,
-`:client-name`, `:is-staff`, `:dev-device-id`).
-
-Three event sub-maps are **opaque source-defined data** and pass through **verbatim** —
-their keys are **not** kebab-cased:
-
-| Sub-map | Wire value type | Note |
-|---------|-----------------|------|
-| `:properties` | string → string | Keys preserved exactly as sent |
-| `:metrics` | string → number | Keys preserved exactly as sent |
-| `:features` | string → string | Keys preserved exactly as sent |
-
-Do not rely on those keys being Clojure-idiomatic; treat them as an opaque bag keyed
-by the upstream-defined strings-as-keywords. (upstream [PR #1835](https://github.com/github/copilot-sdk/pull/1835))
-
-### Internal session telemetry (`:enable-session-telemetry?`)
-
-`:enable-session-telemetry?` is a **session** config flag that controls the CLI's own
-internal usage telemetry — independent of the OpenTelemetry export above. It defaults to
-enabled for GitHub-authenticated sessions and is **always disabled** when a BYOK
-`:provider` is configured. In `:mode :empty` it is defaulted to `false` as one of the
-multi-tenant hardening defaults (the caller can still set it explicitly). Set it to
-`false` to opt out:
-
-```clojure
-(def session
-  (copilot/create-session client
-    {:enable-session-telemetry? false
-     :on-permission-request copilot/approve-all}))
-```
-
-(upstream PR #1224)
-
----
-
-## Advanced Usage
-
-### Manual Server Control
-
-```clojure
-(def client (copilot/client {:auto-start? false}))
-
-;; Start manually
-(copilot/start! client)
-
-;; Use client...
-
-;; Stop manually
-(copilot/stop! client)
-```
-
-### Client Mode (Empty)
-
-`:mode :empty` configures the client for multi-tenant SaaS hosts that must
-isolate sessions from the local machine — no on-disk state from a
-specific user account leaks into a session. The default `:copilot-cli`
-mode preserves historical CLI behavior. (upstream PR #1428)
-
-```clojure
-(require '[github.copilot-sdk :as copilot]
-         '[github.copilot-sdk.tool-set :as tool-set])
-
-(def client
-  (copilot/client
-    {:mode :empty
-     ;; At least ONE of :copilot-home / :session-fs / :cli-url /
-     ;; :is-child-process? is required so the CLI has a tenant-scoped
-     ;; storage root. Using both is fine and common:
-     :copilot-home "/srv/tenants/acme/copilot-home"
-     :session-fs   {:initial-cwd "/srv/tenants/acme/cwd"
-                    :session-state-path "/srv/tenants/acme/state"
-                    :conventions "posix"}}))
-
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     ;; Required in :empty mode (use [] to allow nothing — the key must
-     ;; be present so silently-empty filters can't happen):
-     :available-tools tool-set/isolated
-     ;; Required when client has :session-fs:
-     :create-session-fs-handler (fn [_session] my-fs-handler)}))
-```
-
-What `:empty` mode enforces (vs `:copilot-cli`):
-
-- **Constructor validation**: at least one of `:copilot-home`,
-  `:session-fs`, `:cli-url`, or `:is-child-process?` must be supplied
-  (so the CLI never falls back to the user's home directory). The SDK
-  also forces `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI.
-- **Session validation**: every `create-session` / `resume-session` call
-  must provide `:available-tools` (an empty vector is legitimate). When
-  the client has `:session-fs`, `:create-session-fs-handler` is also
-  required (this applies to both modes).
-- **Safe session defaults** (spread UNDER caller config — caller always wins):
-  `:enable-session-telemetry? false`, `:mcp-oauth-token-storage :in-memory`,
-  `:skip-embedding-retrieval true`, `:embedding-cache-storage :in-memory`,
-  `:enable-on-demand-instruction-discovery false`, `:enable-file-hooks false`,
-  `:enable-host-git-operations false`, `:enable-session-store false`,
-  `:enable-skills false`, `:memory {:enabled false}`.
-- **System message normalization**: the SDK strips the `environment_context`
-  section from the system message (or promotes `:append` to `:customize`) so
-  no host-environment context leaks. If the caller already provides their own
-  `environment_context` override in `:customize` mode, it is preserved verbatim.
-- **Post-create options**: a follow-up `session.options.update` RPC sets
-  `:skip-custom-instructions true`, `:custom-agents-local-only true`,
-  `:coauthor-enabled false`, `:manage-schedule-enabled false`, and forces
-  `:installed-plugins []`. It also defaults `:included-builtin-skills` to `[]`
-  unless the caller supplies an explicit allowlist. On failure, the SDK cleans
-  up the half-configured session before propagating the error.
-
-Both modes always emit `:tool-filter-precedence "excluded"` on
-`session.create` and `session.resume`, and reject bare `"*"` in
-`:available-tools` / `:excluded-tools` at the SDK boundary.
-
-### Tool Sets
-
-Use [`github.copilot-sdk.tool-set`](#tool-sets) to construct `:available-tools` /
-`:excluded-tools` lists with built-in helpers. Mirrors the upstream
-`BuiltInTools` constants. (upstream PR #1428)
-
-```clojure
-(require '[github.copilot-sdk.tool-set :as tool-set])
-
-;; Source-qualified single tool — patterns are "<source>:<name>",
-;; source is one of "builtin", "mcp", or "custom":
-(tool-set/builtin "ask_user")     ; => "builtin:ask_user"
-(tool-set/builtin "*")            ; => "builtin:*"   (all built-ins)
-(tool-set/mcp "*")                ; => "mcp:*"      (all MCP tools)
-(tool-set/custom "my_tool")       ; => "custom:my_tool"
-
-;; Vector of patterns:
-(tool-set/builtins ["task" "skill"])
-;; => ["builtin:task" "builtin:skill"]
-
-;; The "Isolated" preset matches BuiltInTools.Isolated upstream —
-;; every built-in that is safely session-bounded (no host I/O):
-tool-set/isolated
-;; => ["builtin:ask_user" "builtin:task_complete" "builtin:exit_plan_mode" ...]
-```
-
-The constructors enforce well-formed entries: a bare `"*"` is rejected (the SDK
-also rejects it in `:available-tools` / `:excluded-tools` at the session
-boundary — apps must explicitly opt into a source so an absent source can
-never silently grant access to unexpected tools). The runtime always receives
-`:tool-filter-precedence "excluded"` on `session.create` / `session.resume`
-so the ordering between allow and deny lists is deterministic.
-
-### Tools
-
-Let the CLI call back into your process when the model needs capabilities you provide:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def lookup-tool
-  (copilot/define-tool "lookup_issue"
-    {:description "Fetch issue details from our tracker"
-     :metadata {:owner "issues-team"}
-     :parameters {:type "object"
-                  :properties {:id {:type "string"
-                                    :description "Issue identifier"}}
-                  :required ["id"]}
-     :handler (fn [{:keys [id]} invocation]
-                (let [issue (fetch-issue id)]
-                  (copilot/result-success issue)))}))
-
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :tools [lookup-tool]
-                :on-permission-request copilot/approve-all}))
-```
-
-When Copilot invokes `lookup_issue`, the SDK automatically runs your handler and responds to the CLI.
-
-Both `define-tool` and `define-tool-from-spec` accept these common options:
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:defer` | `:auto` or `:never` | runtime default | Per-tool lazy-loading policy; distinct from session `:tool-search` configuration |
-| `:description` | string or `nil` | `nil` | Human-readable tool description |
-| `:handler` | fn | `nil` | Two-argument function receiving parsed arguments and the invocation map |
-| `:is-terminal?` | boolean | `nil` | When true, a successful call ends the agent turn instead of feeding the tool result back to the model. A failed call leaves the loop running so the model can inspect the error and retry. Gated on `some?`; explicit `false` is forwarded and an absent key is omitted. Serialized as wire `isTerminal`. ([upstream PR #2129](https://github.com/github/copilot-sdk/pull/2129)) |
-| `:metadata` | map | `nil` | Opaque host-defined metadata forwarded with the tool definition. An explicit `{}` is preserved; `nil` or an absent key is omitted |
-| `:overrides-built-in-tool` | boolean | `nil` | Allow this definition to replace a built-in tool with the same name |
-
-Use `:parameters` with `define-tool` or `:spec` with `define-tool-from-spec`.
-Metadata is not interpreted. String keys preserve their exact spelling; keyword
-keys follow the SDK's normal kebab-case to camelCase wire conversion.
-
-The handler invocation map contains:
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `:session-id` | string | yes | Session identifier |
-| `:tool-call-id` | string | yes | Tool call identifier |
-| `:tool-name` | string | yes | Invoked tool name |
-| `:arguments` | any | yes | Parsed arguments, without key conversion |
-| `:cancel-chan` | core.async channel | yes | Closes when the handler finishes, the runtime reports the call complete, successful session teardown cancels the invocation, or the client connection closes unexpectedly |
-| `:available-tools` | vector | no | Current tool metadata snapshot, provided only to the `tool_search_tool` handler |
-| `:traceparent` | string | no | W3C trace parent |
-| `:tracestate` | string | no | W3C trace state |
-
-Each `:available-tools` entry contains:
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `:name` | string | yes | Tool name |
-| `:description` | string | yes | Human-readable description |
-| `:namespaced-name` | string | no | Fully qualified tool name |
-| `:mcp-server-name` | string | no | MCP server name |
-| `:mcp-tool-name` | string | no | MCP tool name |
-| `:input-schema` | map | no | Tool input JSON Schema |
-| `:defer-loading` | boolean | no | Whether the runtime deferred loading the tool |
-
-Failure to fetch the current metadata snapshot does not fail the tool call. The
-SDK invokes `tool_search_tool` without `:available-tools` instead.
-
-Handlers that launch asynchronous work should stop it when `:cancel-chan`
-closes. Completion and cancellation race atomically: once cancellation wins,
-the SDK suppresses any late handler result or error. A failed `disconnect!`
-does not cancel pending invocations because local session ownership is
-preserved. Unexpected connection loss disconnects every local session and
-cancels its pending invocations.
-
-**Declaration-only tools (manual resolution):**
-
-The `:handler` key is **optional** (upstream PR #1308). When omitted, the SDK does not auto-respond to tool calls — the call surfaces as a `:copilot/external_tool.requested` event with a pending request id, and the application resolves it later via `handle-pending-tool-call!`. Useful for human-in-the-loop UIs or out-of-process tool execution.
-
-```clojure
-(def manual-tool
-  (copilot/define-tool "manual_lookup"
-    {:description "Look up status manually"
-     :parameters {:type "object"
-                  :properties {:id {:type "string"}}
-                  :required ["id"]}}))
-;; …later, after a human reviews the request:
-(copilot/handle-pending-tool-call! session
-                                   {:request-id "tool-req-7"
-                                    :result "STATUS_OK"})
-```
-
-**Overriding built-in tools:**
-
-Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `edit_file`). Without this flag, defining a tool whose name clashes with a built-in tool causes an error.
-
-```clojure
-(def custom-grep
-  (copilot/define-tool "grep"
-    {:description "Custom grep with project-specific filtering"
-     :overrides-built-in-tool true
-     :parameters {:type "object"
-                  :properties {:pattern {:type "string"
-                                         :description "Search pattern"}}
-                  :required ["pattern"]}
-     :handler (fn [{:keys [pattern]} _invocation]
-                (copilot/result-success (my-custom-grep pattern)))}))
-```
-
-An `apply_patch` override can use a scalar string schema:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def patch-tool
-  (copilot/define-tool "apply_patch"
-    {:parameters {:type "string"}
-     :overrides-built-in-tool true
-     :handler (fn [patch _invocation]
-                (copilot/result-success (str "Received " (count patch) " characters")))}))
-```
-
-The handler receives patch text whether the runtime supplied a string or
-`{:input text}`; `:arguments` in the invocation map retains the original payload.
-Object-schema overrides and other tools keep their argument shape. Invalid
-string-override input fails without invoking the handler. String-schema
-`apply_patch` overrides cannot contain JSON Schema references; use an object
-schema when references are needed.
-
-**Deferring tools:**
-
-Set `:defer` to `:auto` or `:never` (upstream PR #1632) to control whether a tool may be *deferred* — loaded lazily via tool search rather than always pre-loaded into the model's context. `:auto` (the default) lets the runtime defer the tool; `:never` forces it to be pre-loaded. Deferring large tool sets keeps the active context smaller.
-
-```clojure
-(def always-loaded
-  (copilot/define-tool "critical_action"
-    {:description "A tool that must always be available"
-     :defer :never
-     :parameters {:type "object" :properties {}}
-     :handler (fn [_ _] (copilot/result-success "done"))}))
-```
-
-The keyword is converted to the wire string (`:auto` -> `"auto"`, `:never` -> `"never"`); when `:defer` is omitted the field is not sent and the runtime applies its default.
-
-**Handler return values:**
-
-| Return Type | Description |
-|-------------|-------------|
-| String | Automatically wrapped as success result |
-| Map with `:result-type` | Full control over result metadata |
-| core.async channel | Async result (yields string or map) |
-
-Object tool results contain:
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `:text-result-for-llm` | string | yes | Text returned to the model |
-| `:result-type` | keyword or string | yes | One of `success`, `failure`, `rejected`, `denied`, or `timeout` |
-| `:binary-results-for-llm` | vector | no | Binary image or resource results |
-| `:error` | string | no | Error details |
-| `:session-log` | string | no | Session log text |
-| `:tool-telemetry` | map | no | Map of string bucket names to JSON object maps. Nested values may be JSON strings, finite numbers, booleans, `nil`, vectors, or maps with string keys. Sets, symbols, functions, keyword keys, non-finite numbers, and non-object bucket values are invalid. |
-| `:tool-references` | collection of strings | no | Tool names referenced by the result |
-
-**Result helpers:**
-
-```clojure
-(copilot/result-success "It worked!")
-(copilot/result-success
-  "It worked!"
-  {"metrics" {"match_count" 3
-              "cached" false}})
-(copilot/result-failure "It failed" "error details")
-(copilot/result-denied "Permission denied")
-(copilot/result-rejected "Invalid parameters")
-```
-
-**MCP result conversion:**
-
-Convert an MCP `CallToolResult` into the SDK's `ToolResultObject` format with `convert-mcp-call-tool-result`:
-
-```clojure
-(require '[github.copilot-sdk.tools :as tools])
-
-(tools/convert-mcp-call-tool-result
-  {:content [{:type "text" :text "Hello from MCP"}]
-   :is-error false})
-;; => {:text-result-for-llm "Hello from MCP", :result-type "success"}
-
-(tools/convert-mcp-call-tool-result
-  {:content [{:type "text" :text "Something went wrong"}]
-   :is-error true})
-;; => {:text-result-for-llm "Something went wrong", :result-type "failure"}
-```
-
-The input map uses Clojure-idiomatic keys:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:content` | vector | Content blocks, each with `:type` and type-specific fields |
-| `:is-error` | boolean | When true, the result-type is `"failure"` |
-
-Supported content block types:
-
-| Type | Fields | Description |
-|------|--------|-------------|
-| `"text"` | `:text` | Text content, joined with newlines |
-| `"image"` | `:data`, `:mime-type` | Base64-encoded image, added to `:binary-results-for-llm` |
-| `"resource"` | `:resource` with `:uri`, `:text`, `:blob`, `:mime-type` | Resource content (text and/or binary) |
-
-### Commands
-
-Register slash commands that users can invoke in the TUI. Define each command as a map with `:name`, optional `:description`, and `:command-handler`, then pass them via `:commands` in session config. Create, resume, and join send an omitted description as the empty string required by the runtime.
-
-```clojure
-(def my-commands
-  [{:name "deploy"
-    :description "Deploy the current project"
-    :command-handler (fn [{:keys [session-id command-name args]}]
-                       (println "Deploying with args:" args))}
-   {:name "status"
-    :description "Show project status"
-    :command-handler (fn [{:keys [session-id command-name args]}]
-                       (println "All systems operational"))}])
-
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :commands my-commands
-                :on-permission-request copilot/approve-all}))
-```
-
-**Command definition keys:**
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `:name` | string | yes | Command name (without leading slash) |
-| `:description` | string | no | Description shown in TUI command list; defaults to `""` on the wire |
-| `:command-handler` | fn | yes | Handler function |
-
-The handler receives a context map:
-
-| Key | Description |
-|-----|-------------|
-| `:session-id` | The session ID |
-| `:command` | Full command string |
-| `:command-name` | Matched command name |
-| `:args` | Arguments after the command name |
-
-The handler may return `nil` or a core.async channel (awaited automatically).
-
-### System Message Customization
-
-Control the system prompt:
-
-```clojure
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :system-message
-                  {:content "
-<workflow_rules>
-- Always check for security vulnerabilities
-- Suggest performance improvements when applicable
-</workflow_rules>
-"}}))
-```
-
-The SDK auto-injects environment context, tool instructions, and security guardrails. Your `:content` is appended after SDK-managed sections.
-
-For full control (removes all guardrails), use `:mode :replace`:
-
-```clojure
-(copilot/create-session client
-  {:model "gpt-5.4"
-   :on-permission-request copilot/approve-all
-   :system-message {:mode :replace
-                    :content "You are a helpful assistant."}})
-```
-
-#### Customize Mode
-
-The `:customize` mode enables section-level overrides of the system prompt. Twelve sections are configurable:
-
-| Section | Description |
-|---------|-------------|
-| `:preamble` | Agent identity preamble and mode statement (upstream PR #1713) |
-| `:identity` | Section group covering the identity preamble and its sibling sub-sections (tone, tool efficiency, etc.) |
-| `:tone` | Response style, conciseness rules, output formatting |
-| `:tool-efficiency` | Tool usage patterns, parallel calling, batching |
-| `:environment-context` | CWD, OS, git root, directory listing, available tools |
-| `:code-change-rules` | Coding rules, linting/testing, ecosystem tools, style |
-| `:guidelines` | Tips, behavioral best practices |
-| `:safety` | Environment limitations, prohibited actions, security |
-| `:tool-instructions` | Per-tool usage instructions |
-| `:custom-instructions` | Repository and organization custom instructions |
-| `:runtime-instructions` | Runtime-provided system-prompt context (notifications, memories, workspace context, content-exclusion policy); mode instructions may arrive in transition messages |
-| `:last-instructions` | End-of-prompt instructions, including configured subagent-model guidance when the task tool is available |
-
-Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`, `:preserve`) and transform callbacks (1-arity functions). `:preserve` is a no-op marker that opts an individually-addressable section out of a group-level `:remove` — e.g. keep `:tone` when removing the `:identity` group (upstream PR #1713).
-
-Replacing or removing `:last-instructions` also replaces or removes its
-subagent-model guidance. Transforms receive the complete section and their
-returned prose is authoritative. These operations change prompt text, not
-configured models, tool availability, or runtime dispatch policy.
-`:runtime-instructions` is independent of `:last-instructions`.
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     :system-message
-     {:mode :customize
-      :sections {:identity {:action :replace
-                            :content "You are Acme Assistant."}
-                 :tone {:action :append
-                        :content "\nAlways respond in bullet points."}
-                 :code-change-rules {:action :remove}}
-      :content "Additional instructions here."}}))
-```
-
-Transform callbacks receive the current section content and return the replacement:
-
-```clojure
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     :system-message
-     {:mode :customize
-      :sections {:identity {:action (fn [current]
-                                     (clojure.string/replace current
-                                       "GitHub Copilot" "Acme Assistant"))}}}}))
-```
-
-Inspect available sections with the `system-prompt-sections` constant:
-
-```clojure
-copilot/system-prompt-sections
-;; => {:preamble {:description "Agent identity preamble and mode statement"}
-;;     :identity {:description "Section group covering the identity preamble ..."}
-;;     :tone {:description "Response style, conciseness rules, ..."}
-;;     :runtime-instructions {:description "Runtime instructions injected ..."} ...}
-```
-
-Available section keys: `:preamble` (added in upstream PR #1713), `:identity`,
-`:tone`, `:tool-efficiency`, `:environment-context`, `:code-change-rules`,
-`:guidelines`, `:safety`, `:tool-instructions`, `:custom-instructions`,
-`:runtime-instructions` (added in upstream PR #1377), `:last-instructions`.
-
-> **Naming note** — Upstream renamed `SystemPromptSection` →
-> `SystemMessageSection` in the TypeScript SDK. The Clojure SDK keeps
-> `system-prompt-sections` as the canonical name (for back-compat) and
-> exposes `system-message-sections` as an alias.
-
-Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.
-
-### Default Agent Tool Exclusions
-
-Hide tools from the built-in/default agent while keeping them available to custom agents with `:default-agent`.
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def repo-index-tool
-  (copilot/define-tool "repo_index_search"
-    {:description "Search the private repository index"
-     :parameters {:type "object"
-                  :properties {:query {:type "string"}}
-                  :required ["query"]}
-     :handler (fn [{:keys [query]} _]
-                (str "index results for " query))}))
-
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     :tools [repo-index-tool]
-     :custom-agents [{:agent-name "repo-auditor"
-                      :agent-prompt "Audit repository changes."
-                      :agent-tools ["repo_index_search"]
-                      :agent-reasoning-effort "high"}]
-     :default-agent {:excluded-tools ["repo_index_search"]}}))
-```
-
-The default agent cannot call `repo_index_search`. The `repo-auditor` custom agent can still call it because custom-agent tool assignment is independent of `:default-agent`. Its reasoning effort is overridden to `"high"`; omit `:agent-reasoning-effort` to let the runtime resolve effort from the model configuration, inheriting the parent session's effort only when the agent uses the same model.
-
-### Config Directory and Skills
-
-`:config-directory` overrides where the CLI reads its config and state
-(e.g., `~/.copilot`). The deprecated `:config-dir` alias remains accepted.
-It does not define custom agents. Custom agents are provided via `:custom-agents`.
-
-```clojure
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :config-directory "/tmp/copilot-config"
-                :skill-directories ["/path/to/skills" "/opt/team-skills"]
-                :disabled-skills ["legacy-skill" "experimental-skill"]}))
-```
-
-Custom skill directories are scanned when skills first load, including missing
-or empty directories. Adding, editing, or removing files does not refresh the
-catalog on later turns. Call the existing experimental reload API after changing
-skill files; changing the configured directories also refreshes the catalog.
-
-```clojure
-(require '[github.copilot-sdk.session :as session])
-
-(let [result (session/skills-reload! session)]
-  (when (seq (:errors result))
-    (throw (ex-info "Skill reload failed" result)))
-  result)
-```
-
-### Large Tool Output Handling (Experimental)
-
-> **Note:** This is a CLI protocol feature not exposed in the official `@github/copilot-sdk`.
-> The `outputDir` and `maxSizeBytes` settings may be ignored by some CLI versions due to
-> a known issue where session-level config is not applied during `session.send` execution.
-> The CLI's default behavior (30KB threshold, system tmpdir) applies regardless.
-
-Configure how large tool outputs are handled before being sent back to the model:
-
-```clojure
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :large-output {:enabled true
-                               :max-size-bytes 65536
-                               :output-dir "/tmp/copilot-tool-output"}}))
-```
-
-When a tool output exceeds the configured size, the CLI writes the full output to a temp file,
-and the tool result delivered to the model contains a short message with the file path and preview.
-You can see this message in `:tool.execution_complete` events:
-
-```clojure
-(let [events (copilot/subscribe-events session)]
-  (go-loop []
-    (when-let [event (<! events)]
-        (when (= :tool.execution_complete (:type event))
-          (when-let [content (get-in event [:data :result :content])]
-            (println "Tool output message:\n" content)))
-      (recur))))
-```
-
-Note: large output handling is applied by the CLI for built-in tools (like the shell tool).
-For external tools you define in the SDK, consider handling oversized outputs yourself
-(e.g., write to a file and return a short preview).
-
-### Infinite Sessions
-
-Infinite sessions enable automatic context compaction, allowing conversations to continue
-beyond the model's context window limit. When the context approaches capacity, the CLI
-automatically compacts older messages while preserving important context.
-
-```clojure
-;; Enable with defaults (enabled by default)
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all}))
-
-;; Explicit configuration
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :infinite-sessions {:enabled true
-                                    :background-compaction-threshold 0.80
-                                    :buffer-exhaustion-threshold 0.95}}))
-
-;; Disable infinite sessions
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :infinite-sessions {:enabled false}}))
-```
-
-**Configuration options:**
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `:enabled` | boolean | `true` | Enable infinite sessions |
-| `:background-compaction-threshold` | number | `0.80` | Context utilization (0.0-1.0) at which background compaction starts |
-| `:buffer-exhaustion-threshold` | number | `0.95` | Context utilization (0.0-1.0) at which session blocks until compaction completes |
-
-**How it works:**
-
-1. When context reaches the background threshold (default 80%), compaction starts asynchronously
-2. The session continues processing while compaction runs in the background
-3. If context reaches the buffer exhaustion threshold (default 95%), the session blocks until compaction completes
-4. Compaction preserves essential context while removing older, less relevant messages
-
-**Compaction events:**
-
-Sessions emit `:session.compaction_start` and `:session.compaction_complete` events during compaction:
-
-```clojure
-(let [ch (copilot/subscribe-events session)]
-  (go-loop []
-    (when-let [event (<! ch)]
-      (case (:type event)
-        :session.compaction_start
-        (println "Compaction started...")
-
-        :session.compaction_complete
-        (println "Compaction complete")
-
-        nil)
-      (recur))))
-```
-
-### Dynamic Workflows (Experimental)
-
-> **Note:** Dynamic Workflows are `@experimental` upstream and may change in
-> future releases. `argsSchema` authoring, pause/checkpoint mutation APIs, and
-> additional agent options remain intentionally excluded. See the
-> [Factory migration guide](../guides/dynamic-workflows.md#migrating-from-agent-factories)
-> for the breaking name changes.
-
-A Dynamic Workflow is an extension-authored, named workflow that a session can run: it
-declares its own phases and optional limits, executes with reverse-RPC access to the
-parent session (spawn nested agent turns, run journaled/idempotent steps, fan out
-work in parallel or as a pipeline), and reports durable, resumable progress back to
-the CLI.
-Workflows are registered per-session via [`join-session`](#join-session)'s
-`:workflows` option and approved via the [`:workflow` permission kind](#permission-handling).
-
-Most of this API is namespace-qualified only — require the namespace directly:
-
-```clojure
-(require '[github.copilot-sdk.workflow :as workflow]
-         '[github.copilot-sdk.session :as session])
-```
-
-**Defining a workflow**
-
-```clojure
-(def summarize-repo
-  (workflow/define-workflow
-    {:meta {:name "summarize-repo"
-            :description "Summarize a repository's structure and recent activity"
-            :phases [{:title "Scan" :detail "List top-level files and directories"}
-                     {:title "Summarize"}]}
-     :run (fn [{:keys [args phase log step agent parallel] session :session}]
-            (phase "Scan")
-            (let [files (step "list-files" #(session/workspace-list-files session))]
-              (log (str "Found " (count (:files files)) " files"))
-              (phase "Summarize")
-              (let [summaries (parallel
-                                (mapv (fn [f]
-                                        #(agent (str "Summarize " f)))
-                                      (:files files)))]
-                {:file-count (count (:files files))
-                 :summaries summaries})))}))
-```
-
-`define-workflow` is also exposed as a top-level facade, `copilot/define-workflow`
-(synchronous only — no `<define-workflow` twin, since validation does no I/O).
-
-`:meta` is validated eagerly by `define-workflow`:
-
-Metadata and phase maps reject unknown keys before a handle can be registered.
-
-| Field | Type | Required? | Notes |
-|-------|------|-----------|-------|
-| `:name` | string | yes | Non-blank. Must be unique within a `join-session` call's `:workflows` vector. |
-| `:description` | string | yes | Non-blank. |
-| `:phases` | vector of maps | yes | Each phase is `{:title string :detail string (optional)}`. `:title` must be non-blank and unique across phases. |
-| `:limits` | map (optional) | no | Validated only when present; see below. |
-
-| Limit key | Type | Constraint |
-|-----------|------|------------|
-| `:max-concurrent-subagents` | positive integer | — |
-| `:max-total-subagents` | positive integer | — |
-| `:timeout-seconds` | positive finite number | ≤ `2147483.647` |
-| `:max-ai-credits` | positive finite number | must round to a positive nano-AIU value |
-
-Resource limits are optional. An omitted limit leaves that dimension unbounded,
-except that an omitted `:max-concurrent-subagents` falls back to
-`:max-total-subagents` when the latter is set. Set a ceiling only when the workflow's
-cost profile is known or the user explicitly requested one. Do not guess limits on a
-user's behalf: an invented ceiling does not make a run safer and can stop healthy
-work with `workflow_limit_reached` after the run has already spent credits. Bound
-broad fan-out with the workflow's own workload counters instead.
-
-Model-initiated `run_dynamic_workflow` requests still require permission and show the
-effective limits. Direct SDK calls to `run-workflow!` and `resume-workflow!` do not
-request permission, so callers are responsible for choosing any ceilings
-deliberately.
-
-For invocation `:limits`, an omitted field preserves its ceiling and `nil`
-explicitly makes that dimension unlimited. Numeric overrides follow the same
-constraints as declared limits. `:meta` limits cannot contain `nil`, and the
-invocation `:limits` value must be a map, not `nil`.
-Time and credit limits accept finite Clojure ratios, which serialize as JSON
-decimals. Subagent-count limits require integers.
-
-`:run` must be a function of one argument, the [context map](#the-run-context-map)
-described below, and returns (directly or via a core.async channel, `Future`, promise,
-or delay) a JSON-safe value — `nil`, a string, boolean, finite number, or a nested
-vector/map thereof. Return `workflow/json-null` to report an explicit JSON `null`
-result (as opposed to `nil`, which means "no result").
-
-Other namespace-qualified-only helpers:
-
-| Function | Description |
-|----------|-------------|
-| `workflow/workflow-handle?` | Return true when `value` is a handle created by `define-workflow`. |
-| `workflow/workflow-meta` | Return a handle's `:meta` map. |
-| `workflow/terminal-status?` | Return true when an attempt's `:status` (keyword or string) has settled (`:completed`, `:halted`, `:paused`, `:cancelled`, `:error`). A paused run can later resume under the same run ID. Also exposed as `copilot/workflow-terminal-status?`. |
-| `workflow/json-null` | Sentinel value for an explicit JSON `null` workflow result. |
-
-**Driving workflow execution**
-
-Register handles via `join-session`'s `:workflows` option, then drive execution from any
-client connected to that session (typically the parent CLI, but any joined client can
-call these). Each function has a top-level `copilot` facade wrapper (all `^:experimental`)
-and an async `<`-prefixed twin returning a core.async channel:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-;; By name (the workflow must be registered on the joined session) or by handle:
-(copilot/run-workflow! session "summarize-repo" {:args {:path "."}})
-;; => {:run-id "..." :status :completed :result {...} ...}
-
-;; Async twin — channel yields the result, or the caught Throwable directly:
-(let [ch (copilot/<run-workflow! session "summarize-repo" {:args {:path "."}})]
-  (let [result (<!! ch)]
-    (if (instance? Throwable result)
-      (throw result)
-      result)))
-```
-
-| Sync function (`workflow/...`) | Top-level facade | Wire method | Description |
-|--------------------------------|-------------------|-------------|-------------|
-| `run!` | `run-workflow!` | `session.workflow.run` | Start a workflow by name or handle. 2-arity `[session name-or-handle]` or 3-arity with an options map: `:args` (passed to `:run` as `:args`), `:limits` (overrides declared limits, re-validated), `:resume-from-run-id` (delegates to `resume!`). Waits for terminal status via `wait-for-run!` if the initial response is non-terminal. |
-| `resume!` | `resume-workflow!` | `session.workflow.resume` | Resume a durable, previously-started run by `run-id`. 2-arity `[session run-id]` or 3-arity with `{:limits ...}`. See [error classification](#resume-error-classification) below. |
-| `get-run` | `get-workflow-run` | `session.workflow.getRun` | Read the latest durable envelope for a run. `[session run-id]`. |
-| `wait-for-run!` | `wait-for-workflow-run!` | (polls `get-run` + listens for `:copilot/workflow.run_updated`) | Block until a run reaches a terminal status. 2-arity or 3-arity with `{:cancel-chan :poll-interval-ms}` (`:poll-interval-ms` default `5000`; `:cancel-chan` aborts the *wait*, not the run, throwing `ex-info` `{:type :workflow-wait-cancelled :run-id ...}`). Requires the session to be connected (has an active event stream). |
-| `list-runs` | `list-workflow-runs` | `session.workflow.listRuns` | Return the runtime's newest default page of this session's runs. `[session]`. |
-| `get-run-detail` | `get-workflow-run-detail` | `session.workflow.getRunDetail` | Read durable phases, agent turns, and recent progress for a run. `[session run-id]`. |
-| `get-run-progress` | `get-workflow-run-progress` | `session.workflow.getRunProgress` | Page durable progress records. Optional keys: `:phase-id` (string), `:after-seq` and `:before-seq` (exclusive integer cursors), and `:limit` (integer, 1-500; runtime default 200). Unknown keys, obsolete `:cursor`, and session/run identifier overrides are rejected before the RPC. |
-| `cancel!` | `cancel-workflow-run!` | `session.workflow.cancel` | Request cancellation from the CLI. The runtime's reverse `workflow.abort` request targets the active execution token, marks only that attempt cancelled, and closes its `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
-
-Run, resume, get-run, wait, and cancel return a run envelope map with at least `:run-id` and a keywordized
-`:status` (one of `:running`, `:completed`, `:halted`, `:paused`, `:cancelled`, `:error`, or other
-non-terminal statuses reported by the CLI).
-
-`get-run-progress` returns `:records`, nullable `:oldest-seq` and `:newest-seq`,
-boolean `:has-more-older` and `:has-more-newer`, and non-negative `:revision`.
-The `list-runs` paging overload remains intentionally excluded.
-
-**Async twins**: every function above has a `<`-prefixed twin (e.g. `workflow/<run!`,
-`copilot/<run-workflow!`) with the same arities, running the call on a thread pool and
-returning a core.async channel. The channel yields the successful result **or the
-caught `Throwable` directly** (not wrapped) — always check `(instance? Throwable result)`
-before using the value.
-
-#### Resume error classification
-
-`resume!`/`<resume!`/`resume-workflow!`/`<resume-workflow!` reclassify specific wire
-error codes into a stable `ex-info` shape: `{:type :workflow-resume-error :code <kebab-keyword>}`
-(original exception preserved as the cause). Other errors are rethrown unchanged.
-
-| Wire code | `:code` |
-|-----------|---------|
-| `"not_found"` | `:not-found` |
-| `"non_resumable"` | `:non-resumable` |
-| `"workflow_run_not_resumable"` | `:workflow-run-not-resumable` |
-| `"already_active"` | `:already-active` |
-| `"workflow_already_running"` | `:workflow-already-running` |
-| `"workflow_limits_invalid"` | `:workflow-limits-invalid` |
-| `"workflow_session_disposed"` | `:workflow-session-disposed` |
-| `"workflow_storage_unavailable"` | `:workflow-storage-unavailable` |
-| `"workflow_storage_corrupt"` | `:workflow-storage-corrupt` |
-
-```clojure
-(try
-  (workflow/resume! session run-id)
-  (catch clojure.lang.ExceptionInfo e
-    (case (:code (ex-data e))
-      :workflow-limits-invalid (println "Invalid resource limits")
-      :non-resumable (println "This run cannot be resumed")
-      (throw e))))
-```
-
-#### The `:run` context map
-
-Every workflow's `:run` function receives a single context map, built fresh per
-execution:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:run-id` | string | The durable run's ID. |
-| `:args` | JSON value | The original `run!` arguments (default `{}`), persisted across `resume!`. |
-| `:session` | `CopilotSession` | The session the workflow is running within. |
-| `:cancel-chan` | channel | Closes when the run is cancelled/aborted. |
-| `:cancelled?` | `(fn [])` | Returns true once the run has been cancelled/aborted. |
-| `:agent` | `(fn [prompt] ...)` / `(fn [prompt options] ...)` | Runs a nested agent turn and returns its result. `options` may include `:label`, `:schema`, `:model`. |
-| `:step` | `(fn [key producer] ...)` / `(fn [key producer options] ...)` | Runs `producer` (a 0-arg fn) once per unique `key` and journals the JSON-safe result for replay on resume; a repeated `key` returns the cached result without re-running `producer`. Pass `{:volatile? true}` to skip journaling/caching entirely. |
-| `:parallel` | `(fn [thunks] ...)` | Runs a vector of 0-arg thunks concurrently (bounded at 4096 items) and returns their results in order; a non-fatal thunk error yields `nil` in its slot, a fatal error (abort, or an inner `:agent`/`:step` RPC failure) rethrows. |
-| `:pipeline` | `(fn [items & stages] ...)` | Threads each item in `items` (bounded at 4096) sequentially through `stages`, each called as `(stage previous-value original-item index)`; same fatal/non-fatal error semantics as `:parallel`. |
-| `:phase` | `(fn [text] ...)` | Buffers a phase-transition progress line; the SDK flushes before `:agent`/`:step` calls and when the run finishes. |
-| `:log` | `(fn [text] ...)` | Buffers a log progress line; the SDK flushes before `:agent`/`:step` calls and when the run finishes. |
-
-`:agent`, `:step`, `:parallel`, and `:pipeline` all throw `ex-info` with
-`{:type :workflow-aborted :run-id ...}` if the run is cancelled while they're executing.
-Values returned from `:step` producers and from `:run` itself are validated as JSON-safe
-before being journaled or returned; a non-JSON-safe value throws `ex-info` with
-`{:value-type "..."}`.
-
-### Permission Handling
-
-The SDK uses a **deny-by-default** permission model. All permission requests
-(file writes, shell commands, URL fetches, custom tool execution, etc.) are denied unless your
-session config provides an `:on-permission-request` handler. The handler is
-optional on `create-session`, `resume-session`, and `join-session` (upstream
-PR #1308): when omitted, permission requests are not auto-resolved and
-applications must resolve them via `handle-pending-permission-request!`.
-`join-session` historically defaulted to `{:kind :no-result}` and continues to
-behave that way.
-
-Use `approve-all` to opt into approving everything:
-
-```clojure
-(def session (copilot/create-session client
-               {:on-permission-request copilot/approve-all}))
-```
-
-The `:permission-kind` field in permission requests identifies the type of action requiring approval:
-
-| Permission Kind | Description |
-|----------------|-------------|
-| `:shell` | Shell command execution |
-| `:write` | File system write operation |
-| `:mcp` | MCP tool invocation |
-| `:read` | File system read operation |
-| `:url` | URL fetch / HTTP request |
-| `:custom-tool` | SDK-registered custom tool invocation |
-| `:memory` | Memory storage operation (subject, fact, citations) |
-| `:hook` | Hook-triggered permission check |
-| `:extension-management` | Install, enable, disable, or manage an extension |
-| `:extension-permission-access` | Extension access to another permission surface |
-| `:extension-env-access` | Extension request for named environment variables |
-| `:workflow` | Dynamic Workflow run or authoring approval (see [Dynamic Workflows (Experimental)](#dynamic-workflows-experimental)) |
-
-Custom-tool permission requests may include boolean `:skip-permission`, recording
-that the tool declaration asked the runtime to bypass its normal prompt.
-
-Write requests may include a non-empty `:file-edits` vector in both the
-permission request and its event's `:prompt-request`:
-
-```clojure
-{:file-edits [{:before {:path "/workspace/before.clj" :content "(+ 1 1)"}
-               :after {:path "/workspace/after.clj" :content "(+ 1 2)"}}]}
-```
-
-Each edit has at least one complete UTF-8 snapshot. Missing `:before` means
-creation; missing `:after` means deletion; empty `:content` means an empty
-file. Different paths describe a move. These are planned-operation previews,
-not later reads of live files. The runtime omits the vector when a complete
-preview is unavailable, including pre-read sandbox requests and non-UTF-8
-files. Do not infer deletion from an empty legacy `:new-file-contents`.
-
-Memory permission events include additional data fields:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `:memory-action` | `:store` or `:vote` | The memory operation type |
-| `:memory-direction` | `:upvote` or `:downvote` | Vote direction (when action is `:vote`) |
-| `:memory-reason` | string | Reason for the memory operation |
-| `:repo-nwo` | non-blank string | Repository scope in `"owner/name"` form, when applicable |
-| `:scope` | `"repository"` or `"user"` | Storage scope requested by the memory operation |
-
-Extension environment access requests require both the extension identity and
-at least one requested name:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `:extension-name` | non-blank string | Extension asking for access |
-| `:environment-variables` | non-empty vector of non-blank strings | Environment variable names presented for approval |
-
-Workflow permission requests (`:permission-kind :workflow`) include additional
-data fields describing the run or authoring request awaiting approval:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `:operation` | `"run"` or `"author"` | Whether the workflow is being run or authored |
-| `:name` | string | Workflow name |
-| `:description` | string | Workflow description |
-| `:phases` | vector of maps | `{:title string, :detail string (optional)}` — the phases the workflow declares |
-| `:approval-key` | string | Stable key for persisting an approval decision across runs |
-| `:can-persist-approval` | boolean | Whether `:approve-for-session`/`:approve-for-location` are meaningful for this request |
-| `:max-concurrent-subagents`, `:max-total-subagents`, `:timeout-seconds`, `:max-ai-credits` | number (optional) | Effective runtime limits for this run |
-| `:declared-max-concurrent-subagents`, `:declared-max-total-subagents`, `:declared-timeout-seconds`, `:declared-max-ai-credits` | number (optional) | The limits as declared by the workflow definition, shown to approvers alongside the effective limits above |
-| `:managed-approval-required` | boolean (optional) | Raw managed-policy provenance and one-shot restrictions. Consult the callback's derived prompt context below to determine whether a human response is still required. Explicit false remains distinct from omission. |
-
-For fine-grained control, provide your own handler. When the CLI needs
-approval, it sends a JSON-RPC `permission.request` to the SDK. Your
-`:on-permission-request` callback must return a map compatible with the
-permission result payload; the SDK wraps this into the JSON-RPC response
-as `{:result <your-map>}`:
-
-Your handler receives two arguments: the `request` map (the permission
-request payload) and a `ctx` map with:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:session-id` | string | The session the request originated from |
-| `:managed-settings-enabled?` | boolean | `true` when the session has enterprise-managed settings active (`:managed-settings` config or `:enable-managed-settings?`); `false` otherwise |
-| `:prompt-request` | map (optional) | Runtime-derived, user-facing permission prompt. Preserves `:kind`, raw prompt fields, and an explicit false `:managed-approval-required` marker. Absent on older runtimes or requests without a derived prompt. |
-
-The raw request is not rewritten. For standard prompt kinds `"commands"`,
-`"read"`, `"write"`, `"url"`, and `"workflow"`, the derived prompt can clear the
-human requirement after Assisted approval. For those kinds, a true derived
-managed marker requires a human response; false or absence does not, even when
-the raw marker remains true. For a missing prompt or other prompt kinds, retain
-the raw marker as authoritative. Neither a prompt snapshot nor a recovery
-owner ID is an approval grant.
-
-`ctx` is passed to every `:on-permission-request` handler, including
-`approve-all` and `default-join-session-permission-handler`.
-([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139))
-
-The `permission_bash.clj` example demonstrates both an allowed and a denied
-shell command and prints the full permission request payload so you can inspect
-fields like `:full-command-text`, `:commands`, and `:possible-paths`.
-
-```clojure
-;; Approve this request once
-{:kind :approve-once}
-
-;; Approve and remember for the session
-{:kind :approve-for-session
- :approval {:kind :commands
-            :command-identifiers ["echo"]}}
-
-;; Approve and persist for the project location
-{:kind :approve-for-location
- :approval {:kind :write}
- :location-key "/path/to/project"}
-
-;; Reject with optional user-facing detail
-{:kind :reject
- :feedback "Not allowed"}
-
-;; No user confirmation is available
-{:kind :user-not-available}
-
-;; Extension declines to answer (another handler may respond)
-{:kind :no-result}
-```
-
-`:managed-approval-handled` is runtime-owned metadata on approved
-`:copilot/permission.completed` event results. It is not a valid outbound
-permission decision and permission handlers must not return it.
-
-Legacy Clojure permission result kinds such as `:approved` and
-`:denied-by-rules` remain accepted and are normalized before the SDK sends the
-decision to the CLI.
-
-#### `resolvedByHook` — Hook-Resolved Permissions
-
-When the runtime resolves a permission request via a `permissionRequest` hook, the
-`permission.requested` event includes `:resolved-by-hook true`. The SDK automatically
-skips the client's `:on-permission-request` handler and does not send the
-`handlePendingPermissionRequest` RPC — the event is still published to event subscribers
-for observability.
-
-#### `attributed-permission-result`
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(defn permission-handler [_request _ctx]
-  (copilot/attributed-permission-result
-   {:kind :approve-once}
-   {:outcome :auto-approved
-    :source :host-policy
-    :surface :sdk}))
-
-(copilot/attributed-permission-result?
- (permission-handler nil nil))
-;; => true
-```
-
-Attach informational context describing how and where a permission decision was
-made. Reapplying `attributed-permission-result` replaces the previous context
-rather than nesting it. Permission behavior is determined only by the inner
-result. These helpers are experimental, matching their upstream annotation.
-
-| Context key | Allowed values |
-|-------------|----------------|
-| `:outcome` | `:auto-approved`, `:autopilot-denied`, `:prompted-user` |
-| `:source` | `:assisted-approval`, `:human-response`, `:host-policy`, `:unattended-fallback` |
-| `:surface` | `:tui`, `:prompt-mode`, `:copilot-app`, `:sdk`, `:acp` |
-
-The SDK converts these keywords to the runtime's snake-case strings and sends
-`decisionContext` beside `result`. Plain permission decisions omit
-`decisionContext` entirely. An attributed `{:kind :no-result}` still suppresses
-the response RPC. Handlers may return attributed results directly or through a
-core.async channel.
-
-The context may also include the experimental `:response-capability`, one of
-`:interactive`, `:headless`, or `:none`. The SDK serializes the keyword as the
-exact wire string and omits the field when absent. This field is excluded from
-stable SDK parity certification and may change independently of stable APIs.
-([upstream PR #2294](https://github.com/github/copilot-sdk/pull/2294))
-
-#### `approve-all`
-
-```clojure
-(copilot/approve-all request ctx)
-```
-
-A convenience permission handler that approves all permission requests by
-returning `{:kind :approve-once}`. Equivalent to the upstream Node.js SDK
-`approveAll` export.
-
-**Fail-closed under managed settings**: when `ctx` reports
-`:managed-settings-enabled? true` (see `:managed-settings` /
-`:enable-managed-settings?` in the session-config table), `approve-all`
-*throws* `ex-info` with message `"approve-all cannot be used when managed
-settings are enabled"` and `{:session-id (:session-id ctx)}` — host-side
-auto-approval must not bypass managed policy. When the request itself sets
-`:managed-approval-required true` (or omits `false`), `approve-all` returns
-`{:kind :no-result}` instead of approving, deferring the decision to managed
-approval. Otherwise it returns `{:kind :approve-once}` as before.
-([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139))
-
-Pass as the `:on-permission-request` value in session config:
-
-```clojure
-(copilot/create-session client {:on-permission-request copilot/approve-all})
-```
-
-#### `default-join-session-permission-handler`
-
-```clojure
-(copilot/default-join-session-permission-handler request ctx)
-```
-
-Returns `{:kind :no-result}` — the CLI handles permission decisions itself. When used with `resume-session`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not want to handle permission requests.
-
-Use this when reconnecting to a session where the original client already established permission handling:
-
-```clojure
-(copilot/resume-session client "session-123"
-  {:on-permission-request copilot/default-join-session-permission-handler})
-```
-
-Equivalent to the upstream Node.js SDK `defaultJoinSessionPermissionHandler` export.
-
-### User Input Handling
-
-When the agent needs input from the user (via `ask_user` tool), the `:on-user-input-request`
-handler is called. Return a response map with the user's input:
-
-Use `:ask-user-variant :legacy` for this legacy question shape or
-`:ask-user-variant :elicitation` for structured elicitation. Omitting the
-option preserves the runtime default. The elicitation variant is handled by
-`:on-elicitation-request`, not by the legacy user-input callback.
-
-```clojure
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :on-user-input-request
-                (fn [request invocation]
-                  ;; request contains {:question "..." :choices [...] :allow-freeform true/false}
-                  (println "Agent asks:" (:question request))
-                  (when-let [choices (:choices request)]
-                    (println "Choices:" choices))
-                  ;; Return user's response
-                  ;; :answer is required, :was-freeform defaults to true
-                  {:answer (read-line)
-                   :was-freeform true})}))
-```
-
-The request map includes:
-- `:question` - The question being asked
-- `:choices` - Optional list of choices for multiple choice questions
-- `:allow-freeform` - Whether freeform text input is allowed
-
-The response map should include:
-- `:answer` - The user's answer (string, required). `:response` is also accepted for convenience.
-- `:was-freeform` - Whether the answer was freeform (boolean, defaults to true)
-
-### Elicitation Provider
-
-Provide a handler for elicitation requests from the agent. This enables the SDK client to act as a UI provider for form-based dialogs.
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     :on-elicitation-request
-     (fn [{:keys [session-id message requested-schema mode]}]
-       (println "Elicitation for session" session-id ":" message)
-       {:action "accept"
-        :content {:name "user-input"}})}))
-```
-
-The handler receives a single `ElicitationContext` map:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:session-id` | string | Session that triggered the request |
-| `:message` | string | What information is needed from the user |
-| `:requested-schema` | map | JSON Schema describing form fields (optional) |
-| `:mode` | string | `"form"` for structured input, `"url"` for browser redirect (optional) |
-| `:elicitation-source` | string | Source that initiated the request, e.g. MCP server name (optional) |
-| `:url` | string | URL to open in browser, url mode only (optional) |
-
-Return an `ElicitationResult` map:
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `:action` | string | `"accept"`, `"decline"`, or `"cancel"` |
-| `:content` | map | Optional field values for `"accept"`. Omit for `"decline"` or `"cancel"`; absent content is omitted on the wire, never serialized as JSON `null`. |
-
-If the handler throws, the SDK sends `{:action "cancel"}` to prevent the request from hanging.
-
-When `:on-elicitation-request` is set, the session advertises `requestElicitation=true` in the create/resume RPC. Capabilities are updated dynamically via `capabilities.changed` events.
-
-### Session Filesystem
-
-Virtualize per-session storage with custom filesystem handlers. The runtime routes all session-scoped file I/O (event logs, large outputs, checkpoints) through the provided callbacks.
-
-Remembered permission choices also use this storage: `permissions.json` holds
-location approvals, `settings.json` holds permanent URL approvals and sandbox
-preferences, and `config.json` holds folder trust and onboarding state under
-`:session-state-path`. Sessions sharing these backing files share remembered
-grants; use separate, authorized provider namespaces for isolation and reconnect
-resumed sessions to their original namespace. The runtime does not fall back to
-host approval files on provider errors. Coordinate writes across separate
-provider endpoints/processes and protect backing storage from writable aliases
-or shell access; shell execution does not run through SessionFS.
-
-Configure the client with `:session-fs`:
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(def client
-  (copilot/client {:session-fs {:initial-cwd "/home/user/project"
-                                :session-state-path "/sessions"
-                                :conventions "posix"}}))
-```
-
-Provide a provider factory per session:
-
-```clojure
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     :create-session-fs-handler
-     (fn [_session]
-       (let [store (atom {})]
-         {:read-file (fn [path]
-                       (or (get @store path)
-                           (throw (ex-info "missing file" {:code "ENOENT"}))))
-          :write-file (fn [path content _mode]
-                        (swap! store assoc path content))
-          :append-file (fn [path content _mode]
-                         (swap! store update path str content))
-          :exists (fn [path]
-                    (contains? @store path))
-          :stat (fn [path]
-                  {:is-file true
-                   :is-directory false
-                   :size (count (get @store path ""))
-                   :mtime "2026-01-01T00:00:00Z"
-                   :birthtime "2026-01-01T00:00:00Z"})
-          :mkdir (fn [_path _recursive _mode] nil)
-          :readdir (fn [_path] [])
-          :readdir-with-types (fn [_path] [])
-          :rm (fn [path _recursive _force]
-                (swap! store dissoc path))
-          :rename (fn [src dest]
-                    (swap! store
-                      (fn [s]
-                        (-> s
-                            (assoc dest (get s src ""))
-                            (dissoc src)))))}))}))
-```
-
-Provider functions use direct arguments and throw on failure. Errors with `{:code "ENOENT"}` become structured `SessionFsError` maps with code `"ENOENT"`; all other exceptions become `"UNKNOWN"`. `create-session`, `resume-session`, their channel variants, and extension join automatically adapt provider-style factory returns to the low-level RPC handler contract.
-
-Provider results may be immediate values, channels, futures, or promises.
-Channels and promises may yield a `Throwable`; failed futures preserve the
-underlying exception rather than hiding its classification. An asynchronous
-error is reported once; it does not retry the filesystem operation.
-
-**Binary files (optional).** Declare `:capabilities {:binary true}` in the
-client's `:session-fs` configuration and implement both operations on every
-session provider:
-
-| Provider key | Arguments | Result |
-|--------------|-----------|--------|
-| `:read-file-bytes` | `[path]` | Java byte array |
-| `:write-file-bytes` | `[path byte-array mode]` | Ignored on success; throw on failure |
-
-This supports images stored only in the virtual filesystem. The adapter uses
-standard canonical base64 on the wire and limits each read or write to
-50,330,880 raw bytes. Invalid base64 and larger content return filesystem
-errors before invoking the writer; oversized reads fail before encoding.
-Missing binary implementations are rejected during session setup when the
-capability is true. Omitted or false capabilities retain text-only behavior;
-unsupported binary operations fail without reading the runtime host's files.
-Explicit `nil` is invalid for either capability flag or operation.
-
-**Partial writes.** Throw `session-fs-write-failure` from `:write-file` only if
-the failed write changed its target. The adapter adds `:write-changed true` to
-that filesystem error; it does not mark append or binary-write errors.
-
-```clojure
-(require '[github.copilot-sdk :as copilot])
-
-(copilot/session-fs-write-failure "Write failed after truncating the target")
-;; => ExceptionInfo with {:type :session-fs-write-failure}
-```
-
-`session-fs-write-failure?` recognizes the classified exception. The marker
-describes a mutation that happened, not a successful write.
-
-Use `create-session-fs-adapter` when you need the low-level handler map explicitly:
-
-```clojure
-(require '[clojure.java.io :as io])
-
-(def provider
-  {:read-file slurp
-   :write-file (fn [path content _mode] (spit path content))
-   :append-file (fn [path content _mode] (spit path content :append true))
-   :exists (fn [path] (.exists (io/file path)))
-   :stat (fn [path] {:is-file (.isFile (io/file path))
-                     :is-directory (.isDirectory (io/file path))
-                     :size (.length (io/file path))})
-   :mkdir (fn [path _recursive _mode] (.mkdirs (io/file path)))
-   :readdir (fn [path] (vec (.list (io/file path))))
-   :readdir-with-types (fn [_path] [])
-   :rm (fn [path _recursive _force] (clojure.java.io/delete-file path true))
-   :rename (fn [src dest] (.renameTo (io/file src) (io/file dest)))})
-
-(def handler
-  (copilot/create-session-fs-adapter provider))
-```
-
-The low-level handler map requires the 10 core FS operations below.
-`:read-file-bytes` and `:write-file-bytes` are required when binary capability is
-true. SQLite query/exists handlers are required when SQLite capability is true;
-transaction support remains optional (see [SQLite support](#sqlite-support-optional)).
-
-| Key | Params | Returns |
-|-----|--------|---------|
-| `:read-file` | `{:session-id :path}` | `{:content "..."}` |
-| `:write-file` | `{:session-id :path :content :mode}` | nil |
-| `:read-file-bytes` _(optional)_ | `{:session-id :path}` | `{:content "base64..."}` |
-| `:write-file-bytes` _(optional)_ | `{:session-id :path :content :mode}`; content is base64 | nil |
-| `:append-file` | `{:session-id :path :content :mode}` | nil |
-| `:exists` | `{:session-id :path}` | `{:exists true/false}` |
-| `:stat` | `{:session-id :path}` | `{:is-file :is-directory :size :mtime :birthtime}` |
-| `:mkdir` | `{:session-id :path :recursive :mode}` | nil |
-| `:readdir` | `{:session-id :path}` | `{:entries [...]}` |
-| `:readdir-with-types` | `{:session-id :path}` | `{:entries [...]}` |
-| `:rm` | `{:session-id :path :recursive :force}` | nil |
-| `:rename` | `{:session-id :src :dest}` | nil |
-| `:sqlite-query` _(optional)_ | `{:session-id :query-type :query :params}` | `{:rows [...] :columns [...] :rows-affected n}` |
-| `:sqlite-exists` _(optional)_ | `{:session-id}` | `{:exists true/false}` |
-| `:sqlite-transaction` _(optional)_ | `{:session-id :statements [...]}` | `{:results [...]}` or `{:results [] :error {:error-class ... :message ...}}` ([upstream PR #2140](https://github.com/github/copilot-sdk/pull/2140)) |
-
-Handler functions may return values directly or via core.async channels.
-
-#### SQLite support (optional)
-
-To handle `sessionFs.sqliteQuery` and `sessionFs.sqliteExists` (upstream PR #1299),
-add a nested `:sqlite` map to the provider and advertise the capability on the
-client config:
-
-```clojure
-(def client
-  (copilot/client {:session-fs {:initial-cwd "/home/user/project"
-                                :session-state-path "/sessions"
-                                :conventions "posix"
-                                :capabilities {:sqlite true}}}))
-
-(def session
-  (copilot/create-session client
-    {:on-permission-request copilot/approve-all
-     :create-session-fs-handler
-     (fn [_session]
-       {;; ... all 10 fs operations above ...
-        :sqlite {:query (fn [query-type sql params]
-                          ;; query-type is one of :exec, :query, :run
-                          ;; params is the raw bind-parameter map (keys preserved verbatim, e.g. :$userId)
-                          {:rows [{:n 1}] :columns ["n"] :rows-affected 0})
-                 :exists (fn [] true)
-                 :transaction (fn [statements]
-                                ;; statements is a vector of
-                                ;; {:query-type :query :query :params} maps to
-                                ;; run atomically; return one result map per statement.
-                                ;; Throw github.copilot-sdk.session/session-fs-sqlite-transaction-failure
-                                ;; to report a classified failure (see below).
-                                (mapv (fn [_stmt] {:rows [] :columns [] :rows-affected 1})
-                                      statements))}})}))
-```
-
-`:transaction` is optional — a provider that omits it responds to
-`sessionFs.sqliteTransaction` with `{:results [] :error {:error-class "fatal"
-:message "SQLite transactions are not supported by this provider"}}`.
-
-Use `session-fs-sqlite-transaction-failure` to report a classified failure from
-inside a `:transaction` handler, and `session-fs-sqlite-transaction-failure?` to
-recognize one:
-
-```clojure
-(require '[github.copilot-sdk.session :as session])
-
-(session/session-fs-sqlite-transaction-failure
-  "database is locked" :busy-or-locked)
-;; => an ex-info the handler can throw; ex-data has
-;;    {:type :session-fs-sqlite-transaction-failure :error-class :busy-or-locked}
-
-(session/session-fs-sqlite-transaction-failure? some-exception) ;; => true/false
-```
-
-`error-class` is one of `:busy-or-locked`, `:post-commit-ambiguous`, or the
-default `:fatal` (single-arity call). Classified failures are wire-mapped to
-`"busyOrLocked"`, `"postCommitAmbiguous"`, and `"fatal"` respectively; any
-uncaught exception thrown from `:transaction` is also reported as `"fatal"`
-with its message. ([upstream PR #2140](https://github.com/github/copilot-sdk/pull/2140))
-
-Notes:
-
-- `:capabilities {:sqlite true}` is required when sqlite is advertised; declaring
-  it without supplying `:sqlite` in the provider throws at session creation.
-- SQL bind-parameter map keys (e.g. `$userId`) bypass kebab-case conversion and
-  arrive at the handler verbatim.
-- Result row column-name keys (e.g. `:user_id`, `:created_at`) round-trip
-  verbatim on the outgoing wire path — they are not converted to camelCase,
-  matching upstream Node.js semantics where provider rows are forwarded
-  untouched.
-- SQLite handler exceptions propagate as JSON-RPC errors (not wrapped as
-  `SessionFsError`).
-
-### Session Hooks
-
-**Additional-directory trust:** `:additional-directories` supplied at local
-creation or cold resume also authorize repository hooks, not just file access.
-Discovery uses each directory's containing Git root, or the directory itself
-outside Git. For example, adding `/srv/project-b/packages/core` can authorize
-commands and prompts in `/srv/project-b/.github/hooks` without another approval.
-Supply only trusted repositories.
-
-`:enable-file-hooks false` suppresses repository-origin hooks, independently
-of explicit `:hook-directories` and SDK callback `:hooks`.
-`DISABLE_ADDITIONAL_DIRECTORY_HOOKS=true` restores primary-only repository scope
-when the runtime captures startup authorization. Later file-access grants or
-changes to that environment variable do not expand the retained hook scope.
-Re-supply additional directories on cold resume. Managed policy, hook-disable
-settings, and sandbox rules still apply; they do not make untrusted hooks safe.
-
-Lifecycle hooks allow custom logic at various points during the session:
-
-```clojure
-(def session (copilot/create-session client
-               {:model "gpt-5.4"
-                :on-permission-request copilot/approve-all
-                :hooks
-                {:on-pre-tool-use
-                 (fn [input invocation]
-                   ;; Called before each tool execution
-                   ;; input contains {:tool-name "..." :arguments {...}}
-                   (println "About to use tool:" (:tool-name input))
-                   ;; Return nil to proceed, or a modified input map
-                   nil)
-
-                 :on-post-tool-use
-                 (fn [input invocation]
-                   ;; Called after each *successful* tool execution
-                   ;; input contains {:tool-name "..." :tool-args {...} :tool-result {...}}
-                   ;; For failed tool calls, register :on-post-tool-use-failure below.
-                   (println "Tool completed:" (:tool-name input))
-                   nil)
-
-                 :on-post-tool-use-failure
-                 (fn [input invocation]
-                   ;; Called after a tool execution whose result was `"failure"`
-                   ;; (upstream PR #1421). :on-post-tool-use only fires for
-                   ;; successful results, so register this handler to observe
-                   ;; failed tool outcomes. Note: `"rejected"`, `"denied"`, and
-                   ;; `"timeout"` results do NOT currently trigger this hook —
-                   ;; only `"failure"` does.
-                   ;; input contains {:tool-name "..." :tool-args {...}
-                   ;;                 :error "failure message string"
-                   ;;                 :session-id "..." :timestamp 12345}
-                   ;; Optional return: {:additional-context "..."} is appended as
-                   ;; hidden guidance to the model alongside the failed result.
-                   ;; Other fields (e.g. :modified-result, :suppress-output) are
-                   ;; not honored for failure hooks.
-                   (println "Tool failed:" (:tool-name input) (:error input))
-                   {:additional-context "Tip: try `ls` first to see available files."})
-
-                 :on-pre-mcp-tool-call
-                 (fn [input invocation]
-                   ;; Called before each MCP tool call is dispatched (upstream PR #1366).
-                   ;; input contains
-                   ;;   {:server-name "..." :tool-name "..." :arguments {...}
-                   ;;    :tool-call-id "..." :_meta {...} :session-id "..."
-                   ;;    :timestamp 12345}
-                   ;; :arguments and :_meta are opaque MCP payloads and are
-                   ;; passed through verbatim (NOT kebab-cased recursively).
-                   ;; Return nil/{} to preserve the existing _meta on the
-                   ;; outgoing MCP request, {:meta-to-use {...}} to replace
-                   ;; it, or {:meta-to-use nil} to remove it.
-                   (println "Pre-MCP call:" (:server-name input) (:tool-name input))
-                   {:meta-to-use {:traceId "my-trace-id"}})
-
-                 :on-user-prompt-submitted
-                 (fn [input invocation]
-                   ;; Called when user sends a prompt
-                   (println "User prompt:" (:prompt input))
-                   nil)
-
-                 :on-user-prompt-transformed
-                 (fn [input invocation]
-                   ;; Called after the runtime transforms a submitted prompt
-                   ;; (e.g. slash-command/skill expansion) but before it is sent
-                   ;; to the model (upstream PR #2254).
-                   ;; input contains {:prompt "..." :transformed-prompt "..."
-                   ;;                 :timestamp 12345 :cwd "..."}
-                   ;; Return {:modified-transformed-prompt "..."} (wire
-                   ;; modifiedTransformedPrompt) to further rewrite the prompt
-                   ;; actually sent to the model, or nil to leave it as-is.
-                   (println "Transformed prompt:" (:transformed-prompt input))
-                   nil)
-
-                 :on-session-start
-                 (fn [input invocation]
-                   (println "Session started")
-                   nil)
-
-                 :on-session-end
-                 (fn [input invocation]
-                   (println "Session ended")
-                   nil)
-
-                 :on-agent-stop
-                 (fn [{:keys [stop-hook-active]} _invocation]
-                   (when-not stop-hook-active
-                     {:decision "block"
-                      :reason "Run the final validation and fix any failures."}))
-
-                 :on-subagent-start
-                 (fn [_input _invocation]
-                   {:additional-context "Read the requested files before summarizing."})
-
-                 :on-subagent-stop
-                 (fn [input _invocation]
-                   {:modified-response (str "Reviewed child response: " (:response input))})
-
-                 :on-error-occurred
-                 (fn [input invocation]
-                   (println "Error:" (:error input))
-                   nil)}}))
-```
-
-All hooks receive an `input` map (contents vary by hook type) and an `invocation` map
-containing `{:session-id ...}`. Hooks may return `nil` to proceed normally, or in some
-cases return a modified value.
-
-Base hook inputs may include string `:agent-id`, `:agent-type`, and
-`:parent-agent-id`. They remain absent for root hooks or older runtimes that do
-not provide them. The input's `:session-id` retains the runtime's execution
-session; the invocation map still identifies the SDK session handling the hook.
-
-For `:on-error-occurred` and `:on-session-end`, an object-valued `:error` becomes
-its string `:message`, including an empty string. If the object has no string
-message, it becomes JSON with its original member names. Strings, scalars,
-arrays, and absent errors pass through; other hook types are not normalized.
-
-`:on-user-prompt-submitted` may return
-`{:decision "block" :reason "Needs human review."}`. The runtime refuses that
-prompt without starting a model turn or recording a user message, and emits
-an ephemeral `:copilot/session.warning` with `:warning-type "policy_blocked"`
-and the reason. This is different from an agent-stop block, which requests
-another model turn.
-
-`:on-agent-stop` fires when the top-level agent reaches a natural terminal stop. Its
-input contains base `:timestamp` (Unix milliseconds) and `:cwd` (string), SDK-added
-`:session-id`, and optional kebab-cased `:stop-reason`, `:transcript-path`, and
-`:stop-hook-active`; its invocation map is `{:session-id ...}`. Return
-`{:decision "block" :reason "..."}` to keep the agent running and enqueue the reason.
-Return `nil`, or throw from the handler, to let the agent stop. When
-`:stop-hook-active` is true, a previous block already forced a continuation; use it to
-avoid indefinite re-blocking.
-([upstream PR #2054](https://github.com/github/copilot-sdk/pull/2054))
-
-`:on-subagent-start` runs before a child's first turn. Input includes the
-parent's `:session-id`, `:timestamp` (Unix milliseconds), `:cwd`, and
-`:transcript-path`, plus `:agent-name` and optional `:agent-display-name` /
-`:agent-description`. `:session-id` in the invocation map also identifies the parent.
-Return `{:additional-context "..."}` to prepend context to the initial child
-prompt.
-
-`:on-subagent-stop` runs after a child completes a turn, independently of
-`:on-agent-stop`. It adds `:agent-type`, `:stop-reason "end_turn"`, the child's
-original `:response`, and optional `:agent-id`. Return
-`{:decision "block" :reason "..."}` with a nonempty reason to continue the child,
-or `{:modified-response "..."}` to replace the response reported to its parent.
-A valid block takes precedence over a rewrite. `{:decision "allow"}` or `nil`
-allows completion; do not block indefinitely.
-
-Both callbacks are available on create, resume, and join, including channel
-variants. They may return an output map directly or through a core.async
-channel. Omitted callbacks do nothing; explicit `nil` and other non-functions
-are invalid configuration. Optional input fields remain absent when the runtime
-omits them. Child tool-use hooks still identify the child session, unlike these
-parent-associated lifecycle hooks.
-
-### Reasoning Effort
-
-For models that support reasoning (like o1), you can control the reasoning effort level:
-
-```clojure
-;; Check model capabilities
-(let [models (copilot/list-models client)]
-  (doseq [m models
-          :when (:supports-reasoning-effort m)]
-    (println (:name m) "supports reasoning:"
-             (:supported-reasoning-efforts m)
-             "default:" (:default-reasoning-effort m))))
-
-;; Create session with reasoning effort
-(def session (copilot/create-session client
-               {:model "o1"
-                :reasoning-effort "high"
-                :on-permission-request copilot/approve-all})) ; "low", "medium", "high", "xhigh", or "max"
-```
-
-### Multiple Sessions
-
-```clojure
-(def session1 (copilot/create-session client {:model "gpt-5.4"
-                                              :on-permission-request copilot/approve-all}))
-(def session2 (copilot/create-session client {:model "claude-sonnet-4.5"
-                                              :on-permission-request copilot/approve-all}))
-
-;; Both sessions are independent
-(copilot/send-and-wait! session1 {:prompt "Hello from session 1"})
-(copilot/send-and-wait! session2 {:prompt "Hello from session 2"})
-```
-
-### File Attachments
-
-```clojure
-;; File attachment
-(copilot/send! session
-  {:prompt "Analyze this file"
-   :attachments [{:type :file
-                  :path "/path/to/file.clj"
-                  :display-name "My File"}]})
-
-;; File attachment with line range (restrict to lines 10-25)
-(copilot/send! session
-  {:prompt "Explain this section"
-   :attachments [{:type :file
-                  :path "/path/to/file.clj"
-                  :line-range {:start 10 :end 25}}]})
-
-;; Selection attachment (code range)
-(copilot/send! session
-  {:prompt "What does this function do?"
-   :attachments [{:type :selection
-                  :file-path "/path/to/file.clj"
-                  :display-name "my-function"
-                  :selection-range {:start {:line 10 :character 0}
-                                   :end {:line 25 :character 0}}
-                  :text "(defn my-function [...] ...)"}]})
-```
-
-### Blob Attachments
-
-Send inline base64-encoded data (e.g. images) without writing to disk:
-
-```clojure
-;; Blob attachment (inline base64 data)
-(copilot/send! session
-  {:prompt "Describe this image"
-   :attachments [{:type :blob
-                  :data "iVBORw0KGgoAAAANSUhEUg..."
-                  :mime-type "image/png"
-                  :display-name "screenshot.png"}]})
-```
-
-### Extension Context Attachments
-
-Send context captured by an extension without normalizing keys in its opaque
-payload:
-
-```clojure
-(copilot/send! session
-  {:prompt "Use the selected dashboard"
-   :attachments
-   [{:type :extension-context
-     :extension-id "example.extension"
-     :canvas-id "dashboard"
-     :instance-id "dashboard-1"
-     :title "Selected dashboard"
-     :captured-at "2026-09-20T18:00:00Z"
-     :payload {:account-id 42
-               :filters {:userName "octocat"}}}]})
-```
-
-### Connecting to External Server
-
-```clojure
-;; Connect to an existing CLI server (no process spawned)
-(def client (copilot/client {:cli-url "localhost:8080"}))
-(copilot/start! client)
-```
-
----
-
-## Error Handling
-
-```clojure
-(try
-  (let [session (copilot/create-session client
-                                       {:on-permission-request copilot/approve-all})]
-    (copilot/send! session {:prompt "Hello"}))
-  (catch Exception e
-    (println "Error:" (ex-message e))))
-```
-
-JSON-RPC failures expose the server error under `[:error]` in `ex-data`.
-Structured `[:error :data]` remains opaque, including the original spelling of
-nested keys.
+| `(status client)` | The runtime reports its current status. | Map with `:version`, `:protocol-version` and optional experimental `:host-diagnostics`. This does not enable diagnostics. |
+| `(ping client)` or `(ping client message)` | The runtime replies to the control request; no model runs. | Response fields include `:message`, `:timestamp`, and `:protocol-version` when reported. |
+| `(auth-status client)` | The runtime reports its current authentication state; it does not sign in. | Status map, including `:authenticated?` when reported. |
+| `(list-models client)` | A cached list is available or the shared lookup finishes. | Vector of models. Each caller gets a separate channel; closing it does not cancel other callers. Successful lookups are cached per client. New calls fail once shutdown starts. |
+| `(list-sessions client)` or `(list-sessions client filters)` | The runtime returns its current listing. | Vector of metadata. Optional string filters: `:cwd`, `:git-root`, `:repository`, `:branch`. |
+| `(last-session-id client)` | The runtime answers the lookup. | Most recently updated session ID, or `nil`. |
+| `(session-metadata client id)` | The runtime answers for this ID. | Metadata or `nil` if absent. Pass a nonblank ID string, not a handle. An invalid ID fails only this lookup. `:start-time` and `:modified-time` are `java.time.Instant` values. |
+| `(abort! session)` | The runtime acknowledges the session abort, not when all listeners finish. | `nil`. This affects active session work, not just the local wait. |
+| `(history session)` or `(history session view)` | The runtime returns its current history, not when an ongoing turn finishes. | Vector of events. Select `:idiom` (default) or `:raw`. |
+| `(set-model! session model)` or `(set-model! session model tuning)` | The runtime processes the model switch. | `nil`. `model` is a string. Omit tuning to change only the selection. |
+| `(log! session message)` or `(log! session message options)` | The runtime acknowledges the timeline entry, not when subscribers read it. | `nil`. Optional `:level` is `:info`, `:warning`, or `:error`; `:ephemeral? true` omits the entry from saved history. |
+| `(elicit! session form)` | The UI host answers, not when the form appears. | `:action` (`:accept`, `:decline`, `:cancel`), optional `:content` and optional `:_meta`. Preserves host JSON keys. Requires the advertised UI capability; does not read stdin. |
+
+`set-model!` accepts `:reasoning-effort`, `:reasoning-summary`, `:context-tier`,
+and `:model-capabilities` in its tuning map. Use `[:inference :capabilities]`
+for the same capability override at session open. Its `:supports` map can set
+`:vision?`, `:tool-calls?`, `:reasoning-effort?`, and `:adaptive-thinking`.
+Its `:limits` map can set token or vision limits. An override describes a
+model; it does not install a provider, enable a UI, or grant access. Omit
+unused fields rather than sending `nil`.
+
+For `elicit!`, pass `{:message text :requested-schema schema}`. Read
+`[:capabilities :ui :elicitation]` from `(copilot/session-info session)`;
+capabilities can change while the session is open. Without that capability
+an open session reports an unsupported-host error. If the request waits
+behind a trace lookup, the SDK checks again before sending the form.
+Withdrawing the capability does not recall a form already submitted. A closed or replaced
+handle reports `:session-closed` instead. This outbound UI request is distinct from
+registering an application callback for a request **from** the runtime.
+It also does not install a desktop UI scheduler. Native UI-thread scheduling
+depends on the host, platform, and application event loop; the headless
+examples do not test a desktop UI or an identity-provider flow.
+
+There is no fixed SDK timeout for a human answer. Each client admits at most
+64 unanswered outbound forms across its sessions. `:elicitation-capacity`
+means the excess form was not sent. An answer or session retirement frees
+capacity; closing a caller's result channel does not dismiss the form or
+free its slot. These slots are separate from incoming form callbacks.
+The result channel settles
+when the host answers, the session closes or fails, or the connection ends.
+A reply the SDK received first keeps its result even if you read it later.
+If the session fails before detach is acknowledged, unanswered forms receive
+the same failure as pending turns and event subscriptions.
+A reply received after session failure or an acknowledged detach or delete
+cannot turn a pending form into an acceptance. This also applies when
+the release acknowledgment arrives after the caller's wait timed out,
+with or without an application filesystem. Close the owning session
+to abandon pending forms and cancel their application
+handlers; merely stopping your local wait does not dismiss a form. An
+unanswered form can occupy a form worker while the session is open.
+Use a local deadline or cancellation control in the application handler if
+the form needs one, and return `{:action :cancel}` to settle it.
+
+Use that one operation for confirmation, selection, or text entry instead of
+expecting three convenience functions. For example, check both the action and
+the submitted boolean. Form property names in `:content` are strings for all
+three actions. Content accompanying `:decline` or `:cancel` is not consent:
+
+```clojure
+(require '[copilot.sdk :as copilot])
+
+(defn confirmed? [session]
+  (let [form {:message "Include the appendix?"
+              :requested-schema {:type "object" :properties {"confirmed" {:type "boolean"}}
+                                 :required ["confirmed"]}}
+        answer (copilot/await!! (copilot/elicit! session form))]
+    (and (= :accept (:action answer)) (true? (get-in answer [:content "confirmed"])))))
+```
+
+## Client options
+
+| Key | Type | Default or omission |
+|---|---|---|
+| `:mode` | `:empty` or `:coding-agent` | Required. There is no default to start a subprocess. |
+| `:base-directory` | Nonblank string | Copilot session and cache root, not a boundary for all process writes. Required for `:empty` unless you supply `:session-fs`. Use a directory private to the tenant or application; see [deployment limits](../getting-started.md#add-the-sdk-to-another-application). |
+| `:session-fs` | Map | Omitted uses the runtime's own filesystem. Requires the matching provider on each create/resume; see below. |
+| `:github` | Map | Optional `:token` string and `:use-logged-in-user?` boolean. Automatic login is off by default in `:empty`; `:coding-agent` can use the logged-in user when no token is supplied. |
+| `:client-info` | Map | Optional string `:application-name`, `:application-version`, `:integration-name`, and `:integration-version` identify the host at connection time. |
+| `:models` | Map | Optional zero-argument `:on-list` supplies a vector of model descriptions, directly or on a core.async channel. Omit to use the runtime's list. |
+| `:plugins` | Map | `:builtin-directories` is a vector of trusted absolute host paths. Omitted or `[]` registers none. This is distinct from session-level plugin discovery. |
+| `:run-on-ui-thread` | Function of one action | Optional desktop integration. Have the application's UI thread invoke the supplied zero-argument action exactly once, and wait for it to finish before returning. Omit on headless hosts. |
+| `:session-idle-timeout-seconds` | Nonnegative integer | Omit for the native runtime's timeout policy. |
+| `:observability` | Map | Optional `:log-level`: `:none`, `:error`, `:warning`, `:info`, `:debug`, or `:all`. A zero-argument `:on-get-trace-context` can supply `:traceparent` and `:tracestate`. `:telemetry` configures the native host's OpenTelemetry exporter. |
+
+`:coding-agent` is for a host that intends normal coding capabilities. In
+`:empty` mode the SDK removes ambient GitHub/Copilot token settings **from the
+runtime environment**; it does not scrub secrets from the application JVM.
+It disables repository hooks, host Git operations, local
+credential storage, skills, and cross-session memory by default. This is not
+an OS sandbox. Do not trust repository contents, subprocesses, remote
+servers, or model output merely because you selected `:empty`.
+
+### Host telemetry and plugins
+
+The **presence** of `[:observability :telemetry]`, even `{}`, enables
+OpenTelemetry for the native host. There is no `:enabled?` key in this map.
+Supply string `:source-name`, `:exporter-type`, `:file-path`, or
+`:otlp-endpoint` as required. `:otlp-protocol` accepts `"http/json"` or
+`"http/protobuf"`. Omitted fields leave the host's environment settings in
+effect; runtime policy takes precedence.
+
+`{:capture-content? false}` inside that map explicitly disables content capture;
+`true` can put prompt and response content into spans. Use approved files or
+collector endpoints only. Model or request metadata can be sensitive even
+without content. Request trace context and GitHub service telemetry are
+separate controls.
+
+The SDK looks up trace context for create, resume, and message submission.
+For a send, lookup starts when the session admits the request, with the
+caller's dynamic bindings. Its 10-second budget includes time waiting behind
+earlier requests. Model and trace providers share four workers per client.
+Do not read a Java `ThreadLocal` or `InheritableThreadLocal` in a provider
+to find the caller's active span. Read the headers on the submitting thread
+and store the immutable map in a Clojure dynamic var:
+
+```clojure
+(require '[copilot.sdk :as copilot])
+
+(def ^:dynamic *trace-headers* {})
+(def tracing {:observability {:on-get-trace-context (fn [] *trace-headers*)}})
+
+(defn send-traced! [session headers prompt]
+  (binding [*trace-headers* headers]
+    (copilot/send! session prompt)))
+```
+
+Use `tracing` as part of the client options. The provider sees the binding
+for that request, not the Java thread-local state of a previous request.
+If all four are busy, the SDK omits the optional trace headers; it does not
+queue or retry the lookup. Interrupting a create or resume during trace
+lookup cancels that lookup without sending the session request. A provider
+that ignores interruption still occupies its worker until it returns.
+Callers sharing a model lookup receive `:provider-timeout` without waiting
+for an interrupted application stream to finish closing.
+Closing discovery discards the model cache and
+releases the SDK's references to both application providers.
+
+Later sends, aborts, history reads, timeline entries, UI requests, and model
+changes on the same session cannot overtake a send waiting for trace headers.
+If that send's trace provider tries to queue one of these operations on the
+same session, it receives `:trace-provider-reentry` instead of waiting for
+its own headers. This also applies to `future` calls that carry the provider's
+bindings. A history read on a different session can proceed.
+This orders submission, not completion. Each session permits 64 live
+reservations; excess requests report `:admission-capacity`. A reservation
+is not a submitted RPC. It cannot submit while detach or deletion is in
+progress. A refusal leaves the handle usable for a new call; it does not
+replay an unsent request. A confirmed release cancels outstanding trace
+lookups and unsent reservations without waiting for event delivery or a
+separate delete reply. If connection loss retires the session, its
+existing reservations report that loss. New calls on the closed handle
+report `:session-closed`.
+
+The turn deadline for `start-turn!` and `send-and-wait!!` starts after the
+session registers the wait, before message preparation. With or without tracing, the SDK checks the
+deadline under the client lock after wire conversion, when registering the
+RPC as pending. Registration places the request in the local outgoing queue;
+it does not mean the runtime received the prompt. If the deadline has already
+passed, the SDK sends neither the prompt nor a cancellation.
+The deadline does not interrupt preparation or lock acquisition;
+`start-turn!` can return its result channel after the deadline.
+
+Explicitly closing the `start-turn!` result channel abandons only that
+caller's wait and frees its slot. On close, interruption of the owning
+blocking call, or timeout, an unsent reservation or a queued frame not yet
+claimed by the writer can be withdrawn without sending the prompt. Once the
+writer claims it, the prompt may execute and the SDK only cancels its pending
+reply; it does not abort runtime work. When an interrupt races submission,
+either side can win. An interrupt or timeout alone does not tell you whether
+the runtime received the prompt. Do not retry blindly. Use `abort!` to explicitly ask the
+runtime to stop session work. A finished or abandoned wait also releases its deadline
+timer without waiting for the original timeout. Interrupting `await!!` alone
+does not close the channel.
+
+Register only built-in plugin directories the application controls. They are
+registered during client startup, not installed from a marketplace, and a
+registration failure prevents opening the client.
+
+## Session options
+
+Pass a map on create or resume. Unknown options fail rather than silently
+falling back to a CLI. Omit a key to use its default; `nil` is not a general
+substitute for omission. Common configuration groups are listed below.
+
+| Key or group | Type and use | Default or omission |
+|---|---|---|
+| `:session-id`, `:name` | Create-only strings. Pass the ID as a separate argument on resume. `:name` is for local sessions. | Local create generates an ID if omitted; cloud create can receive one from the service. |
+| `:cloud` | Create-only map; optional `:repository` takes `:owner`, `:name`, and optional `:branch` strings. | Omit for a local session. A cloud request requires the relevant service access; it is not a different SDK transport. |
+| `:model`, `:client-name`, `:working-directory`, `:config-directory` | Optional strings. `:enable-config-discovery?` is a boolean. | Omit to leave selection to the runtime. |
+| `:extension-paths` | Vector of host-trusted standalone extension entry files. Relative paths resolve against this request's working directory. | Omission or `[]` on owning resume removes previous entries. Supplying a path does not enable extensions or grant permissions. |
+| `:inference` | `:reasoning-effort` string, `:reasoning-summary` keyword, `:context-tier`, and named provider/model vectors. | The named catalog is experimental upstream. `:default-provider` accepts a name or explicit `nil`. See [Getting started](../getting-started.md) for a complete catalog. |
+| `:events` | `:streaming?`, `:include-sub-agent-streaming-events?`, optional `(fn [event] ...)` at `:on-event`. | Streaming is not requested unless configured. Each client has 16 `:on-event` workers; [subscriptions](#events-and-history) do not use them. |
+| `:tools` | Vectors `:available-tools`, `:excluded-tools`, `:definitions`; optional `:search` and `:large-output` maps. | `:empty` requires an explicit `:available-tools` on create **and** resume. `[]` means no tools; a bare `"*"` is not an allowlist. |
+| `:permissions` | `:on-request` takes a request and invocation context. | Omitting a handler does **not** mean approve. |
+| `:github` | Session `:token` or `:token-provider`; `:capi` options include `:enabled?` and `:auto-tier`. | No provider callback unless registered. Do not specify both session token forms. |
+| `:interaction` | `:commands` vector and callbacks for user input, elicitation, shell authentication, plan exit, or automatic mode changes. Boolean `:auto-mode-recovery?` requests recovery of an active request. | No implicit user decision. Recovery is not requested by default. Re-register callbacks after detach. |
+| `:hooks` | `:handlers` map, `:directories` vector, `:enable-repository-hooks?` boolean. | Application callbacks and executable repository hooks are separate; repository hooks default off in `:empty`. |
+| `:mcp` | `:servers` map keyed by server name strings, `:disabled-servers` vector, `:on-auth-request` callback. | Stdio MCP servers execute a command; HTTP/SSE servers contact an endpoint. Only configure trusted servers. No MCP server is needed to load the SDK. |
+| `:agents` | `:definitions` vector with `:name` and `:prompt`, `:selected`, and discovery directories. | Do not infer tool permissions from a custom agent's name. |
+| `:system-message` | Map with `:mode` `:append`, `:replace`, or `:customize`; `:replace` requires `:content`. | `:empty` removes the environment-context prompt section by default. |
+| `:filesystem`, `:git`, `:instructions`, `:skills`, `:plugins` | Group filesystem roots, Git access, instruction or skill discovery, and plugin directories. | Grant discovery access deliberately. No separate runtime process isolates what you grant. |
+| `:policy` | `:allowed-models` vector; `:managed-settings` map; managed-model policy options. | Set permissions and allowed models for the application rather than relying on a prompt. |
+| `:state` | `:infinite-sessions` with `:enabled?` and optional compaction thresholds; memory, storage, and session filesystem options. | Closing a session does not delete its persisted history. |
+| `:suppress-resume-event?`, `:allow-transcript-recovery?`, `:continue-pending-work?` | Resume-only booleans. | Omit to leave the runtime behavior unchanged. |
+
+For `:system-message` customization, look up section identifiers and descriptions
+in `copilot.sdk.specs/system-message-sections`. For example:
+
+```clojure
+(require '[copilot.sdk.specs :as specs])
+
+(get-in specs/system-message-sections [:tone :description])
+;; => "Response style, length, and format."
+```
+
+For a cloud create with no explicit ID, the SDK holds events received after
+it submits the request. When the runtime assigns an ID, the `:on-event`
+callback receives the retained events for that ID in order, before live
+events. A subscription attached after open does not receive this batch.
+Neither automatic nor manual responders can answer a request known to be
+completed, hook-resolved, or aborted. A pending automatic decision waits
+for any required session filesystem provider to initialize. Before starting
+the handler, the SDK processes completions already queued when storage became
+ready. A failed factory does not run the handler. Up to 16 decisions can wait
+for storage on a session; exceeding that limit fails the session rather than
+starting work without storage.
+Direct host requests, such as user input or a pre-tool hook, are refused if
+the required provider is not ready at receipt. They do not queue a user
+decision or invoke a hook. Initial credential requests are separate: they
+can precede the server-assigned ID.
+Before a manual `respond!!` claims a request or a queued handler starts,
+the SDK processes received events that affect decisions, including storage
+readiness. Informational messages and replayed requests or aborts do not
+delay decisions. A replayed completion or hook resolution still counts.
+The same rule applies when sending the first callback reply or retrying a
+rejected one. A live completion or abort suppresses an unsent result.
+It does not wait for application handlers to finish. If the router cannot
+reach that point in ten seconds, the manual reply fails without sending; an
+automatic admission timeout fails a still-active session. A timeout after
+a confirmed release does not discard observations already accepted. A restored
+request can be answered by ID even when the runtime did not re-emit it, until
+a live session-wide abort. New requests emitted after the abort can still be
+answered. A checkpoint
+that records completion or hook resolution rules out a new manual reply; it
+also removes a handler that is still waiting to start. It does not cancel a
+running handler or its original reply. A later abstention or rejection of that
+reply does not reopen the settled request.
+
+Across pending creates, each client holds at most 8,192 events and 16 MiB
+of encoded frame data. To make room, it drops whole batches for the oldest
+unregistered IDs and logs a warning. An oversized frame discards the held
+batch for its own ID, so an earlier request cannot outlive a lost completion.
+Later frames for an evicted ID can still be held and delivered. After an
+eviction warning, the open-time observer may see only the tail of the stream.
+An observed deletion ends the old conversation's eligibility; a refused
+delete does not discard events for a conversation that still exists.
+If the connection cannot queue a retained batch, open reports the failure.
+
+Do not delete a saved ID without an open handle while this client is waiting
+for a cloud create to return its ID. The delete request names only an ID;
+until the allocation is identified, the SDK cannot prove the two operations
+refer to different sessions. It refuses the delete without sending it. Wait
+for the create result, then confirm which saved session you intend to delete.
+If a create identifies the target while a permitted delete is still checking
+the inventory, the create keeps the ID. The unsent delete cannot act on that
+new handle.
+If a create was written but its allocation remains unknown, this client
+refuses later server-assigned creates and ID-only deletes without a handle
+(`session_allocation_unresolved`). Early events cannot safely be assigned to
+other outstanding creates, so the SDK discards their unidentified batches.
+Use a fresh client and reconcile the saved sessions before deleting one.
+An independent client that can delete or reuse IDs in the same store must
+also coordinate with your application: the runtime delete has no generation
+precondition.
+
+If the returned ID already belongs to an open handle, the second open fails
+without deleting the first. If local setup fails after the runtime
+acknowledges a newly allocated cloud ID, the SDK
+attempts to delete that allocation only if the ID cannot expand to another
+session and the allocation belongs to the client's default runtime store.
+Once the runtime confirms that release, early events for a replacement
+belong to its new handle. They need not wait for the failed opener to return.
+For an abbreviated UUID, an unconfirmed storage root, or an
+application-owned filesystem, it sends no delete, attaches
+`:session-cleanup-unconfirmed` to the setup error, and prevents that client
+from reusing the ID. For an unambiguous ID in another store or an
+application-owned filesystem, it still detaches the live session it acquired.
+Detach does not remove the saved data. Graceful close waits for admitted
+creates, even those that have not received a session ID yet, and reports
+unconfirmed cleanup.
+It never guesses an ID when the allocation is unconfirmed.
+Closing an open session normally still detaches rather than deletes.
+
+If a timeout withdraws a create, resume, detach, or delete before the
+writer commits to sending it, the SDK does not send it later. A delete
+is not committed merely because the writer took it from the queue: the
+writer must first confirm it still owns the target.
+Interrupting the caller after a create was sent does not cancel the remote
+allocation. The SDK stops admitting callbacks for that open and waits up to
+the request deadline for a reply so it can clean up a known allocation. If
+the request times out or the connection fails before the server returns an
+ID, the outcome is unknown: the SDK does not guess an ID and cannot
+guarantee deletion.
+
+Create and resume reserve a known ID before they call the application's
+trace provider. A nested open of that ID gets `:session-already-open`; a
+different ID remains available.
+
+If an explicit create or resume returns a different ID, the SDK reports
+`:session-id-mismatch` with `:session-id` and `:returned-session-id`. It
+detaches the returned ID only if it can reserve it without displacing
+another owner. The mismatch does not delete saved history. A failed
+cleanup remains attached to the original error. If the runtime did not
+even return a valid ID, the SDK does not guess which session to detach.
+
+If create or resume **succeeded** before setup failed, only a successful
+cleanup frees the ID. If the runtime refuses that cleanup or does not
+acknowledge it, this client cannot reuse the ID: a callback could still
+belong to the old session. Other IDs remain usable on a connected client.
+If the runtime refused the **initial create or resume**, there was no
+acquisition to undo. Later frames cannot call that generation's filesystem
+or other callbacks, and the caller can retry the ID after rollback. These are protocol
+guarantees, not a live cloud service or entitlement test.
+
+**Configuration limits.** The named BYOK catalog supports provider/model
+definitions and fixed credentials, not upstream's experimental rotating
+bearer-token callback. Session `[:github :token-provider]` is a different
+contract. The Clojure SDK does not expose experimental startup sandbox or
+permission options, diagnostics configuration, extension-source overrides,
+host-policy prechecks, or tool progress callbacks. Reading an open result or status diagnostic
+does not grant permission to set them. A permission handler is not a sandbox.
+
+### MCP servers and custom agents
+
+```clojure
+(defn research-options [server-command catalog-url]
+  {:mcp {:servers {"notes" {:type :stdio :command server-command
+                            :args ["--stdio"] :tools ["lookup"] :timeout 5000}}}
+   :agents {:selected "catalog-reader"
+            :definitions [{:name "catalog-reader" :prompt "Look up the requested catalog entry."
+                           :mcp-servers {"catalog" {:type :http :url catalog-url
+                                                    :tools ["find_entry"] :timeout 5000}}}]}})
+```
+
+Supply an installed, trusted server executable and a trusted MCP endpoint.
+Merge these options into your session configuration. The `"notes"` server is
+configured for the session; `"catalog"` is configured only for this agent.
+These are configuration examples, not servers bundled with the SDK.
+
+| Scope | Keys and defaults |
+|---|---|
+| Local MCP server | `:command` is required. Omitted `:type`, `:stdio`, and `:local` select a subprocess. Optional `:args` is a vector of strings, `:env` a string-to-string map, and `:working-directory` a string. |
+| Remote MCP server | `:type` (`:http` or `:sse`) and `:url` are required. Optional `:headers` is a string-to-string map. Do not store credentials in source. |
+| Either server | `:timeout` is in milliseconds. Optional `:defer-tools :auto` allows deferral behind tool search; `:never` keeps the server's tools in the initial list. Omit it for the runtime default. Server `:tools` omitted or `["*"]` includes all its tools; `[]` includes none. This is not the session's tool allowlist or a permission grant. |
+| Custom agent | `:name` and `:prompt` are required. Agent `:tools` omitted or `nil` does not restrict tools further; `[]` selects none. `:model-policy :required` requires the configured `:model`; omitted policy permits fallback. Per-agent `:hooks` maps event-name strings to vectors of declarative actions, not Clojure functions. |
+
+### Tool and permission callbacks
+
+Put tool definitions in `[:tools :definitions]`. Use `:name`, `:description`,
+a JSON Schema in `:parameters`, and a `(fn [arguments invocation] ...)`
+handler. The invocation includes the session and tool-call IDs and a
+`:cancelled?` function. A handler can return text. An automatic permission
+callback also receives the pending `:request-id` in its invocation context.
+Check the operation and its arguments before returning `{:kind :approve-once}`;
+use `{:kind :reject}` for other requests.
+
+```clojure
+(defn lookup-options [entries]
+  {:tools
+   {:available-tools ["custom:lookup"]
+    :definitions [{:name "lookup" :description "Read one entry from the supplied map."
+                   :parameters {:type "object" :properties {:key {:type "string"}}
+                                :required ["key"] :additionalProperties false}
+                   :handler (fn [{:keys [key]} _] (get entries key "not found"))}]}
+   :permissions
+   {:on-request
+    (fn [{:keys [kind tool-name args]} _]
+      (if (and (= kind "custom-tool") (= tool-name "lookup") (contains? entries (:key args)))
+        {:kind :approve-once}
+        {:kind :reject}))}})
+```
+
+Pass this map, together with explicit model configuration, to `with-session`.
+Tool execution and permission decisions run in the application. Do not
+attribute an automated decision to a person.
+
+Each session runs up to two tool, permission, command, or MCP OAuth
+callbacks at a time. A busy session queues up to 16 more in arrival order.
+The client shares eight workers and up to 128 waiting requests across
+sessions. Within each worker pool, a free worker takes the oldest request
+whose session has a slot. Work that can start immediately does not need
+space in the waiting queue.
+If the SDK cannot admit more work, it returns a failure or unavailable
+decision for requests that are still pending. A busy reply does not run
+an application handler or grant permission. Keep callbacks short and
+honor cancellation. Completion or cancellation frees a busy-reply slot
+immediately if the reply has not been submitted. A submitted reply occupies
+its slot until its acknowledgment, closure or timeout.
+
+If a session exhausts its callback request history or its outstanding
+busy replies, the handle stops admitting new requests. Pending turns,
+forms, and event subscriptions report the same failure, even if the
+application detects it in `respond!!` and no later event arrives. A later
+runtime reply cannot complete an unanswered turn or form. If the connection
+ends after this failure, a request still being prepared keeps that failure.
+A manual answer being prepared keeps the same failure even if the handle
+is then detached; the SDK does not send it.
+Close the failed handle to detach it. The runtime can still use the session
+filesystem and its end hook for cleanup, but ordinary callbacks stop.
+Other sessions on the client can continue.
+
+Two concurrent tools can each wait for `elicit!` on their own session.
+Form handlers run on separate workers, with at most two active per session
+and four per client. Forms that must wait use the same bounded waiting
+queue; the SDK replies `:cancel` if there is no room to wait.
+A form handler cannot call `elicit!` on **any session of the same client**
+from the handler or a continuation carrying its Clojure bindings
+(`:recursive-elicitation`). Do not wait for such a form on an unbound
+executor either. Return the answer and ask a follow-up from the caller.
+A separate client has its own form workers.
+
+If an automatic permission handler throws or returns an invalid decision,
+the SDK replies `{:kind :user-not-available}`, without attributing it to a user.
+If the runtime definitively rejects a different automatic decision as invalid
+parameters, the SDK sends **one** `:user-not-available` reply for that request.
+It does not run the handler again. If the runtime rejects that terminal reply
+as invalid parameters, the still-live request is available for manual
+response. A timeout, disconnect, or negative acknowledgment does not trigger
+a retry. This also applies when a full callback queue caused the SDK to send
+a busy tool error or `:user-not-available` without running a handler. Only a
+definitive invalid-parameters rejection permits manual repair of that
+still-live request. Hook-resolved requests and replay checkpoints do not invoke the
+handler; cancellation suppresses stale replies. No absent handler grants
+permission.
+
+To return an MCP tool result from a Clojure handler, use the pure function
+`copilot/mcp-tool-result`. Supply a `:content` vector with string block types
+`"text"`, `"image"`, or `"resource"` and an optional `:is-error?` flag. Text
+is joined with newlines. Image data and resource blobs use canonical Base64;
+a resource blob without a MIME type defaults to `application/octet-stream`.
+The result includes `:result-type`, `:text-result-for-llm`, and binary results
+only when present. Conversion does not start an MCP server.
+
+A structured tool result may include `:skip-large-output-processing? true`
+to bypass the runtime's spill-to-file processing for that result. `false`
+or omission uses the session's normal large-output policy. This flag does
+not approve the underlying tool call.
+
+If the application resolves a pending request itself, use
+`(copilot/respond!! session kind answer)`. It **blocks** until it receives
+an affirmative runtime acknowledgment or fails; do not pass it to `await!!`.
+After submission, interrupting the caller does not abandon the bounded wait
+or resend the answer. The caller receives the result or error and keeps its
+interrupt status. For `:tool`, supply the original
+`:request-id` and exactly one of `:result` or a nonempty `:error` string.
+For `:permission`, supply `:request-id` and a decision in `:result`. Do not
+retry an already settled request or answer a request belonging to another
+session. When the prompt advertises a confirmation option, an automatic
+or manual decision can include its matching string `:selected-option-id`
+on `:approve-once`, `:approve-for-session`, `:approved`, `:user-not-available`,
+or `:denied-interactively-by-user`. Omit it when no option was selected.
+The option ID does not attribute a decision to a person.
+If `respond!!` throws a JSON-RPC invalid-parameters error (`-32602`),
+you can correct the answer on the same live handle unless the request has
+since completed or been aborted. Do not retry an ambiguous delivery. A
+`{:kind :no-result}` abstention is not a manual resolution.
+
+On create, omitting `:on-request` does not advertise an application permission
+handler. On resume, the runtime can send **new** permission requests even
+without that handler. Observe `:copilot/permission.requested` and pass its
+`[:data :request-id]` to `respond!!` from an application thread. If nobody
+answers, the tool can remain pending. A local wait timeout does not deny
+permission or abort the turn.
+
+After a successful detach or delete acknowledgment, a late runtime reply
+cannot turn an unanswered turn request into success. Without an
+`:on-event` observer, a turn keeps its runtime result or error if the SDK
+received the reply and its matching completion event before the acknowledgment,
+even if the event is still queued for publication. A missing reply or
+completion fails the wait. With an observer, explicit release ends an
+unfinished wait; the observer can still drain accepted events.
+Do not depend on one error type for detach: the local
+handle may close first, or the runtime may report a session error or an
+aborted turn first. None of these outcomes approves the pending request.
+An ordinary resume interrupts unfinished work; a permission request still
+visible in history need not be actionable. To continue pending work, resume
+with `:continue-pending-work? true`
+and answer the **saved** permission request ID. Do not wait for another
+notification for that ID. `respond!!` does not enumerate pending requests.
+
+`copilot/approve-all` is an **explicit opt-in** permission handler for trusted,
+unmanaged use. It returns `{:kind :no-result}` rather than granting a request that
+requires managed approval, and refuses use with managed settings enabled.
+It is not the default. Prefer a handler that verifies both the operation and
+its arguments, as above.
+
+### Credentials and interactive callbacks
+
+The offline examples do not certify rotating live credentials, all hook
+types, interactive UI, or third-party MCP servers. Verify the host capabilities
+and callbacks your application depends on before migrating.
+
+A session `[:github :token-provider]` receives a map with `:host`,
+`:reason` (`:initial` or `:refresh`), and `:session-id` when known.
+An initial request for a cloud session can precede its server-assigned ID.
+It may be called **before** open/resume returns. Return `{:kind :cancelled}`
+or `{:kind :token :access-token token :expires-in seconds}` with more than
+3,600 seconds remaining; `:token-type` is optional. A core.async channel of
+the same result is also accepted. The runtime owns refresh timing. Supply
+the provider again on resume; the SDK registers it. Do not put credentials
+in logs, prompts, tool output, or a saved example.
+
+Command handlers receive invocation context. An elicitation handler receives
+the pending `:request-id` and optional `:_meta`; metadata member names stay
+as supplied by the host. Elicitation returns `:action`
+(`:accept`, `:decline`, or `:cancel`), optional `:content`, and optional
+`:_meta` for negotiated extensions. Do not put image bytes in primitive
+form content. `elicit!` accepts a message and form schema, not caller-supplied
+request metadata. If the runtime explicitly rejects an answer as invalid
+parameters, the SDK sends one cancellation without repeating the form data.
+
+User input returns `:answer` and `:was-freeform?`. A legacy `ask_user` request can
+advertise `:image-attachment-constraints`: allowed MIME types, maximum
+image count, and maximum decoded bytes per image. Only then may the handler
+also return an `:attachments` vector of image maps with `:type :image`,
+`:mime-type` and Base64 `:data`. A text-only answer needs no change.
+For an image-only answer, use `:answer ""` and `:was-freeform? true`.
+
+Shell authentication handles `:secret`, `:text`, or `:confirm` input;
+cancel with `{:action :cancel}`.
+Declare `[:interaction :on-shell-authentication-request]` only if the host can
+securely collect the user's response. The invocation's read-only `:cancel-ch`
+closes when the response is no longer needed. A parked `core.async/take!`
+listener does not run on the RPC reader. Keep the listener nonblocking or
+schedule longer cleanup on an application-owned worker. A matching cancellation
+received before the reply is admitted wins even if the handler has already
+returned an answer. A normal handler return is not a cancellation. It
+cannot be invalidated merely because its worker has not finished returning.
+When a pending prompt is cancelled, the runtime receives the cancellation
+answer without waiting for the application's terminal or stream to close.
+The application worker still occupies its slot until the handler exits.
+Cancellation cannot recall a submitted reply. Never log secret input.
+
+A client can wait for four human responses across all its sessions: user
+input, shell authentication, plan exit, and auto-mode changes share those
+four slots. Each request has five minutes from receipt. If all slots are busy
+or a request times out, the SDK cancels shell authentication, rejects plan
+exit, declines an auto-mode switch, or reports user input unavailable. It does
+not queue another question. A completed user-input, plan-exit, or auto-mode
+handler frees its slot before its answer is sent, so the runtime can ask a
+follow-up immediately. Filesystem, hook, token-provider, and native UI
+callbacks use separate workers with a 60-second deadline. A transform
+that changes several system-message sections shares one deadline across
+all sections. If it expires, the SDK reports a timeout instead of sending
+part of the transformed message.
+
+Return `{:approved? false}` to reject a plan exit request. An auto-mode switch
+handler receives `[request invocation]` and can return `:no`, `:yes`, or
+`:yes-always`. Set `[:interaction :auto-mode-recovery?]` to `true` only with
+`:on-auto-mode-switch-request`. Create or resume fails with
+`:unsupported-auto-mode-recovery` if the runtime does not acknowledge the
+capability. A recovery offer has a nested `:auto-mode-recovery` map with
+`:request-id`, `:original-model`, and `:allow-always?`. If `:allow-always?`
+is false, `:yes-always` is treated as `:no`. Without recovery, a switch
+request can apply to future messages rather than the current one.
+
+An MCP OAuth handler at
+`[:mcp :on-auth-request]` takes a request and invocation context. It can supply
+an access token or cancel; hand refresh back to the runtime only when the
+request advertises `:runtime-refresh-supported`. If supplied, `:expires-in`
+must be a positive integer in seconds. An invalid lifetime cancels the
+request without sending the token. If the runtime explicitly rejects a token
+reply as invalid parameters, the SDK sends one cancellation, not the token
+again. MCP OAuth does not authenticate the Clojure-to-Rust connection.
+
+### Session hooks
+
+```clojure
+(def hook-options
+  {:hooks {:handlers
+           {:on-user-prompt-transformed
+            (fn [{:keys [transformed-prompt]} _invocation]
+              (when (string? transformed-prompt)
+                {:modified-transformed-prompt (str transformed-prompt "\nUse plain language.")}))}}})
+```
+
+Register `(fn [input invocation] ...)` on each create or resume. The
+invocation contains the registered `:session-id`; the input's `:session-id`
+identifies the emitting runtime session and can differ for child agents.
+Common input fields include `:working-directory` and `:timestamp` (numeric
+epoch milliseconds become `java.time.Instant`). The runtime can also send
+`:agent-id`, `:agent-type`, `:parent-agent-id`, `:traceparent`, and
+`:tracestate`. The table describes expected input, **not** a guarantee that
+the SDK validates or fills missing fields. Check values your handler needs.
+
+| Handler under `[:hooks :handlers]` | Hook-specific input | Optional result fields |
+|---|---|---|
+| `:on-pre-tool-use` | `:tool-name`, `:tool-args`, optional `:tool-call-id` | `:permission-decision` (`:allow`, `:deny`, `:ask`), `:permission-decision-reason`, `:modified-args` (JSON), `:additional-context`, `:suppress-output?` |
+| `:on-pre-mcp-tool-call` | `:server-name`, `:tool-name`, `:arguments`, optional `:tool-call-id` and `:_meta` | `:meta-to-use`: omit to retain metadata, a map to replace it, or `nil` to clear hook-controlled metadata, not runtime-owned keys. |
+| `:on-post-tool-use` | Successful `:tool-result`, `:tool-name`, `:tool-args`, optional `:tool-call-id` | `:modified-result` (structured tool result with `:text-result-for-llm` and `:result-type`), `:additional-context`, `:suppress-output?` |
+| `:on-post-tool-use-failure` | `:tool-name`, `:tool-args`, `:error` string, optional `:tool-call-id`; no full tool result | `:additional-context` for the model. This hook handles `:failure`, not rejection, denial, or timeout. |
+| `:on-user-prompt-submitted` | `:prompt` | `:modified-prompt`, `:additional-context`, `:suppress-output?`, or `:decision :block` with optional `:reason` |
+| `:on-user-prompt-transformed` | `:prompt`, `:transformed-prompt` | `:modified-transformed-prompt` before persistence and model submission |
+| `:on-session-start` | `:source` (`:startup`, `:resume`, `:new`), optional `:initial-prompt` | `:additional-context`, `:modified-config` (JSON object) |
+| `:on-session-end` | `:reason` (`:complete`, `:error`, `:abort`, `:timeout`, `:user-exit`), optional `:final-message`, `:error` | `:suppress-output?`, `:cleanup-actions` (vector of strings), `:session-summary` |
+| `:on-error-occurred` | `:error`, `:error-context` (`:model-call`, `:tool-execution`, `:system`, `:user-input`), `:recoverable?` | `:error-handling` (`:retry`, `:skip`, `:abort`), `:retry-count` (number), `:user-notification`, `:suppress-output?` |
+| `:on-agent-stop` | Optional `:stop-reason`, `:transcript-path`, `:stop-hook-active?` | `:decision :block` with a `:reason` to continue instead of stopping. Check `:stop-hook-active?` to avoid repeatedly blocking. |
+| `:on-subagent-start` | `:agent-name`, `:transcript-path`, optional `:agent-display-name`, `:agent-description` | `:additional-context` for the child's first prompt |
+| `:on-subagent-stop` | Subagent-start fields plus `:agent-type`, `:stop-reason` (`"end_turn"`), `:response`, optional `:agent-id` | `:modified-response` to replace the response reported to the parent, optional `:decision :allow`; `:decision :block` with a nonempty `:reason` continues the child instead. |
+
+Return a map or `nil`, directly or via a core.async channel. Text fields are
+strings and `:suppress-output?` is boolean. Omitting a handler, returning
+`nil`, or throwing an ordinary exception produces **no hook output**; do not
+rely on throwing to deny an operation. An invalid non-nil result (for example
+an unknown key), an interrupted callback, a JVM `Error`, or a worker timeout reports a
+reverse request error instead. All values inside a post-tool hook's
+`:modified-result` must encode as JSON. Only SDK field names are converted.
+Additional JSON fields and their nested names keep their spelling, including
+case, punctuation and keyword namespaces. An application spec registered
+under an extra field's name does not impose a schema on the tool's JSON.
+If an extra wire name matches a
+Clojure SDK keyword (for example, `"result-type"` alongside `"resultType"`),
+the extra uses a string key. An invalid value fails that hook, not unrelated
+requests on the client. Register only the hooks your application
+handles. A subscription observes events and cannot change a hook decision.
+
+### Session filesystem
+
+Run the [session filesystem example](../../examples/session_filesystem.clj):
+
+```bash
+./run-all-examples.sh session-filesystem
+# PASS: session-filesystem
+```
+
+The example gives a named session its own in-memory store, writes a timeline
+entry, then closes the session and client. A fresh client reads that entry
+from history. After both clients close, the example removes its store. No
+model call is needed. The [text-only provider](../../test/github/copilot_sdk/memory_fs_fixture.clj)
+is an offline fixture, not a production filesystem.
+
+On the client, `:session-fs` requires string `:initial-cwd`,
+`:session-state-path`, and `:conventions` (`"posix"` or `"windows"`).
+These are provider paths, not a grant of host filesystem access. With
+`:empty` and no `:base-directory`, the SDK creates a private temporary
+runtime home. On **each** create or resume, supply a provider map or a
+factory under `[:state :create-session-fs-provider]`. A factory receives
+the session handle during setup, before it can send messages. Do not
+start a lifecycle operation on that client from the factory or a continuation
+carrying its bindings while the factory is active (`:session-fs-factory-reentry`).
+After the factory returns, a retained continuation no longer owns its work.
+Capture the intended store or tenant explicitly when you construct the
+factory. SDK callback workers do not inherit the opener's Java
+`InheritableThreadLocal` values, and the same worker can serve other sessions.
+The application owns storage, tenant isolation and access checks.
+
+Provider functions take **positional arguments**. Path and content arguments
+below are strings unless marked as bytes. Mode is an integer or `nil`;
+omitted `recursive?` and `force?` flags arrive as `false`. For a missing file,
+throw `NoSuchFileException` or `ex-info` with `{:code "ENOENT"}`.
+
+| Required operation | Arguments | Result |
+|---|---|---|
+| `:read-file` | `[path]` | Full text |
+| `:write-file`, `:append-file` | `[path content mode]` | Create missing parents and write or append text; return value ignored. |
+| `:exists` | `[path]` | Boolean |
+| `:stat` | `[path]` | Map with booleans `:is-file` and `:is-directory`, `:size` in bytes, and ISO timestamp strings `:mtime` and `:birthtime`. |
+| `:mkdir` | `[path recursive? mode]` | Create directory; return value ignored. |
+| `:readdir` | `[path]` | Vector of entry names |
+| `:readdir-with-types` | `[path]` | Vector of maps, e.g. `{:name "notes" :type :directory}` or `{:name "plan.md" :type :file}` |
+| `:rm` | `[path recursive? force?]` | Remove path; `force?` tolerates missing paths. Return value ignored. |
+| `:rename` | `[src dest]` | Move file or directory; return value ignored. |
+
+Optional operations are off by default. Set a flag in client
+`[:session-fs :capabilities]` only if **every** session provider implements it.
+
+| Flag | Provider functions and results |
+|---|---|
+| `:binary` | `:read-file-bytes [path]` returns a JVM byte array; `:write-file-bytes [path bytes mode]` receives one. The SDK handles Base64 on the wire. |
+| `:read-file-range` | `:read-file-range [path offset length]` returns `{:content byte-array :byte-length total-file-size}` from the same read. Use byte offsets, not character offsets. `nil` length means through EOF; zero length or an offset past EOF returns empty content. Independent of `:binary`; implement bounded reads without downloading the full file for a slice. |
+| `:sqlite` | In a nested `:sqlite` map, supply `:exists []` (boolean) and `:query [query-type sql params]` (`:exec`, `:run`, or `:query`; named bindings or `nil`). Return `nil` for an empty result or a map with `:rows` (vector of row maps), `:columns` (vector of names), `:rows-affected` (nonnegative integer), and optional `:last-insert-rowid`. Optional `:transaction [statements]` runs maps with `:query-type`, `:query`, and optional `:params` atomically and returns one result map per statement, in order. |
+
+The [framed provider tests](../../test/github/copilot_sdk/native_fs_test.clj)
+exercise binary data, byte ranges, and SQLite results without requiring a
+model or database service.
+
+## Message options
+
+Pass a prompt string or a map. Do not infer a new application permission
+from an attachment, a model response, or a message's source.
+
+| Key | Type | Default or omission |
+|---|---|---|
+| `:prompt` | String | Required in a message map. |
+| `:timeout-ms` | Positive integer, at most 2147483647 | `start-turn!` and `send-and-wait!!` only; defaults to 60000. A timeout ends the local wait, **not** the agent's work. Do not retry blindly. |
+| `:mode` | `:enqueue` or `:immediate` | Omitted uses the runtime delivery mode. Immediate steering cannot request structured output. |
+| `:agent-mode` | `:interactive`, `:plan`, `:autopilot`, or `:shell` | Omitted uses the session mode. |
+| `:attachments` | Vector of attachment maps | Omitted sends none. Examples: `{:type :file :path path}`, `{:type :blob :data base64-text :mime-type media-type}`. |
+| `:response-schema` | JSON Schema map | Omit for normal text. A structured wait requires a nonblank final root assistant response without tool requests; otherwise it fails. The result is still an event, not a parsed JSON map. |
+| `:source`, `:display-prompt`, `:client-turn-id`, `:request-headers` | Source (`:user`, `:system`, agent or automation ID map), display string, application turn ID, string-to-string headers | Omit unless needed. |
+
+## Events and history
+
+`(copilot/subscribe session)` returns a **read channel of event maps**, not
+`{:ok event}` results. It observes the whole conversation, not a particular
+prompt. With overlapping turns, a live text fragment identifies an assistant
+message but not necessarily the prompt that produced it. Use the turn's own
+result for its answer; do not infer it from event order or `session.idle`.
+Drain the subscription while the turn runs. An event has a type such
+as `:copilot/assistant.message_delta` and content at `[:data :delta-content]`.
+Each subscription buffers up to 64 events. Filtering by `:type` **after**
+taking, including in a downstream channel, does not reduce admission to that
+buffer. Drain promptly and check for a terminal `{:error exception}` before
+filtering. On overflow, `ex-data` contains `:type :subscription-overflow`
+and the first undelivered `:event`; this subscription will not resume.
+Subscribe again for future events and use `history` to reconcile persisted
+events by ID. History cannot restore ephemeral deltas. Do not resend the turn.
+Use `clojure.core.async/close!` to unsubscribe in `finally`; this neither
+aborts a turn nor detaches a session. Shutdown can also end a subscription
+with an error.
+As on an ordinary core.async channel, a `take!` callback must not block.
+For blocking work, take with `<!!` on a thread your application owns.
+
+An `:on-event` callback reserves one of **16 observer workers per client**,
+even while its session is idle. If all workers are occupied, a create or
+resume with another observer fails with `:observer-capacity`. Closing a
+session lets its worker drain and exit; a blocked callback holds its slot
+until it returns. This is not a limit on sessions without `:on-event`.
+For more event streams on one client, omit `:on-event` and use `subscribe`
+after open or resume, before sending a prompt. A subscription does not
+replay events that arrived before it was attached.
+
+Observer callbacks run in order for one session, and their return values
+are ignored. A type check inside a callback also runs after admission to
+the observer's queue. Keep callbacks short; do not
+return a channel expecting the SDK to await its work. A slow observer can
+overflow its bounded queue. A turn's wait normally includes delivery of its
+completion event to that observer. One exception prevents a circular wait:
+if the observer starts a follow-up on the same session and is still handling
+the original event, the follow-up can return when the runtime reply and
+matching event arrive. The observer still receives both events in order.
+Independent callers keep the normal delivery guarantee. If shutdown cancels
+delivery of the completion event, the outstanding turn fails rather than
+returning a successful result. Overflow ends the observer with an explicit error,
+not the other subscribers. A callback exception is logged; it does not turn
+a successful runtime response into a failed turn. If application I/O throws
+a nonfatal exception during interruption, the SDK logs its class without
+including the application's exception message. That exception does not turn
+a confirmed detach or shutdown into a failure. A fatal error during
+interruption reaches the worker's uncaught-exception handler even if no
+caller waits for it. Keep blocking decisions out
+of event observers.
+
+If the connection ends unexpectedly, the SDK stops accepting decisions and
+new requests. Events already accepted by the reader still go to subscriptions
+and ordinary observers in order. After the last accepted notification, an
+observer has up to 500 ms to drain; a timeout is logged and any outstanding
+delivery receipts fail. If a detach, delete, or failed open is already in
+progress when the connection ends, its cleanup cancels the session observer.
+A detach or delete that received no reply reports the connection error,
+including when delete was still checking the session inventory. Closing
+the handle after connection loss also cancels its observer. In both cases,
+subscriptions keep events the reader already accepted, and a session without
+an observer keeps a turn result confirmed before the loss.
+When the observer itself closes its session,
+the SDK stops further delivery without interrupting that callback's remaining
+work. The earlier drain timer no longer applies once self-close has stopped
+delivery. Until that callback returns, closing the session or client from
+another thread can still interrupt it. The handle cannot be used for new work after
+`close!!` returns. No detach is sent on a dead connection. Still close the
+client to stop any remaining observers and release its native host. A graceful
+client close cannot confirm remote shutdown after connection loss.
+If a turn received its runtime reply and matching completion event
+before EOF, it waits for observer delivery under the original deadline. If
+the observer drains, the turn returns the runtime result or error. If the
+drain times out or the worker stops before delivery finishes, the wait fails
+with `:observer-drain-timeout` or `:observer-stopped`. An unanswered request
+or a reply still missing its named event also fails.
+
+`(copilot/lifecycle-events client)` is a separate read channel for
+runtime-reported **client lifecycle** notifications about sessions. Close it
+to unsubscribe without detaching those sessions. Do not look for assistant
+text on the lifecycle channel. The SDK does not synthesize a notification
+for each local open/close/delete. Do not use the arrival of one as evidence
+that an operation completed. Use the operation's own result and query
+`session-metadata` or `list-sessions` for current runtime state.
+
+The default `history` view, like a live session event, uses a keyword `:type`
+and leaves the envelope's `:timestamp` as an ISO string. If an event was
+copied from another session, optional `:occurred-at` is the time it happened;
+`:timestamp` is when this copy was recorded. Both are ISO strings. Selected fields
+**inside `:data`** become `java.time.Instant`: `:start-time` on
+`:copilot/session.start` and `:cache-expires-at` on `:copilot/assistant.usage`.
+If coercion fails, the SDK retains the original data and normalizes the type.
+For archival or inspection use `(copilot/await!! (copilot/history session :raw))`: this returns
+the original JSON values, with string keys, timestamp strings, explicit nulls
+as `nil`, and exact integers. These are decoded values, not the original bytes.
+
+## Historical reference links
+
+Older architecture decisions link to these 1.x names. None is a 2.x alias.
+
+### create-session
+
+Use `with-session` or `open-session!!`. The [1.x create-session reference](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/01246672fc5fb8e8f2b50437eea6a55145e54934/doc/reference/API.md#create-session)
+describes the old API.
+
+### query-seq
+
+Use `subscribe` within an owned session instead of the 1.x lazy sequence.
+The [1.x query-seq contract](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/01246672fc5fb8e8f2b50437eea6a55145e54934/doc/reference/API.md#query-seq)
+applies only to that revision.
+
+### query-chan
+
+Use `start-turn!` for a request result or `subscribe` for a session event
+stream. See [the 1.x query-chan contract](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/01246672fc5fb8e8f2b50437eea6a55145e54934/doc/reference/API.md#query-chan)
+if maintaining an old application.

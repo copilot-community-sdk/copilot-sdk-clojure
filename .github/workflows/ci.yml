@@ -7,24 +7,36 @@ on:
       - main
 
 jobs:
-  ci:
-    runs-on: ubuntu-latest
+  native:
+    name: Native runtime (${{ matrix.classifier }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            classifier: native-linux-x64
+            java: '17'
+          - runner: macos-15
+            classifier: native-darwin-arm64
+            java: '21'
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          persist-credentials: false
       - name: Check out certified upstream SDK
+        if: runner.os == 'Linux'
         uses: actions/checkout@v6
         with:
-          repository: github/copilot-sdk
-          ref: b96cd2b54f7eb87458fd50f485a751c712e88f62
+          repository: microsoft/copilot-sdk
+          ref: 5671812ecd4ce58ee040e9a41d98da2f849c8095
           path: .upstream/copilot-sdk
           persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-java@v5
         with:
-          distribution: 'temurin' # See 'Supported distributions' for available options
-          java-version: '21'
+          distribution: temurin
+          java-version: ${{ matrix.java }}
 
       - name: Set up Clojure
         uses: DeLaGuardo/setup-clojure@13.6.1
@@ -40,11 +52,19 @@ jobs:
             ~/.gitlibs
             ~/.deps.clj
             .cpcache
-          key: cljdeps-${{ hashFiles('deps.edn', 'bb.edn') }}
-          restore-keys: cljdeps-
+          key: cljdeps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('deps.edn', 'bb.edn') }}
+          restore-keys: cljdeps-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Run CI
+      - name: Run offline tests, examples, and built-JAR checks
         env:
           COPILOT_SDK_UPSTREAM: ${{ github.workspace }}/.upstream/copilot-sdk
-          COPILOT_UPSTREAM_VALIDATION: 'true'
-        run: bb ci
+          COPILOT_UPSTREAM_VALIDATION: ${{ runner.os == 'Linux' && 'true' || 'false' }}
+        run: bb ci:full "${{ matrix.classifier }}"
+
+  ci:
+    needs: native
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both native platforms
+        run: test "${{ needs.native.result }}" = success

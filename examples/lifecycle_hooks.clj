@@ -1,78 +1,47 @@
 (ns lifecycle-hooks
-  "Lifecycle hooks: session start/end, agent and subagent lifecycle, tools, prompts, and errors."
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  "Use native lifecycle hooks to guide a tool-free reader and observe its work."
+  (:require [basic-chat]
+            [copilot.sdk :as copilot]))
 
-;; See examples/README.md for usage
+(def default-prompt "Why do bridges have expansion joints?")
+(def audience-brief "Explain this to a new reader. Use plain language and give one everyday example.")
+(def reader-brief "Give the writer a short factual explanation, not a finished article.")
 
-(def defaults
-  {:prompt "Use the glob tool to list all .clj files in the examples directory. Just list the filenames."})
+(defn- handlers [seen]
+  (letfn [(note! [hook detail]
+            (swap! seen conj hook)
+            (locking *out* (println (str "Hook " (name hook) ": " detail)))
+            nil)]
+    {:on-session-start (fn [{:keys [source]} _] (note! :session-start source))
+     :on-session-end (fn [{:keys [reason]} _] (note! :session-end reason))
+     :on-user-prompt-submitted (fn [_ _]
+                                 (note! :prompt audience-brief)
+                                 {:additional-context audience-brief})
+     :on-pre-tool-use (fn [{:keys [tool-name]} _] (note! :pre-tool tool-name))
+     :on-post-tool-use (fn [{:keys [tool-name tool-result]} _]
+                         (note! :post-tool (str tool-name " => " (:result-type tool-result))))
+     :on-subagent-start (fn [{:keys [agent-name]} _]
+                          (note! :subagent-start agent-name)
+                          {:additional-context reader-brief})
+     :on-subagent-stop (fn [{:keys [agent-name]} _] (note! :subagent-stop agent-name))
+     :on-agent-stop (fn [{:keys [stop-reason]} _] (note! :agent-stop stop-reason))
+     :on-error-occurred (fn [{:keys [error-context error]} _]
+                          (note! :error (str error-context ": " error))
+                          {:error-handling :abort})}))
 
-(defn run
-  [{:keys [prompt] :or {prompt (:prompt defaults)}}]
-  (let [fired-hooks (atom [])
-        record!     (fn [hook-name data]
-                      (swap! fired-hooks conj {:hook hook-name :data data}))]
-    (copilot/with-client-session
-      [session {:on-permission-request copilot/approve-all
-                :model "claude-haiku-4.5"
-                :hooks {:on-session-start
-                        (fn [data _ctx]
-                          (println "🚀 Hook: session-start")
-                          (record! :on-session-start data))
-
-                        :on-session-end
-                        (fn [data _ctx]
-                          (println "🏁 Hook: session-end")
-                          (record! :on-session-end data))
-
-                        :on-pre-tool-use
-                        (fn [data _ctx]
-                          (println "🔧 Hook: pre-tool-use —" (:tool-name data))
-                          (record! :on-pre-tool-use data)
-                          {:approved true})
-
-                        :on-post-tool-use
-                        (fn [data _ctx]
-                          (println "✅ Hook: post-tool-use —" (:tool-name data))
-                          (record! :on-post-tool-use data))
-
-                        :on-user-prompt-submitted
-                        (fn [data _ctx]
-                          (println "💬 Hook: user-prompt-submitted")
-                          (record! :on-user-prompt-submitted data))
-
-                        :on-error-occurred
-                        (fn [data _ctx]
-                          (println "❌ Hook: error-occurred")
-                          (record! :on-error-occurred data))
-
-                        :on-agent-stop
-                        (fn [data _ctx]
-                          (println "🛑 Hook: agent-stop")
-                          (record! :on-agent-stop data)
-                          ;; {:decision "block" :reason "..."} keeps the agent running;
-                          ;; use :stop-hook-active to avoid blocking it repeatedly.
-                          nil)
-
-                        :on-subagent-start
-                        (fn [data _ctx]
-                          (println "Hook: subagent-start" (:agent-name data))
-                          (record! :on-subagent-start data)
-                          {:additional-context "Check the requested files before reporting."})
-
-                        :on-subagent-stop
-                        (fn [data _ctx]
-                          (println "Hook: subagent-stop" (:agent-name data))
-                          (record! :on-subagent-stop data)
-                          {:modified-response (:response data)})}}]
-
-      (println "\nPrompt:" prompt "\n")
-      (println "🤖:" (h/query prompt :session session))
-
-      (println "\n--- Hook summary ---")
-      (let [events @fired-hooks
-            freqs  (frequencies (map :hook events))]
-        (println "Total hooks fired:" (count events))
-        (doseq [[hook cnt] (sort-by (comp str key) freqs)]
-          (println (str "  " hook " × " cnt)))))))
+(defn run [client options question]
+  (let [seen (atom #{})
+        reader {:name "reader" :description "Prepare a factual note for the writer."
+                :prompt "Give one fact that helps answer the reader's question." :tools []}
+        prompt (str "Call the reader agent once with the task tool. Use its note to answer: " question)
+        answer (copilot/with-session
+                 [session client (assoc options :tools {:available-tools ["builtin:task"]}
+                                        :agents {:included-builtin-agents [] :definitions [reader]}
+                                        :hooks {:enable-repository-hooks? false :handlers (handlers seen)})]
+                 (basic-chat/ask session prompt))]
+    ;; Detaching the session can invoke session-end. Take the snapshot after with-session.
+    (println "Hooks observed:" (sort @seen))
+    (println "Tool and subagent hooks require a tool call and delegation. On a runtime error, the error hook requests an abort.")
+    (when-not (every? @seen [:session-start :prompt :pre-tool :post-tool :subagent-start :subagent-stop :agent-stop :session-end])
+      (throw (ex-info "The turn did not complete the reader workflow" {:observed @seen})))
+    {:answer answer :hooks @seen}))

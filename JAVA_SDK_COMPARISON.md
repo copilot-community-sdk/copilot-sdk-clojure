@@ -1,4 +1,10 @@
-# Technical Review: copilot-sdk-clojure vs copilot-sdk-java
+# Historical technical review: the pre-2.x Clojure and Java SDKs
+
+This is a [historical comparison at its original revision](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/af6fc991857fecc37615a8df578e861eb9ca6e33/JAVA_SDK_COMPARISON.md).
+The counts, design recommendations, and performance discussion below do not
+describe native 2.x. For today's design, read the [native runtime decision](doc/adr/2026-11-24-native-only-runtime.md)
+and [installation guide](doc/getting-started.md). The Clojure SDK calls the Rust
+C interface through JNA; it does not depend on the Java SDK.
 
 A careful, side-by-side technical assessment of this project (`copilot-sdk-clojure`) and the
 official Java SDK ([github/copilot-sdk-java](https://github.com/github/copilot-sdk-java)),

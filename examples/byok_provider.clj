@@ -1,90 +1,49 @@
 (ns byok-provider
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  "Use an explicit model catalog without signing in to GitHub Copilot."
+  (:require [basic-chat]
+            [clojure.string :as str]
+            [copilot.sdk :as copilot]))
 
-;; See examples/README.md for usage
-;; See doc/auth/byok.md for full BYOK documentation
+(def default-prompt "What is 2+2? Answer in one sentence.")
 
-;; This example demonstrates using the Copilot SDK with your own API key
-;; (BYOK = Bring Your Own Key) to connect to OpenAI, Azure, Anthropic,
-;; or any OpenAI-compatible endpoint.
+(defn- required [env k]
+  (let [value (get env k)]
+    (when (str/blank? value) (throw (ex-info (str "Set " k " for this demo.") {})))
+    value))
 
-;; NOTE: This example requires an API key. Set one of:
-;;   OPENAI_API_KEY    - for OpenAI
-;;   AZURE_OPENAI_KEY  - for Azure OpenAI
-;;   ANTHROPIC_API_KEY - for Anthropic
-;;   (no key needed)   - for Ollama (local)
+(defn session-options [env]
+  (let [model (required env "COPILOT_DEMO_MODEL")
+        url (required env "COPILOT_DEMO_BASE_URL")
+        provider (cond
+                   (= url "https://api.openai.com/v1")
+                   {:name "openai" :provider-type :openai :wire-api :completions
+                    :api-key (required env "COPILOT_DEMO_OPENAI_KEY")}
 
-(def defaults
-  {:provider-name "openai"})
+                   (= url "https://api.anthropic.com")
+                   {:name "anthropic" :provider-type :anthropic
+                    :api-key (required env "COPILOT_DEMO_ANTHROPIC_KEY")}
 
-(defn- openai-config
-  "Configuration for OpenAI direct."
-  []
-  (let [api-key (System/getenv "OPENAI_API_KEY")]
-    (when-not api-key
-      (throw (ex-info "Set OPENAI_API_KEY environment variable" {})))
-    {:model "gpt-5.4"
-     :provider {:provider-type :openai
-                :base-url "https://api.openai.com/v1"
-                :api-key api-key}}))
+                   (re-matches #"https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.openai\.azure\.com" url)
+                   {:name "azure" :provider-type :azure :azure {:api-version "2024-10-21"}
+                    :api-key (required env "COPILOT_DEMO_AZURE_KEY")}
 
-(defn- azure-config
-  "Configuration for Azure OpenAI."
-  []
-  (let [api-key (System/getenv "AZURE_OPENAI_KEY")
-        base-url (or (System/getenv "AZURE_OPENAI_ENDPOINT")
-                     "https://your-resource.openai.azure.com")]
-    (when-not api-key
-      (throw (ex-info "Set AZURE_OPENAI_KEY environment variable" {})))
-    {:model "gpt-5.4"
-     :provider {:provider-type :azure
-                :base-url base-url
-                :api-key api-key
-                :azure-options {:azure-api-version "2024-10-21"}}}))
+                   (re-matches #"http://127\.0\.0\.1:[0-9]{1,5}/v1" url)
+                   {:name "local" :provider-type :openai :wire-api :completions}
 
-(defn- anthropic-config
-  "Configuration for Anthropic."
-  []
-  (let [api-key (System/getenv "ANTHROPIC_API_KEY")]
-    (when-not api-key
-      (throw (ex-info "Set ANTHROPIC_API_KEY environment variable" {})))
-    {:model "claude-sonnet-4"
-     :provider {:provider-type :anthropic
-                :base-url "https://api.anthropic.com"
-                :api-key api-key}}))
-
-(defn- ollama-config
-  "Configuration for Ollama (local, no API key needed)."
-  []
-  {:model "llama3"
-   :provider {:provider-type :openai
-              :base-url "http://localhost:11434/v1"}})
-
-(defn- get-provider-config [provider-name]
-  (case provider-name
-    "openai" (openai-config)
-    "azure" (azure-config)
-    "anthropic" (anthropic-config)
-    "ollama" (ollama-config)
-    (throw (ex-info (str "Unknown provider: " provider-name
-                         ". Use: openai, azure, anthropic, or ollama")
-                    {:provider provider-name}))))
+                   :else (throw (ex-info "Unsupported COPILOT_DEMO_BASE_URL. Use the exact OpenAI or Anthropic API URL, an HTTPS Azure OpenAI resource host, or http://127.0.0.1:PORT/v1." {})))
+        provider-name (:name provider)]
+    {:model (str provider-name "/chat")
+     :inference {:providers [(assoc provider :base-url url)]
+                 :models [{:provider provider-name :id "chat" :model-id model :wire-model model}]}
+     :tools {:available-tools []} :events {:streaming? true}
+     :enable-config-discovery? false :github {:capi {:enabled? false}}}))
 
 (defn run
-  "Run a BYOK query with a specified provider.
-
-  Usage:
-    clojure -A:examples -X byok-provider/run
-    clojure -A:examples -X byok-provider/run :provider-name '\"anthropic\"'
-    clojure -A:examples -X byok-provider/run :provider-name '\"ollama\"'"
-  [{:keys [provider-name] :or {provider-name (:provider-name defaults)}}]
-  (let [config (get-provider-config provider-name)]
-    (println (str "Using BYOK provider: " provider-name))
-    (println (str "  Model: " (:model config)))
-    (println (str "  Base URL: " (get-in config [:provider :base-url])))
-    (println)
-    (copilot/with-client [client {}]
-      (copilot/with-session [session client (assoc config :on-permission-request copilot/approve-all)]
-        (println "Q: What is 2+2?")
-        (println "🤖:" (h/query "What is 2+2? Answer in one sentence." :session session))))))
+  "Ask the model at the explicitly selected endpoint; local Ollama needs no key."
+  ([state-dir prompt] (run state-dir prompt basic-chat/run))
+  ([state-dir prompt demo]
+   (let [options (assoc (session-options (System/getenv)) :working-directory state-dir)]
+     (println "Catalog model:" (:model options) "| deployment:" (get-in options [:inference :models 0 :wire-model]))
+     (copilot/with-client [client {:mode :empty :base-directory state-dir
+                                   :github {:use-logged-in-user? false}}]
+       (demo client options prompt)))))

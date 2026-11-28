@@ -403,7 +403,7 @@
                        ">Authentication</span>")
              (.indexOf (slurp (io/file output-dir "index.html"))
                        ">Documentation</span>")))
-      (is (.isFile (io/file output-dir "github.copilot-sdk.html")))
+      (is (.isFile (io/file output-dir "copilot.sdk.html")))
       (is (str/includes? (slurp (io/file output-dir "sdk.v1.html"))
                          "href=\"doc-index.html\""))
       (is (.isFile (io/file output-dir "css/default.css"))))))

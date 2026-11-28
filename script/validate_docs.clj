@@ -29,27 +29,19 @@
    "doc/style.md"
    "doc/reference/API.md"
    "doc/getting-started.md"
-   "doc/auth/index.md"
-   "doc/auth/byok.md"
-   "doc/mcp/overview.md"
-   "doc/mcp/debugging.md"
+   "doc/guides/native-2x.md"
    "README.md"
+   "examples/README.md"
    "AGENTS.md"
    "CHANGELOG.md"])
 
 (def source-namespaces
-  "Known SDK namespaces referenced by documentation."
-  #{"github.copilot-sdk.client"
-    "github.copilot-sdk.session"
-    "github.copilot-sdk.workflow"
-    "github.copilot-sdk.helpers"
-    "github.copilot-sdk.specs"
-    "github.copilot-sdk.instrument"
-    "github.copilot-sdk.logging"
-    "github.copilot-sdk.tools"
-    "github.copilot-sdk.tool-set"
-    "github.copilot-sdk.generated.event-specs"
-    "github.copilot-sdk.generated.coerce"})
+  "Namespaces in the production source tree, including internal namespaces."
+  (into #{} (map #(-> (str (fs/relativize "src" %))
+                      (str/replace #"\.clj$" "")
+                      (str/replace #"[/\\]" ".")
+                      (str/replace "_" "-")))
+        (fs/glob "src" "**/*.clj")))
 
 ;; --- State ---
 
@@ -205,16 +197,10 @@
 ;; --- Namespace Reference Check ---
 
 (defn validate-namespace-refs [file content]
-  (let [;; Look for require forms referencing our namespaces
-        ns-refs (re-seq #"github\.copilot[-_]sdk[.\w-]*" content)]
-    (doseq [ns-ref ns-refs]
-      (let [normalized (str/replace ns-ref "_" "-")]
-        (when (and (not (source-namespaces normalized))
-                   ;; Allow sub-references like github.copilot-sdk.client/start!
-                   (not (some #(str/starts-with? normalized (str % "/")) source-namespaces))
-                   ;; Allow the base namespace
-                   (not= normalized "github.copilot-sdk"))
-          (warn! file (format "Reference to unknown namespace: %s" normalized)))))))
+  (doseq [{:keys [code start-line]} (extract-clojure-blocks content)
+          ns-ref (distinct (re-seq #"\b(?:copilot\.sdk|github\.copilot[-_]sdk)(?:\.[\w-]+)*" code))
+          :when (not (source-namespaces (str/replace ns-ref "_" "-")))]
+    (warn! file (format "Line %d: code references unknown SDK namespace: %s" start-line ns-ref))))
 
 ;; --- Generated HTML Validation ---
 
@@ -225,7 +211,15 @@
                            {:doc-paths ["doc"]})
           output-dir (fs/file repo-root "doc/api")
           {:keys [manifest reserved-output-files]}
-          (docs-links/read-topic-manifest source-manifest output-dir)]
+          (docs-links/read-topic-manifest source-manifest output-dir)
+          public-namespaces (get-in (edn/read-string (slurp "deps.edn")) [:aliases :codox :exec-args :namespaces])
+          namespace-pages (into #{"index.html"} (map #(str % ".html")) public-namespaces)
+          expected (into (set reserved-output-files) (map :output-file) manifest)]
+      (when-not (= namespace-pages (set reserved-output-files))
+        (error! "doc/api/topic-manifest.edn" "Codox namespace pages do not match the public list in deps.edn"))
+      (doseq [page (fs/glob output-dir "*.html")
+              :when (not (expected (fs/file-name page)))]
+        (error! (str page) "Obsolete generated page; regenerate Codox in a clean output directory"))
       (doseq [output-file reserved-output-files]
         (when-not (fs/regular-file? (fs/file output-dir output-file))
           (error! output-file "Codox-owned generated output is missing")))
@@ -278,7 +272,9 @@
       (validate-links file content)
       (validate-code-blocks file content)
       (validate-anchor-links file content)
-      (validate-namespace-refs file content)))
+      ;; Historical decisions include valid examples of the SDK at their own pin.
+      (when-not (str/includes? file "doc/adr/")
+        (validate-namespace-refs file content))))
   (println "done")
 
   (print "  Checking generated HTML topic links... ")

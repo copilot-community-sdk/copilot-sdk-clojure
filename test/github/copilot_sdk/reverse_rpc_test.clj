@@ -13,15 +13,11 @@
    - `disconnect` terminates blocked workers
    - notification-queue overflow is counted and warned (ASY-003 evidence)"
   (:require [clojure.core.async :as async :refer [chan put! close! >!!]]
-            [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [github.copilot-sdk.framed-peer :refer [open-connection read-framed write-framed!]]
             [github.copilot-sdk.protocol :as protocol])
-  (:import [java.io InputStream OutputStream PipedInputStream PipedOutputStream]
-           [java.nio.charset StandardCharsets]
-           [java.util.concurrent CountDownLatch TimeUnit]))
-
-(def ^:private pipe-buffer (* 256 1024))
+  (:import [java.util.concurrent CountDownLatch TimeUnit]))
 
 ;; The worker-pool diagnostics are protocol-internal. Bind the private Vars once
 ;; here rather than widening the production API for tests.
@@ -35,43 +31,6 @@
 ;; -----------------------------------------------------------------------------
 ;; Framed JSON-RPC helpers (mirror the Content-Length framing the SDK speaks)
 ;; -----------------------------------------------------------------------------
-
-(defn- write-framed!
-  [^OutputStream out msg]
-  (let [body (.getBytes ^String (json/write-str msg) StandardCharsets/UTF_8)]
-    (.write out (.getBytes (str "Content-Length: " (alength body) "\r\n\r\n")
-                           StandardCharsets/UTF_8))
-    (.write out body)
-    (.flush out)))
-
-(defn- read-header-line
-  [^InputStream in]
-  (let [sb (StringBuilder.)]
-    (loop []
-      (let [b (.read in)]
-        (cond
-          (neg? b) (when (pos? (.length sb)) (str sb))
-          (= b 10) (str sb)
-          (= b 13) (recur)
-          :else (do (.append sb (char b)) (recur)))))))
-
-(defn- read-framed
-  "Read one Content-Length framed JSON message, or nil on EOF."
-  [^InputStream in]
-  (loop [headers {}]
-    (if-let [line (read-header-line in)]
-      (if (str/blank? line)
-        (let [n (parse-long (get headers "content-length"))
-              buf (byte-array n)]
-          (loop [off 0]
-            (when (< off n)
-              (let [r (.read in buf off (- n off))]
-                (when (neg? r) (throw (ex-info "EOF mid-message" {:expected n})))
-                (recur (+ off r)))))
-          (json/read-str (String. buf StandardCharsets/UTF_8) :key-fn keyword))
-        (let [[k v] (str/split line #": " 2)]
-          (recur (assoc headers (str/lower-case (str/trim k)) (str/trim (or v ""))))))
-      nil)))
 
 (defn- collect-by-id!
   "Read `n` framed messages, returning `{id -> message}`. Returns `::timeout`
@@ -91,23 +50,6 @@
         (pred) true
         (< (System/currentTimeMillis) deadline) (do (Thread/sleep 5) (recur))
         :else false))))
-
-(defn- open-connection
-  "Wire a real protocol connection to piped streams.
-
-   Returns `:conn`, the `:->client` stream the fake server writes requests to,
-   and the `:<-client` stream the fake server reads responses from."
-  [options]
-  (let [->client (PipedOutputStream.)
-        client-in (PipedInputStream. ->client pipe-buffer)
-        client-out (PipedOutputStream.)
-        <-client (PipedInputStream. client-out pipe-buffer)
-        state-atom (atom {:connection (protocol/initial-connection-state)
-                          :options options})]
-    {:conn (protocol/connect client-in client-out state-atom)
-     :state-atom state-atom
-     :->client ->client
-     :<-client <-client}))
 
 (defn- request
   [id method params]
@@ -222,14 +164,15 @@
                                                              :request-handler-queue-size 2})
           release (CountDownLatch. 1)
           entered (atom 0)
-          rejected-preparations (atom 0)]
+          released-preparations (CountDownLatch. 5)
+          released-count (atom 0)]
       (try
         (protocol/set-request-dispatch!
          conn
          (blocking-handler {:entered entered :release release})
          (fn [_method params]
            {:params params
-            :on-reject #(swap! rejected-preparations inc)}))
+            :release! #(do (swap! released-count inc) (.countDown released-preparations))}))
         ;; 2 execute, 2 queue, the 5th has nowhere to go.
         (dotimes [i 5]
           (write-framed! ->client (request (str "r" i) "hooks.invoke" {})))
@@ -245,14 +188,17 @@
               (is (= 2 (get-in msg [:error :data :maxConcurrency])))
               (is (= 2 (get-in msg [:error :data :queueSize]))))))
         (is (= 1 (:rejected-requests (connection-stats conn))))
-        (is (= 1 @rejected-preparations))
+        (is (wait-for #(= 1 @released-count) 3000)
+            "the rejected request must release its reservation before the accepted handlers unblock")
         (testing "accepted requests still complete once handlers unblock"
           (.countDown release)
           (let [responses (collect-by-id! <-client 4 5000)]
             (is (not= ::timeout responses))
             (when (not= ::timeout responses)
               (is (= #{"r0" "r1" "r2" "r3"} (set (keys responses))))
-              (is (every? #(contains? % :result) (vals responses))))))
+              (is (every? #(contains? % :result) (vals responses)))))
+          (is (.await released-preparations 3 TimeUnit/SECONDS))
+          (is (= 5 @released-count)))
         (finally
           (.countDown release)
           (protocol/disconnect conn))))))

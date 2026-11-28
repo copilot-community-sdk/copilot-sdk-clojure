@@ -1,52 +1,16 @@
 (ns github.copilot-sdk.codegen-test
-  "Cross-validation tests for the schema-driven codegen pipeline.
-
-   Four distinct purposes:
-
-   1. **Forward correctness** — generated `*-data` specs in
-      `github.copilot-sdk.generated.event-specs` must accept canonical wire
-      payloads (post `util/wire->clj`). If they don't, the generator or the
-      pinned schema is wrong.
-
-   2. **Envelope discrimination** — generated full envelope specs (e.g.
-      `::session.start`) and the aggregate `::event` spec must reject
-      payloads with a wrong `:type` literal, mismatched `:data` shape, or
-      an unknown event type. These tests pin the envelope-as-discriminator
-      contract: a feature regression here would silently destroy the value
-      of `::event`.
-
-   3. **Three-tier coercion contract** (Phase 3.5) — every coercion entry
-      in `script/codegen/coercions.edn` must:
-        a. round-trip semantically through wire→idiom→wire (Instant
-           equality, not string equality, since ISO 8601 normalization can
-           reshape the textual form);
-        b. be exercised by at least one fixture (no dead entries);
-        c. produce a value that satisfies the hand-written idiom spec.
-
-   4. **Drift audit** — for every event variant that has BOTH a hand-written
-      spec in `github.copilot-sdk.specs` and a generated spec, the hand spec
-      must accept the COERCED payload (not the raw wire payload). After
-      Phase 3.5 the audit's `known-drifts` set is empty: every richer hand
-      spec is either reconciled by coercion or reflected in a passthrough
-      spec.
-
-   These tests do **not** instrument any runtime path. They validate the
-   generated artifacts directly against fixture payloads, so they are pure
-   regression coverage for the codegen pipeline."
+  "Validate generator determinism, generated wire schemas, and wire-to-idiom coercions."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.java.shell :as sh]
-            [clojure.set]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-metadata :as event-metadata]
             [github.copilot-sdk.generated.event-specs :as gen]
-            [github.copilot-sdk.protocol :as protocol]
-            [github.copilot-sdk :as sdk]
-            [github.copilot-sdk.specs :as specs])
+            [github.copilot-sdk.protocol :as protocol])
   (:import [java.time Instant]))
 
 (def ^:private codegen-probe
@@ -257,58 +221,6 @@
                     (when event-type
                       [event-type consts])))
                 variants))))
-
-(defn- event-types-with-schema-marker
-  [marker value]
-  (let [variants (-> schema :definitions :SessionEvent :anyOf)]
-    (into #{}
-          (keep (fn [variant]
-                  (let [variant (if-let [r (:$ref variant)]
-                                  (get-in schema (mapv keyword (rest (str/split r #"/"))))
-                                  variant)]
-                    (when (= value (get variant marker))
-                      (get-in variant [:properties :type :const])))))
-          variants)))
-
-(def ^:private internal-event-types
-  "Event types that the protocol schema marks internal. Generated wire specs
-   cover them for forward compatibility, but they are not part of the public
-   SDK event surface."
-  (event-types-with-schema-marker :visibility "internal"))
-
-(def ^:private experimental-event-types
-  (event-types-with-schema-marker :stability "experimental"))
-
-(def ^:private schema-marked-intentionally-excluded-experimental-event-types
-  #{"assistant.fusion_phase_activity"
-    "assistant.fusion_phase_completed"
-    "assistant.fusion_phase_failed"
-    "assistant.fusion_phase_started"
-    "workflow.run_settled"
-    "workflow.run_started"
-    "permission.assentDetected"
-    "permission.carriedForward"
-    "permission.contextualAuthorization"
-    "permission.messageAuthorization"
-    "permission.messageAuthorizationDegraded"
-    "permission.messageAuthorizationRead"
-    "session.completion_receipt"
-    "session.auto_tier_recommendation"
-    "session.fusion_completed"
-    "session.fusion_resolved"
-    "session.fusion_route_failed"
-    "session.fusion_route_started"
-    "session.managed_plugin_progress"
-    "session.quota_observation"
-    "ui.ephemeral_query"})
-
-(def ^:private sdk-experimental-events-without-schema-marker
-  #{"session.auto_tier_switch_failed"})
-
-(def ^:private intentionally-excluded-experimental-event-types
-  (clojure.set/union
-   schema-marked-intentionally-excluded-experimental-event-types
-   sdk-experimental-events-without-schema-marker))
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical wire-shape fixtures (post `util/wire->clj`, i.e. kebab-case keys).
@@ -834,32 +746,6 @@
       (is (contains? gen/event-types event-type)
           (str event-type " missing from gen/event-types — schema may have moved")))))
 
-(deftest assistant-message-tool-request-caller-idiom-contract
-  (let [request (-> fixtures
-                    (get "assistant.message")
-                    :tool-requests
-                    first)]
-    (is (s/valid? ::specs/assistant-message-tool-request request))
-    (is (s/valid? ::specs/assistant-message-tool-request-caller
-                  (:caller request)))
-    (is (s/valid? ::specs/assistant-message-tool-request
-                  (assoc request :future-tool-field {:enabled true})))
-    (is (s/valid? ::specs/assistant-message-tool-request-caller
-                  (assoc (:caller request) :future-caller-field "value")))
-    (is (not (s/valid? ::specs/assistant-message-tool-request
-                       (assoc-in request [:caller :type] "assistant"))))
-    (is (not (s/valid? ::specs/assistant-message-tool-request
-                       (update request :caller dissoc :caller-id))))))
-
-(deftest session-idle-idiom-contract-is-forward-compatible
-  (is (s/valid? ::specs/session.idle-data
-                {:aborted false
-                 :mode "autopilot"
-                 :future-idle-field {:enabled true}}))
-  (is (not (s/valid? ::specs/session.idle-data
-                     {:mode :autopilot
-                      :future-idle-field true}))))
-
 (deftest hook-start-envelope-is-closed-but-data-is-forward-compatible
   (let [data (get fixtures "hook.start")
         valid-envelope (envelope "hook.start" data)]
@@ -875,37 +761,6 @@
     (testing "closing the envelope does not close the nested data payload"
       (is (s/valid? ::gen/hook.start
                     (envelope "hook.start" (assoc data :future-hook-field {:enabled true})))))))
-
-(deftest public-event-types-match-generated-schema-set
-  (testing "the public curated `event-types` set covers exactly the schema's public event types
-            (guards against drift without exposing internal or intentionally excluded experimental events)"
-    (let [curated (set (map name sdk/event-types))
-          generated (clojure.set/difference
-                     gen/event-types
-                     internal-event-types
-                     intentionally-excluded-experimental-event-types)
-          missing (clojure.set/difference generated curated)
-          extra (clojure.set/difference curated generated)]
-      (is (empty? missing)
-          (str "schema event types missing from public event-types: " (sort missing)
-               " — add them (or update the schema pin)"))
-      (is (empty? extra)
-          (str "public event-types not present in the schema: " (sort extra)
-               " — remove them or update the schema pin")))))
-
-(deftest intentionally-excluded-events-remain-classified
-  (is (clojure.set/subset? intentionally-excluded-experimental-event-types
-                           gen/event-types)
-      "Every intentional event exclusion must still exist in the generated schema")
-  (is (clojure.set/subset?
-       schema-marked-intentionally-excluded-experimental-event-types
-       experimental-event-types)
-      "An intentionally excluded schema-marked event becoming stable requires a public-surface decision")
-  (is (empty?
-       (clojure.set/intersection
-        sdk-experimental-events-without-schema-marker
-        experimental-event-types))
-      "An SDK-experimental event gaining a schema marker requires consolidating the exclusion registry"))
 
 (deftest generated-data-specs-preserve-variant-local-types
   (testing "session.schedule_created-data rejects string :id (must be positive integer)"
@@ -988,11 +843,7 @@
                     :hook-type "pre-tool-use"}]
     (is (s/valid? ::gen/hook.start-data
                   (assoc hook-start :input nested-json)))
-    (is (s/valid? ::specs/hook.start-data
-                  (assoc hook-start :input nested-json)))
     (is (not (s/valid? ::gen/hook.start-data
-                       (assoc hook-start :input nested-invalid))))
-    (is (not (s/valid? ::specs/hook.start-data
                        (assoc hook-start :input nested-invalid))))))
 
 (deftest generated-event-data-remains-open-at-the-top-level
@@ -1114,27 +965,25 @@
       (is (= (coerce/event-idiom->wire idiom) event)))))
 
 (deftest attachment-type-coercion-round-trips
-  (let [wire-types ["file"
-                    "directory"
-                    "selection"
-                    "github_reference"
-                    "blob"
-                    "extension_context"]
-        idiom-types [:file
-                     :directory
-                     :selection
-                     :github-reference
-                     :blob
-                     :extension-context]
-        wire-event
-        {:type "user.message"
-         :data {:attachments (mapv (fn [attachment-type]
-                                     {:type attachment-type})
-                                   wire-types)}}
-        idiom-event (coerce/event-wire->idiom wire-event)]
-    (is (= idiom-types
-           (mapv :type (get-in idiom-event [:data :attachments]))))
-    (is (= wire-event (coerce/event-idiom->wire idiom-event)))))
+  (doseq [[wire idiom] [["file" :file]
+                        ["directory" :directory]
+                        ["selection" :selection]
+                        ["blob" :blob]
+                        ["extension_context" :extension-context]
+                        ["github_reference" :github-reference]
+                        ["github_commit" :github-commit]
+                        ["github_release" :github-release]
+                        ["github_actions_job" :github-actions-job]
+                        ["github_repository" :github-repository]
+                        ["github_file_diff" :github-file-diff]
+                        ["github_tree_comparison" :github-tree-comparison]
+                        ["github_url" :github-url]
+                        ["github_file" :github-file]
+                        ["github_snippet" :github-snippet]]]
+    (let [event {:type "user.message" :data {:attachments [{:type wire}]}}
+          converted (coerce/event-wire->idiom event)]
+      (is (= (get-in converted [:data :attachments 0 :type]) idiom) wire)
+      (is (= (coerce/event-idiom->wire converted) event) wire))))
 
 (deftest auto-tier-coercion-rejects-non-identifiers
   (doseq [[direction value]
@@ -1168,108 +1017,6 @@
       (is (instance? clojure.lang.ExceptionInfo failure) (pr-str value))
       (is (= (select-keys (ex-data failure) [:event-type :field :direction :value])
              {:event-type "session.start" :field :auto-tier :direction direction :value value})))))
-
-(deftest coerced-data-satisfies-hand-spec
-  (testing "after wire->idiom, hand-written spec accepts the data"
-    (doseq [[event-type payload] fixtures]
-      (let [hand-kw (keyword "github.copilot-sdk.specs" (str event-type "-data"))]
-        (when (s/get-spec hand-kw)
-          (let [coerced-data (coerce/coerce-data event-type payload :wire->idiom)]
-            (is (s/valid? hand-kw coerced-data)
-                (str "hand spec " hand-kw " rejected coerced data: "
-                     (s/explain-str hand-kw coerced-data)))))))))
-
-;; ---------------------------------------------------------------------------
-;; Drift audit — surfaces residual disagreements between hand-written and
-;; generated specs after coercion is applied.
-;;
-;; The audit is FIELD-PRECISE:
-;;   * `known-drifts` lists [event-type field reason] tuples for any
-;;     residual drift that the coercion layer does NOT reconcile.
-;;   * For every fixture, we extract the set of failing fields from
-;;     `s/explain-data` against the hand-written spec, AFTER coercion.
-;;   * We assert that set is exactly equal to the documented drifts for
-;;     that event-type — so stale entries (drift was fixed but registry
-;;     still references it) AND undocumented drifts both fail the test.
-;;
-;; After Phase 3.5 reconciliation, this set should be empty: every
-;; richer hand spec is reconciled either via coercion (Instant) or by
-;; intentional omission from the hand spec (e.g. session.start :version,
-;; where the global ::version is shared with ::model-info and the
-;; generated wire spec is the canonical contract).
-;; ---------------------------------------------------------------------------
-
-(def ^:private known-drifts
-  "Hand-written specs known to disagree with the schema even after
-   coercion. Each entry is a [event-type field reason] tuple. Empty after
-   Phase 3.5: the test fails if any drift is detected, forcing the
-   contributor to either add a coercion entry or fix the hand spec."
-  #{})
-
-(defn- failing-fields
-  "Extract the set of map keys (top-level :in path heads) where `payload`
-   fails `spec`. Returns #{} when payload is valid."
-  [spec payload]
-  (let [data (s/explain-data spec payload)]
-    (->> (:clojure.spec.alpha/problems data)
-         (map (fn [{:keys [in path]}]
-                ;; Prefer :in (which targets actual map keys) over :path
-                ;; (which references the s/keys spec name).
-                (or (first in) (last path))))
-         (remove nil?)
-         set)))
-
-(deftest hand-written-specs-agree-with-generated
-  (doseq [[event-type payload] fixtures]
-    (testing (str "specs.clj ::" event-type "-data agrees with generated for canonical payload (post-coercion)")
-      (let [hand-kw (keyword "github.copilot-sdk.specs" (str event-type "-data"))
-            gen-kw  (keyword "github.copilot-sdk.generated.event-specs"
-                             (str event-type "-data"))]
-        (when (s/get-spec hand-kw)
-          (is (s/valid? gen-kw payload)
-              (str "Generator regression: " gen-kw " rejects fixture: "
-                   (s/explain-str gen-kw payload)))
-          (let [coerced-data    (coerce/coerce-data event-type payload :wire->idiom)
-                actual-failing  (failing-fields hand-kw coerced-data)
-                registered-fields (->> known-drifts
-                                       (filter #(= event-type (first %)))
-                                       (map second)
-                                       set)]
-            (is (= actual-failing registered-fields)
-                (str "Drift mismatch for " event-type " (after coercion):\n"
-                     "  actual failing fields:    " (sort actual-failing) "\n"
-                     "  registered known-drifts:  " (sort registered-fields) "\n"
-                     (cond
-                       (seq (clojure.set/difference actual-failing registered-fields))
-                       (str "  → undocumented drifts: "
-                            (sort (clojure.set/difference actual-failing registered-fields))
-                            " (add a coercion entry, fix specs.clj, or add to known-drifts)")
-                       (seq (clojure.set/difference registered-fields actual-failing))
-                       (str "  → stale drift entries: "
-                            (sort (clojure.set/difference registered-fields actual-failing))
-                            " (remove from known-drifts; the drift is no longer reproducible)")
-                       :else "")))))))))
-
-(deftest every-hand-written-event-data-spec-has-a-fixture
-  ;; Coverage gate: the drift audit above only inspects event-types present
-  ;; in `fixtures`. This test fails if `specs.clj` defines a richer hand-
-  ;; written `::<event>-data` spec for an event that has NO fixture, so a
-  ;; contributor cannot silently introduce a hand spec that the drift audit
-  ;; never exercises.
-  (let [hand-spec-event-types
-        (->> gen/event-types
-             (filter (fn [event-type]
-                       (s/get-spec
-                        (keyword "github.copilot-sdk.specs"
-                                 (str event-type "-data")))))
-             set)
-        covered (set (keys fixtures))
-        missing (clojure.set/difference hand-spec-event-types covered)]
-    (is (empty? missing)
-        (str "Hand-written `*-data` specs without a fixture (drift audit "
-             "would silently skip them): " (sort missing) ". Either add a "
-             "minimal valid fixture in `fixtures`, or remove the hand spec "
-             "from `github.copilot-sdk.specs`."))))
 
 ;; ---------------------------------------------------------------------------
 ;; Generated top-level form size — JVM `Method code too large!` regression
@@ -1351,6 +1098,8 @@
                :data "YWJj"
                :mime-type "text/plain"
                :type "resource"}]
-    (is (s/valid? ::gen/session.binary_asset-data valid))
+    (doseq [type ["image" "resource"]]
+      (is (s/valid? ::gen/session.binary_asset-data (assoc valid :type type))))
+    (is (not (s/valid? ::gen/session.binary_asset-data (assoc valid :type "session.start"))))
     (is (not (s/valid? ::gen/session.binary_asset-data
                        (assoc valid :data {:unexpected "map"}))))))

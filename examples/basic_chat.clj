@@ -1,20 +1,28 @@
 (ns basic-chat
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  "Ask one question, or follow up in the same conversation."
+  (:require [clojure.string :as str]
+            [copilot.sdk :as copilot]
+            [copilot.sdk.helpers :as h]))
 
-;; See examples/README.md for usage
+(defn- show-answer [answer]
+  (when (str/blank? answer) (throw (ex-info "The model returned no chat answer" {})))
+  (println "Assistant:" answer)
+  answer)
 
-(def defaults
-  {:q1 "What is the capital of France? Please answer in one sentence."
-   :q2 "What is its population approximately?"})
+(defn ask [session question]
+  (println "You:" (if (string? question) question (:prompt question)))
+  (show-answer (h/query!! session question)))
 
-(defn run
-  [{:keys [q1 q2] :or {q1 (:q1 defaults) q2 (:q2 defaults)}}]
-  (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                         :model "claude-haiku-4.5"
-                                         :allowed-models ["claude-haiku-4.5"]}]
-    (println "Q1:" q1)
-    (println "🤖:" (h/query q1 :session session))
-    (println)
-    (println "Q2:" q2)
-    (println "🤖:" (h/query q2 :session session))))
+(defn once [client-options session-options prompt]
+  (println "You:" prompt)
+  (show-answer (h/query-once!! {:client client-options :session session-options} prompt)))
+
+(defn run [client options prompt & follow-ups]
+  (copilot/with-session [session client options]
+    (loop [[question & more] (cons prompt follow-ups)]
+      (let [answer (ask session question)]
+        (if (seq more) (recur more) answer)))))
+
+(defn independent [client options & questions]
+  ;; Reuse the client, not the conversation. None of the questions share history.
+  (mapv (fn [question] (copilot/with-session [session client options] (ask session question))) questions))

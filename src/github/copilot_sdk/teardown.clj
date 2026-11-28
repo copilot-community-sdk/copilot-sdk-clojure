@@ -1,6 +1,5 @@
-(ns github.copilot-sdk.teardown
-  "One teardown-outcome contract shared by the client, protocol, and process
-   layers.
+(ns ^:no-doc github.copilot-sdk.teardown
+  "One teardown-outcome contract shared by the client, protocol, and native host.
 
    Closing a socket, closing an NIO channel, and joining a finished thread are
    idempotent by contract: they do not throw when the resource is already gone.
@@ -59,25 +58,6 @@
        (when-not (expected-failure? e#)
          (failure ~step e#)))))
 
-(defmacro attempt-collecting
-  "Like `attempt`, but `body` itself returns a vector of teardown failures (a
-   nested teardown). Returns those failures together with any failure raised by
-   the call itself."
-  [step & body]
-  `(let [collected# (volatile! nil)
-         thrown# (attempt ~step (vreset! collected# (do ~@body)))]
-     (collect (conj (vec @collected#) thrown#))))
-
-(defn attach-cleanup-failures!
-  "Attach cleanup failures to primary and log each retained failure."
-  [^Throwable primary cleanup-failures]
-  (doseq [^Throwable cleanup-failure cleanup-failures]
-    (when-not (identical? primary cleanup-failure)
-      (.addSuppressed primary cleanup-failure))
-    (log/warn cleanup-failure
-              "Cleanup failed while preserving the primary failure"))
-  primary)
-
 (defn cleanup-preserving!
   "Run `cleanup`, preserving `primary` when both body and cleanup fail.
 
@@ -92,17 +72,19 @@
         (when (instance? InterruptedException cleanup-failure)
           (.interrupt (Thread/currentThread)))
         (if primary
-          (attach-cleanup-failures! primary [cleanup-failure])
+          (do
+            (when-not (identical? primary cleanup-failure)
+              (.addSuppressed ^Throwable primary cleanup-failure))
+            (log/warn cleanup-failure "Cleanup failed while preserving the primary failure")
+            primary)
           (throw cleanup-failure)))
       (finally
         (when interrupted?
           (.interrupt (Thread/currentThread)))))))
 
 (defmacro with-cleanup
-  "Evaluate `body`, then call `cleanup`, preserving a body failure as primary.
-
-   Unlike `call-with-cleanup`, this keeps `body` lexically visible to enclosing
-   macros such as `core.async/go`."
+  "Evaluate body, then call cleanup. Preserve a body failure as primary.
+   The body stays lexically visible to core.async/go."
   [cleanup & body]
   `(let [primary# (volatile! nil)]
      (try
@@ -112,9 +94,3 @@
          (throw failure#))
        (finally
          (cleanup-preserving! @primary# ~cleanup)))))
-
-(defn call-with-cleanup
-  "Call `body`, then `cleanup`, preserving a body failure as the primary error."
-  [body cleanup]
-  (with-cleanup cleanup
-    (body)))

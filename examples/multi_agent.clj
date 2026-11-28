@@ -1,87 +1,47 @@
 (ns multi-agent
-  "Multi-agent pipeline: 3 researchers (parallel) → analyst → writer"
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]
-            [clojure.core.async :as async :refer [<!! <! go]]))
+  "Run independent research turns in parallel, then pass their findings to an analyst and a writer."
+  (:require [basic-chat]
+            [clojure.string :as str]
+            [copilot.sdk :as copilot]))
 
-;; See examples/README.md for usage
+(def default-topics
+  ["functional programming benefits" "immutable data structures" "concurrent programming challenges"])
 
-(def defaults
-  {:topics ["functional programming benefits"
-            "immutable data structures"
-            "concurrent programming challenges"]})
+(defn- agent-options [options name prompt]
+  (assoc options :tools {:available-tools []}
+         :agents {:definitions [{:name name :prompt prompt :tools []}] :selected name}))
 
-(declare research-phase analysis-phase synthesis-phase)
+(defn- finish-research [topics sessions]
+  (let [replies (mapv (fn [session topic]
+                        (println "Research:" topic)
+                        (copilot/start-turn! session {:prompt (str "Research: " topic) :timeout-ms 60000}))
+                      sessions topics)]
+    (mapv (fn [topic reply]
+            (let [finding (get-in (copilot/await!! reply) [:data :content])]
+              (when (str/blank? finding)
+                (throw (ex-info "Researcher returned no finding" {:topic topic})))
+              (println "Finding for" topic ":" finding)
+              [topic finding]))
+          topics replies)))
 
-(defn run
-  [{:keys [topics] :or {topics (:topics defaults)}}]
-  (copilot/with-client [client]
-    (println "🗂️  CLI process working directory:" (get-in client [:options :cwd]))
-    (->> (research-phase client topics)
-         (analysis-phase client)
-         (synthesis-phase client))))
+(defn- research-batch [client options topics]
+  ;; Hold the scopes open until every result is collected or one of the turns fails.
+  (letfn [(open-sessions [remaining sessions]
+            (if (seq remaining)
+              (copilot/with-session [session client options]
+                (open-sessions (next remaining) (conj sessions session)))
+              (finish-research topics sessions)))]
+    (open-sessions topics [])))
 
-(defmacro ^:private with-timing
-  "Execute body, print elapsed time, and return result."
-  [& body]
-  `(let [start# (System/currentTimeMillis)
-         result# (do ~@body)]
-     (println (str "  (completed in " (- (System/currentTimeMillis) start#) "ms)"))
-     result#))
-
-(def researcher-prompt "You are a research assistant. Be concise: 2-3 bullet points.")
-(defn- research-topic
-  "Start parallel research on a topic. Returns channel yielding {:topic :findings}.
-   Uses go + <create-session + <send! — parks instead of blocking."
-  [client topic]
-  (go
-    (let [session (<! (copilot/<create-session
-                       client
-                       {:on-permission-request copilot/approve-all
-                        :system-message {:mode :append :content researcher-prompt}
-                        :model "gpt-5.4"}))]
-      (if (instance? Throwable session)
-        {:topic topic :findings (str "Error: " (ex-message session))}
-        (let [answer (<! (copilot/<send! session {:prompt (str "Research: " topic)}))]
-          {:topic topic
-           :findings answer})))))
-
-(defn- format-research
-  "Format research results as a summary string."
-  [results]
-  (->> results
-       (map #(str "• " (:topic %) ": " (:findings %)))
-       (clojure.string/join "\n\n")))
-
-(defn research-phase
-  "Run parallel research on topics. Returns formatted summary string."
-  [client topics]
-  (println "📚 Research Phase (parallel)")
-  (with-timing
-    (let [result-chan (async/merge (mapv #(research-topic client %) topics))
-          results (doall (repeatedly (count topics) #(<!! result-chan)))]
-      (doto (format-research results) println))))
-
-(def analyst-prompt "You are an analyst. Identify patterns and insights. Be concise: 2-3 sentences.")
-(defn analysis-phase
-  "Analyze research findings. Returns analysis string."
-  [client research-summary]
-  (println "\n🔍 Analysis Phase")
-  (with-timing
-    (doto (h/query (str "Analyze these findings:\n\n" research-summary)
-                   :client client
-                   :session {:on-permission-request copilot/approve-all
-                             :system-prompt analyst-prompt :model "gpt-5.4"})
-      (->> (println "Analysis:\n")))))
-
-(def synthesis-prompt "You are a writer. Create clear, engaging prose.")
-(defn synthesis-phase
-  "Write executive summary from analysis. Returns summary string."
-  [client analysis]
-  (println "\n📋 FINAL SUMMARY:")
-  (with-timing
-    (doto (h/query (str "Write a 3-4 sentence executive summary. ANALYSIS: " analysis)
-                   :client client
-                   :session {:on-permission-request copilot/approve-all
-                             :system-prompt synthesis-prompt :model "gpt-5.4"})
-      println)))
+(defn run [client options & topics]
+  (let [researcher (agent-options options "researcher" "Report one concise finding on the given topic.")
+        analyst (agent-options options "analyst" "Identify patterns across the findings in two sentences.")
+        writer (agent-options options "writer" "Write a short executive summary of the analysis.")
+        findings (into [] (mapcat #(research-batch client researcher %))
+                       (partition-all 3 (or (seq topics) default-topics)))
+        report (str/join "\n" (map (fn [[topic finding]] (str topic ": " finding)) findings))
+        analysis (copilot/with-session [session client analyst]
+                   (basic-chat/ask session (str "Analyze these findings:\n" report)))
+        summary (copilot/with-session [session client writer]
+                  (basic-chat/ask session (str "Summarize this analysis:\n" analysis)))]
+    {:findings findings :analysis analysis :summary summary}))

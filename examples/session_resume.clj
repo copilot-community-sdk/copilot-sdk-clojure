@@ -1,46 +1,19 @@
 (ns session-resume
-  "Demonstrates session resume: create a session, teach it a code word,
-   then resume the session by ID and verify the model remembers it."
-  (:require [github.copilot-sdk :as copilot]))
+  (:require [basic-chat]
+            [clojure.string :as str]
+            [copilot.sdk :as copilot]))
 
-;; See examples/README.md for usage
-
-(def defaults
-  {:code-word "PINEAPPLE"
-   :prompt "What was the code word I told you? Reply with just the word."})
-
-(defn run
-  [{:keys [code-word prompt]
-    :or {code-word (:code-word defaults) prompt (:prompt defaults)}}]
-  (copilot/with-client [client {}]
-    (println "Creating session...")
-    (let [session (copilot/create-session
-                   client
-                   {:on-permission-request copilot/approve-all
-                    :name "Code word example"
-                    :model "claude-haiku-4.5"
-                    :available-tools []})]
-      (println "Sending code word:" code-word)
-      (let [result (copilot/send-and-wait!
-                    session
-                    {:prompt (str "Remember this code word: " code-word
-                                  ". Just confirm by repeating it back.")})]
-        (println "🤖:" (get-in result [:data :content])))
-
-      (let [session-id (:session-id session)]
-        (copilot/disconnect! session)
-        (println "\nResuming session" session-id "...")
-        (let [resumed (copilot/resume-session
-                       client session-id
-                       {:on-permission-request copilot/approve-all
-                        :allow-transcript-recovery? false
-                        :available-tools []})]
-          (try
-            (when-let [report (copilot/transcript-recovery resumed)]
-              (throw (ex-info "Clean session unexpectedly reported transcript recovery"
-                              {:recovery report})))
-            (println "Asking:" prompt)
-            (let [result (copilot/send-and-wait! resumed {:prompt prompt})]
-              (println "🤖:" (get-in result [:data :content])))
-            (finally
-              (copilot/disconnect! resumed))))))))
+(defn run [client options prompt]
+  (let [code-word "PINEAPPLE"
+        id (copilot/with-session [session client (assoc options :name "Code word example")]
+             (basic-chat/ask session (str "Remember the code word " code-word ". Repeat it back."))
+             (copilot/session-id session))
+        answer (copilot/with-resumed-session [session client id (assoc options :allow-transcript-recovery? false)]
+                 (println "Resumed session:" id)
+                 (when (:transcript-recovery (copilot/session-info session))
+                   (throw (ex-info "Clean resume unexpectedly required transcript recovery" {})))
+                 (basic-chat/ask session prompt))]
+    (copilot/delete-session!! client id)
+    (when-not (str/includes? (str/upper-case answer) code-word)
+      (throw (ex-info "The resumed session did not recall the code word" {})))
+    answer))

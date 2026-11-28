@@ -93,9 +93,6 @@
 ;; File I/O helpers
 ;; ---------------------------------------------------------------------------
 
-(def header
-  ";; AUTO-GENERATED — do not edit. Run `bb codegen`.\n;; Source: schemas/  (schema version pinned in .copilot-schema-version)\n")
-
 (defn write-clj!
   "Write `forms` (a sequence of forms) to `path` with a generated-file header."
   [path forms]
@@ -106,7 +103,7 @@
            (binding [*print-meta* true]
              (pr-str form)))
          forms)]
-    (.write sw header)
+    (.write sw ";; AUTO-GENERATED — do not edit. Run `bb codegen`.\n;; Source: schemas/  (schema version pinned in .copilot-schema-version)\n")
     (.write sw "\n")
     (.write sw (str/join "\n\n" form-strings))
     (.write sw "\n")

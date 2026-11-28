@@ -1,71 +1,73 @@
 (ns mcp-local-server
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  "List files in a demo-owned directory with a read-only stdio MCP server."
+  (:require [basic-chat]
+            [byok-provider]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [copilot.sdk :as copilot])
+  (:import [java.nio.file Files]
+           [java.nio.file.attribute FileAttribute]))
 
-;; See examples/README.md for usage
-;; See doc/mcp/overview.md for full MCP documentation
+(def default-prompt "Call list_files and report the file names.")
+(def summary-prompt "Call list_files. Pass all returned names as the files array to summarize_files and report its summary.")
 
-;; This example demonstrates using MCP (Model Context Protocol) servers
-;; to extend the assistant's capabilities with external tools.
+(def ^:private samples ["garden.md" "weather.csv"])
 
-;; NOTE: This example requires npx (Node.js) to be installed,
-;; as it uses the @modelcontextprotocol/server-filesystem MCP server.
+(def ^:private summarize
+  {:name "summarize_files" :description "Summarize the names from list_files."
+   :parameters {:type "object" :properties {:files {:type "array" :items {:type "string"}}}
+                :required ["files"] :additionalProperties false}
+   :handler (fn [{:keys [files]} _]
+              (str (count files) " files: " (str/join ", " files) "."))})
 
-(def defaults
-  {:allowed-dir "/tmp"})
+(defn- interpreter []
+  (let [python (io/file (or (System/getenv "COPILOT_DEMO_PYTHON") ""))]
+    (when-not (and (.isAbsolute python) (.isFile python) (.canExecute python))
+      (throw (ex-info "Set COPILOT_DEMO_PYTHON to the absolute path of a trusted, installed Python 3." {})))
+    (.getPath python)))
 
-(defn run
-  "Run a query with the filesystem MCP server.
+(defn- list-samples [client options prompt summary?]
+  (let [python (interpreter)
+        ;; The shell removes this tree after native workers and the MCP process exit.
+        directory (Files/createDirectory (.toPath (io/file (:working-directory options) "mcp-samples"))
+                                         (make-array FileAttribute 0))
+        script (io/file (io/resource "fixtures/directory_server.py"))
+        mcp-tool "samples-list_files"
+        approved (atom {})
+        authorize (fn [{:keys [kind server-name tool-name tool-call-id args]} _]
+                    (if (and (string? tool-call-id)
+                             (or (and (= kind "mcp") (= server-name "samples") (= tool-name mcp-tool) (= args {}))
+                                 (and summary? (= kind "custom-tool") (= tool-name (:name summarize))
+                                      (= (set (keys args)) #{:files}) (vector? (:files args))
+                                      (= (count samples) (count (:files args)))
+                                      (= (set samples) (set (:files args))))))
+                      (do (swap! approved assoc tool-call-id tool-name)
+                          {:kind :approve-once})
+                      {:kind :reject}))
+        tools (cond-> {:available-tools [(str "mcp:" mcp-tool)]}
+                summary? (assoc :definitions [summarize])
+                summary? (update :available-tools conj "custom:summarize_files"))]
+    (doseq [file samples]
+      (Files/createFile (.resolve directory file) (make-array FileAttribute 0)))
+    (copilot/with-session
+      [session client (assoc options :tools tools :permissions {:on-request authorize}
+                             :mcp {:servers {"samples" {:type :stdio :command python
+                                                        :args ["-I" "-S" (.getAbsolutePath script)]
+                                                        :working-directory (str directory)
+                                                        :tools ["list_files"] :defer-tools :never :timeout 5000}}})]
+      (let [answer (basic-chat/ask session prompt)
+            history (copilot/await!! (copilot/history session))
+            completed (into #{} (for [{:keys [type data]} history
+                                      :when (and (= type :copilot/tool.execution_complete) (:success data))]
+                                  (get @approved (:tool-call-id data))))
+            expected (cond-> #{mcp-tool} summary? (conj (:name summarize)))]
+        (when-not (= completed expected)
+          (throw (ex-info "The model did not complete the requested tools." {:expected expected :completed completed})))
+        (println "Completed tools:" (str/join ", " (sort completed)))
+        answer))))
 
-  Usage:
-    clojure -A:examples -X mcp-local-server/run
-    clojure -A:examples -X mcp-local-server/run :allowed-dir '\"/home/user/docs\"'"
-  [{:keys [allowed-dir] :or {allowed-dir (:allowed-dir defaults)}}]
-  (println (str "MCP Filesystem Server — allowed directory: " allowed-dir))
-  (println)
-  (let [session-config {:model "claude-haiku-4.5"
-                        :on-permission-request copilot/approve-all
-                        :mcp-servers
-                        {"filesystem"
-                         {:mcp-command "npx"
-                          :mcp-args ["-y" "@modelcontextprotocol/server-filesystem"
-                                     allowed-dir]
-                          :mcp-tools ["*"]}}}]
-    (copilot/with-client [client {}]
-      (copilot/with-session [session client session-config]
-        (println "Q: List the files in the allowed directory")
-        (println "🤖:" (h/query (str "List the files in " allowed-dir ". Just list the filenames, nothing more.")
-                                :session session))))))
+(defn run [state-dir prompt]
+  (byok-provider/run state-dir prompt #(list-samples %1 %2 %3 false)))
 
-(defn run-with-custom-tools
-  "Run with MCP server and custom tools combined.
-
-  Usage:
-    clojure -A:examples -X mcp-local-server/run-with-custom-tools
-    clojure -A:examples -X mcp-local-server/run-with-custom-tools :allowed-dir '\"/home/user/docs\"'"
-  [{:keys [allowed-dir] :or {allowed-dir (:allowed-dir defaults)}}]
-  (let [summary-tool
-        (copilot/define-tool "summarize_text"
-          {:description "Summarize a piece of text into a single sentence."
-           :parameters {:type "object"
-                        :properties {:text {:type "string"
-                                            :description "The text to summarize"}}
-                        :required ["text"]}
-           :handler (fn [{:keys [text]} _]
-                      (copilot/result-success
-                       (str "Summary: " (subs text 0 (min 100 (count text))) "...")))})
-        session-config {:model "claude-haiku-4.5"
-                        :tools [summary-tool]
-                        :on-permission-request copilot/approve-all
-                        :mcp-servers
-                        {"filesystem"
-                         {:mcp-command "npx"
-                          :mcp-args ["-y" "@modelcontextprotocol/server-filesystem" allowed-dir]
-                          :mcp-tools ["*"]}}}]
-    (println "MCP + Custom Tools Example")
-    (println (str "  Allowed directory: " allowed-dir))
-    (println)
-    (copilot/with-client [client {}]
-      (copilot/with-session [session client session-config]
-        (println "🤖:" (h/query (str "List the files in " allowed-dir " and summarize the result briefly using the summarize_text tool.")
-                                :session session))))))
+(defn run-with-custom-tools [state-dir prompt]
+  (byok-provider/run state-dir prompt #(list-samples %1 %2 %3 true)))

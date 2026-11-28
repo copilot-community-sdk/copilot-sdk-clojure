@@ -1,73 +1,31 @@
 (ns metadata-api
-  "Demonstrates the metadata API functions introduced in v0.1.24:
-   - list-sessions with context filtering
-   - list-tools with model-specific overrides
-   - get-quota for account usage information
-   - get-current-model and switch-model for dynamic model switching
+  "Inspect the native runtime and find a session in its private demo store."
+  (:require [basic-chat]
+            [copilot.sdk :as copilot]))
 
-   Note: Some methods (tools.list, account.getQuota, session.model.*)
-   require a CLI version that supports them. The example gracefully
-   handles unsupported methods."
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+(defn run [client options]
+  (let [{:keys [version protocol-version]} (copilot/await!! (copilot/status client))
+        id (copilot/with-session [session client (assoc options :name "Metadata example")]
+             (copilot/session-id session))
+        listed (copilot/await!! (copilot/list-sessions client {:cwd (:working-directory options)}))
+        metadata (copilot/await!! (copilot/session-metadata client id))]
+    (when-not (and (= id (:session-id metadata)) (some #(= id (:session-id %)) listed))
+      (throw (ex-info "The new demo session was not found in the store" {:session-id id})))
+    (println "Runtime:" version "| protocol:" protocol-version)
+    (println "Saved session:" id "| last modified:" (str (:modified-time metadata)))
+    (copilot/delete-session!! client id)
+    (println "Deleted this demo session.")
+    :found-and-deleted))
 
-;; See examples/README.md for usage
-
-(defn run
-  [& _]
-  (println "=== Copilot Metadata API Demo ===\n")
-
-  (copilot/with-client [client {:log-level :warning}]
-    ;; 1. List sessions (supported on all CLI versions)
-    (println "1. Active Sessions:")
-    (let [sessions (copilot/list-sessions client)]
-      (println (str "   Found " (count sessions) " session(s)"))
-      (when (seq sessions)
-        (doseq [session (take 3 sessions)]
-          (println (str "   - " (:session-id session)))
-          (when-let [ctx (:context session)]
-            (println (str "     Repository: " (:repository ctx)))
-            (println (str "     Branch: " (:branch ctx)))))))
-
-    ;; 2. List available tools
-    (println "\n2. Available Tools:")
-    (try
-      (let [tools (copilot/list-tools client)]
-        (println (str "   Found " (count tools) " tools"))
-        (doseq [tool (take 5 tools)]
-          (println (str "   - " (:name tool) ": " (:description tool)))))
-      (catch Exception e
-        (println (str "   Skipped: " (.getMessage e)))))
-
-    ;; 3. Get quota information
-    (println "\n3. Account Quota:")
-    (try
-      (let [quotas (copilot/get-quota client)]
-        (doseq [[quota-type snapshot] quotas]
-          (println (str "   " quota-type ":"))
-          (println (str "     Entitlement: " (:entitlement-requests snapshot)))
-          (println (str "     Used: " (:used-requests snapshot)))
-          (println (str "     Remaining: " (:remaining-percentage snapshot) "%"))))
-      (catch Exception e
-        (println (str "   Skipped: " (.getMessage e)))))
-
-    ;; 4. Model switching within a session
-    (println "\n4. Dynamic Model Switching:")
-    (copilot/with-session [session client {:on-permission-request copilot/approve-all
-                                           :model "claude-haiku-4.5"}]
-      ;; Query with claude-haiku-4.5
-      (println "   Query: 'What is 2+2? Answer briefly.'")
-      (println (str "   Response: " (h/query "What is 2+2? Answer briefly." :session session)))
-
-      ;; Try model introspection (requires CLI support)
-      (try
-        (let [current (copilot/get-current-model session)]
-          (println (str "\n   Current model: " current))
-          (copilot/switch-model! session "gpt-5.4")
-          (println (str "   Switched to: " (copilot/get-current-model session)))
-          (println "   Query: 'What was my previous question?'")
-          (println (str "   Response: " (h/query "What was my previous question?" :session session))))
-        (catch Exception e
-          (println (str "\n   Model switching skipped: " (.getMessage e)))))))
-
-  (println "\n=== Demo Complete ==="))
+(defn switch-model [client options prompt]
+  (let [models (copilot/await!! (copilot/list-models client))
+        first-id (or (:model options) (:id (first models)))
+        second-id (some #(when (not= first-id (:id %)) (:id %)) models)]
+    (when-not (and first-id second-id)
+      (throw (ex-info "Model switching needs two available models" {:initial-model first-id})))
+    (copilot/with-session [session client (assoc options :model first-id)]
+      (println "Initial model:" first-id)
+      (basic-chat/ask session "Remember my project name: Maple Lantern. Confirm its name.")
+      (copilot/await!! (copilot/set-model! session second-id))
+      (println "Switched to:" second-id)
+      (basic-chat/ask session prompt))))

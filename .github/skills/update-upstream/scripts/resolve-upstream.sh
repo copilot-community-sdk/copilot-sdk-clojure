@@ -20,7 +20,7 @@ else
 fi
 
 upstream_root="$(git -C "${candidate}" rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "error: upstream github/copilot-sdk checkout not found at ${candidate}" >&2
+  echo "error: upstream microsoft/copilot-sdk checkout not found at ${candidate}" >&2
   echo "clone it beside the primary copilot-sdk-clojure checkout or set COPILOT_SDK_UPSTREAM" >&2
   exit 1
 }
@@ -30,17 +30,12 @@ origin_url="$(git -C "${upstream_root}" remote get-url origin 2>/dev/null)" || {
   exit 1
 }
 
-case "${origin_url}" in
-  git@github.com:github/copilot-sdk.git | \
-  ssh://git@github.com/github/copilot-sdk.git | \
-  https://github.com/github/copilot-sdk | \
-  https://github.com/github/copilot-sdk.git)
-    ;;
-  *)
-    echo "error: expected origin to be github/copilot-sdk, found ${origin_url}" >&2
-    echo "set COPILOT_SDK_UPSTREAM to a checkout with the canonical origin remote" >&2
-    exit 1
-    ;;
-esac
+# Existing clones can retain the official repository's pre-transfer URL.
+upstream_url='^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)(microsoft|github)/copilot-sdk(\.git)?$'
+if [[ ! ${origin_url} =~ ${upstream_url} ]]; then
+  echo "error: expected origin to be microsoft/copilot-sdk" >&2
+  echo "set COPILOT_SDK_UPSTREAM to a checkout with the canonical origin remote" >&2
+  exit 1
+fi
 
 printf '%s\n' "${upstream_root}"

@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$ref": "#/definitions/ExtensionManifest",
+  "description": "Build-time schema for extension.json files used by GitHub Copilot extensions.",
+  "definitions": {
+    "CanvasAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Action name exposed by the canvas provider"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the action"
+        },
+        "inputSchema": {
+          "$ref": "#/definitions/CanvasJsonSchema",
+          "description": "JSON Schema for the action input"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas action that the agent or host can invoke. To discover the input schema for a particular action, call the list_canvas_capabilities tool.",
+      "title": "CanvasAction",
+      "stability": "experimental"
+    },
+    "CanvasJsonSchema": {
+      "description": "JSON Schema for canvas open input",
+      "title": "CanvasJsonSchema",
+      "x-opaque-json": true,
+      "stability": "experimental"
+    },
+    "ExtensionInitialization": {
+      "type": "string",
+      "enum": [
+        "module"
+      ],
+      "description": "Extension process initialization strategy."
+    },
+    "ExtensionManifest": {
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "required": [
+                "schemaVersion"
+              ]
+            },
+            {
+              "required": [
+                "version"
+              ]
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "tools": {
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "tools"
+              ]
+            },
+            {
+              "properties": {
+                "canvases": {
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "canvases"
+              ]
+            },
+            {
+              "properties": {
+                "commands": {
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "commands"
+              ]
+            }
+          ]
+        }
+      ],
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "Optional JSON Schema location used by authoring tools. The runtime ignores this value."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "const": 1,
+          "description": "Canonical extension manifest schema version."
+        },
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "description": "Deprecated alias for `schemaVersion`.",
+          "deprecated": true
+        },
+        "initialization": {
+          "$ref": "#/definitions/ExtensionInitialization"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProtocolExternalToolDefinition"
+          },
+          "default": []
+        },
+        "canvases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProtocolCanvasContribution"
+          },
+          "default": []
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProtocolCommandDefinition"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "initialization"
+      ],
+      "additionalProperties": false,
+      "description": "Declarative contributions used to advertise an extension before its process starts."
+    },
+    "ProtocolCanvasContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "inputSchema": {
+          "$ref": "#/definitions/CanvasJsonSchema"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CanvasAction"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "ProtocolCommandDefinition": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "ProtocolExternalToolDefer": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "never"
+      ],
+      "description": "Controls whether the runtime may defer loading an external tool definition.",
+      "title": "ProtocolExternalToolDefer",
+      "x-enumDescriptions": {
+        "auto": "The runtime may defer the tool according to its tool-loading policy.",
+        "never": "The runtime must include the tool without deferring it."
+      },
+      "stability": "experimental"
+    },
+    "ProtocolExternalToolDefinition": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique model-visible tool name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Model-visible explanation of what the tool does."
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional human-readable display title."
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "JSON Schema describing the tool's input arguments."
+        },
+        "overridesBuiltInTool": {
+          "type": "boolean",
+          "description": "Whether this definition replaces a built-in tool with the same name."
+        },
+        "skipPermission": {
+          "type": "boolean",
+          "description": "Whether execution bypasses the normal tool permission prompt."
+        },
+        "hasHandler": {
+          "type": "boolean",
+          "description": "Whether the SDK has a local handler for this tool. Set by the SDK, not the model.\nOn explicit continuation, an unanswered handler-backed call is interrupted\nwhen the resuming SDK also registers a handler; it is never replayed.",
+          "visibility": "internal"
+        },
+        "defer": {
+          "$ref": "#/definitions/ProtocolExternalToolDefer",
+          "description": "Tool-loading deferral policy."
+        },
+        "isTerminal": {
+          "type": "boolean",
+          "description": "Whether the tool executes commands in a terminal."
+        },
+        "idempotent": {
+          "type": "boolean",
+          "description": "Whether repeating a call with the same arguments has no additional effect\nbeyond the first call, as is true of any tool without side effects. Hosts\nmay use this to safely repeat a call whose outcome was lost. It does not\naffect permission checks."
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Optional caller-defined metadata associated with the tool."
+        },
+        "namespace": {
+          "$ref": "#/definitions/ProtocolExternalToolNamespace",
+          "description": "Optional namespace grouping this tool with related tools. Where the model\nprovider supports native tool namespaces, deferred tools sharing a namespace\nare presented to the model as one group; elsewhere the tool stays flat. The\ntool's `name` remains its unique invocation name either way."
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "additionalProperties": false,
+      "description": "Serializable definition of a caller-implemented tool whose execution is handled over the SDK connection.",
+      "title": "ProtocolExternalToolDefinition",
+      "stability": "experimental"
+    },
+    "ProtocolExternalToolNamespace": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Namespace name: 1-64 ASCII letters, digits, underscores, or hyphens."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional model-visible explanation of the tools in this namespace."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Namespace that groups related caller-implemented tools for model tool discovery.",
+      "title": "ProtocolExternalToolNamespace",
+      "stability": "experimental"
+    }
+  }
+}
