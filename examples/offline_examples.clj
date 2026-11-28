@@ -12,22 +12,30 @@
             [session-filesystem]
             [structured-output]))
 
-(defn- text-model [_]
-  [[{:role "assistant" :content "Native "} {:content "turn complete."}] "stop"])
+(defn- reply [start & fragments]
+  [(into [{:role "assistant" :content start}] (map #(hash-map :content %) fragments)) "stop"])
+
+(def ^:private rainbow "Sunlight bends and reflects inside raindrops. The light spreads into different colors.")
+(def ^:private rainbow-follow-up "Look for sunlit raindrops in front of you with the sun behind you.")
 
 (defn- chat-model [requests]
   (case (count requests)
-    1 (text-model requests)
+    1 (reply rainbow)
     2 (let [messages (:messages (peek requests))]
-        (when-not (and (some #(and (= "assistant" (:role %)) (= fixture/answer (:content %))) messages)
+        (when-not (and (some #(and (= "assistant" (:role %)) (= rainbow (:content %))) messages)
                        (str/includes? (:content (peek messages)) (last (get live/demos "basic-chat"))))
           (throw (ex-info "The chat follow-up lost its conversation history" {})))
-        [[{:role "assistant" :content fixture/answer}] "stop"])))
+        (reply rainbow-follow-up))))
 
 (defn- independent-model [requests]
-  (when (some #(= "assistant" (:role %)) (:messages (peek requests)))
-    (throw (ex-info "Independent queries shared a conversation" {})))
-  (text-model requests))
+  (let [messages (:messages (peek requests))
+        question (last (str/split-lines (:content (peek messages))))]
+    (when (some #(= "assistant" (:role %)) messages)
+      (throw (ex-info "Independent queries shared a conversation" {})))
+    (reply (case question
+             "What is 2+2?" "4."
+             ("What is the capital of Japan?" "What is the capital of Japan? Answer in one sentence.") "Tokyo."
+             "Who wrote Hamlet?" "William Shakespeare."))))
 
 (defn- recall-model [requests]
   (let [messages (:messages (peek requests))]
@@ -39,7 +47,8 @@
           (throw (ex-info "Resume did not restore the first turn" {}))))
     [[{:role "assistant" :content "PINEAPPLE"}] "stop"]))
 
-(def ^:private extracted-note {"summary" "The beta opens Friday." "actions" ["Kim will send invitations."]})
+(def ^:private extracted-note {"summary" "The beta opens Friday."
+                               "actions" ["Kim will send invitations." "Lee will update the guide."]})
 
 (defn- note-model [requests]
   (let [{:keys [type json_schema]} (:response_format (peek requests))]
@@ -49,9 +58,12 @@
     [[{:role "assistant" :content (json/write-str extracted-note)}] "stop"]))
 
 (defn- answer-model [requests]
-  (let [schema (get-in (peek requests) [:response_format :json_schema :schema])]
-    (when-not (= (:required schema) ["answer" "confidence"])
-      (throw (ex-info "Expected an answer and numeric confidence schema" {})))
+  (let [schema (get-in (peek requests) [:response_format :json_schema :schema])
+        confidence (get-in schema [:properties :confidence])]
+    (when-not (and (= (:required schema) ["answer" "confidence"])
+                   (= (:type confidence) "number")
+                   (not-any? #(contains? confidence %) [:minimum :maximum]))
+      (throw (ex-info "Expected numeric confidence without provider-side minimum or maximum" {})))
     [[{:role "assistant" :content "{\"answer\":\"Paris\",\"confidence\":0.95}"}] "stop"]))
 
 (defn- attachment-model [requests]
@@ -59,7 +71,7 @@
     (when-not (and (str/includes? messages "The community garden grows lemon thyme.")
                    (not (str/includes? messages "The next workday is Saturday.")))
       (throw (ex-info "Expected only the selected line of the attachment" {}))))
-  (text-model requests))
+  (reply "Lemon thyme."))
 
 (defn- manifest-model [requests]
   (let [messages (:messages (peek requests))]
@@ -86,7 +98,7 @@
   (when-not (= "low" (:reasoning_effort (peek requests)))
     (throw (ex-info "The model did not receive the requested reasoning effort"
                     {:effort (:reasoning_effort (peek requests))})))
-  (text-model requests))
+  (reply "30. The differences are 4, 6, 8, then 10."))
 
 (defn- lookup-model [languages requests]
   (let [n (count requests)
@@ -97,36 +109,46 @@
       (do (when-not (str/includes? (:content message) language)
             (throw (ex-info "The model did not receive the lookup request" {:language language})))
           [[{:role "assistant" :tool_calls [{:index 0 :id id :type "function"
-                                             :function {:name "lookup_language" :arguments (json/write-str {:language language})}}]}]
+                                             :function {:name "lookup_language"
+                                                        :arguments (json/write-str {:language (if (= "private" language)
+                                                                                                "PRIVATE" language)})}}]}]
            "tool_calls"])
       (let [expected ({"clojure" "Lisp" "python" "general-purpose" "rust" "ownership"
                        "unlisted" "No entry" "private" "private catalog is not available"} language)]
         (when-not (and (= "tool" (:role message)) (= (:tool_call_id message) id) (str/includes? (:content message) expected))
           (throw (ex-info "Unexpected model-facing tool result" {:language language :content (:content message)})))
-        [[{:role "assistant" :content expected}] "stop"]))))
+        (reply (if (= language "private") "The private catalog is not available." (:content message)))))))
+
+(defn- stream-recipe [& fragments]
+  (let [text (apply str fragments)]
+    [(constantly (apply reply fragments)) 1 {:streamed text :final text}]))
+
+(defn- no-model [_] (throw (ex-info "This example does not need a model" {})))
 
 (def ^:private recipes
   (merge
-   (sorted-map "basic-chat" [chat-model 2 fixture/answer]
+   (sorted-map "basic-chat" [chat-model 2 rainbow-follow-up]
                "file-attachments" [manifest-model 2 "org.clojure/data.json"]
-               "file-selection" [attachment-model 1 fixture/answer]
+               "file-selection" [attachment-model 1 "Lemon thyme."]
                "lifecycle-hooks" lifecycle/recipe
-               "metadata-api" [text-model 0 :found-and-deleted]
+               "metadata-api" [no-model 0 :found-and-deleted]
                "model-switch" [switched-model 2 "Maple Lantern"]
-               "permission-policy" [(partial lookup-model ["private"]) 2 "private catalog is not available"]
-               "query" [independent-model 1 fixture/answer]
-               "query-multi" [independent-model 3 (vec (repeat 3 fixture/answer))]
-               "query-streaming" [text-model 1 {:streamed fixture/answer :final fixture/answer}]
-               "query-async" [text-model 1 {:streamed fixture/answer :final fixture/answer}]
-               "reasoning-effort" [reasoning-model 1 fixture/answer]
-               "session-events" [text-model 1 {:streamed fixture/answer :final fixture/answer}]
-               "session-filesystem" [text-model 0 {:restored? true :cleaned? true}]
+               "permission-policy" [(partial lookup-model ["private"]) 2 "The private catalog is not available."]
+               "query" [independent-model 1 "Tokyo."]
+               "query-multi" [independent-model 3 ["4." "Tokyo." "William Shakespeare."]]
+               "query-streaming" (stream-recipe "An immutable value never changes. " "An update gives you a new value.")
+               "query-async" (stream-recipe "Why do programmers prefer dark mode? " "Because light attracts bugs.")
+               "reasoning-effort" [reasoning-model 1 "30. The differences are 4, 6, 8, then 10."]
+               "session-events" (stream-recipe "A compass needle is a small magnet. " "It aligns with Earth's magnetic field. "
+                                               "Its north end points toward magnetic north.")
+               "session-filesystem" [no-model 0 {:restored? true :cleaned? true}]
                "session-resume" [recall-model 2 "PINEAPPLE"]
                "structured-answer" [answer-model 1 {"answer" "Paris" "confidence" 0.95M}]
                "structured-output" [note-model 1 extracted-note]
                "structured-output-primitive" [note-model 1 extracted-note]
                "tool-integration" [(partial lookup-model ["clojure" "python" "rust" "unlisted"]) 8
-                                   ["Lisp" "general-purpose" "ownership" "No entry"]])
+                                   ["Clojure is a Lisp that runs on the JVM." "Python is a general-purpose language."
+                                    "Rust checks ownership at compile time." "No entry in the example catalog."]])
    interaction/recipes config-fixture/recipes))
 
 (defn- exercise! [recipe]

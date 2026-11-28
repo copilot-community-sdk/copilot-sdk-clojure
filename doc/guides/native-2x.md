@@ -134,7 +134,7 @@ command runs the offline smoke suite. Use the names below to run just one.
 | 1.x examples | 2.x outcome |
 |---|---|
 | `basic_chat`, `helpers_query` | `basic-chat` borrows a session for `query!!`. `query` uses `query-once!!`; `query-multi` reuses a client across independent sessions. `query-streaming` and `query-async` show callback and channel observation. There is no hidden shared client or lazy event sequence. |
-| `session_events` | `session-events` subscribes before the turn, streams text and reports the event types and counts. Not every turn produces compaction, truncation or usage events. The application closes the subscription. |
+| `session_events` | `session-events` subscribes before the turn, streams text, prints the request's final reply and counts key events such as `assistant.message_delta` and `session.idle` when observed. The application closes the subscription. |
 | `session_resume` | `session-resume` teaches a code word, detaches, resumes without transcript recovery and asks the model to recall the word on a second turn. |
 | `metadata_api` | `metadata-api` filters stored sessions by working directory. `model-switch` switches to a second advertised model between turns in the same conversation. The stable 2.x facade has no equivalent to `get-quota`, `list-tools` or `get-current-model`; the demo does not invent those values. |
 | `byok_provider`, `empty_mode` | Named-only `byok-provider` supports OpenAI, Azure OpenAI, Anthropic and a local OpenAI-compatible endpoint such as Ollama. `empty-mode` runs a provider turn with tenant-owned session storage in memory and an explicit tool policy. |

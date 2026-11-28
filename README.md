@@ -9,15 +9,17 @@ SDK, start a Copilot CLI, or connect to an existing runtime.
 From this **2.x checkout**, on macOS arm64 or glibc Linux x64:
 
 ```bash
-./run-all-examples.sh --live
-# Or run one conversation with your own prompts:
+./run-all-examples.sh query     # One question, local model fixture, no account.
 ./run-all-examples.sh --live basic-chat 'What makes a rainbow?' 'Explain the colors in one sentence.'
+# Run the full portable suite against your Copilot account:
+./run-all-examples.sh --live
 ```
 
-`--live` runs the portable demos using a Copilot-enabled account (for example,
-through `gh auth login`). Live prompts go to the model and can consume account
-usage. Omit `--live` to run the offline suite against the same native runtime
-with local fixtures. Both commands need the Clojure CLI, a JDK and access to
+The two `basic-chat` questions share a session. `--live` uses a Copilot-enabled
+account (for example, through `gh auth login`) and can consume account usage.
+The portable suite starts with one question and ends with multi-client resume.
+Omit `--live` for the same native runtime with local fixtures. The commands
+need the Clojure CLI, a JDK and access to
 fetch dependencies on first use. See the [demo catalog](examples/README.md)
 for individual commands and examples that require extra setup.
 

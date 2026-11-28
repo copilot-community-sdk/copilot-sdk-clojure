@@ -3,14 +3,16 @@
 Run a small Clojure application, ask a real model a question, and watch the SDK calls and results in your terminal. Start from this checkout on macOS arm64 or glibc Linux x64 with the Clojure CLI and a JDK.
 
 ```bash
-./run-all-examples.sh --live
-# Or choose one demo and supply your own prompts:
+./run-all-examples.sh query
+# Try a conversation with your own prompts and a real model:
 ./run-all-examples.sh --live basic-chat \
   'Pick one common garden herb. Reply with its name only.' \
   'Suggest a dish using the herb you just named.'
 ```
 
-The first command runs the unattended live suite with default inputs and stops on the first error. It does not enable a shell, read stdin, or start an external tool server. In the second command, both questions use the **same session**. The demo prints `You:` and `Assistant:` for each turn.
+The first asks for Japan's capital and prints `Assistant: Tokyo.` using a local fixture. In the second, both questions use the **same session** and the model supplies the answers. Next, try `session-resume` to see the code word survive detach, and `structured-output` for a meeting note with two action items.
+
+`./run-all-examples.sh --live` runs the entire portable suite with default inputs, in teaching order. It stops on the first error and does not enable a shell, read stdin, or start an external tool server. To retry one demo after a failure, pass its name rather than rerunning the whole suite.
 
 ## Choose a demo
 
@@ -34,11 +36,11 @@ For the portable `--live` suite, use an account with GitHub Copilot access that 
 | [multi-agent](multi_agent.clj) | Use `start-turn!` to start three research turns in separate sessions before waiting for their answers. The analyst receives all three findings; the writer receives the analysis. |
 | [permission-policy](tool_integration.clj) | Reject the private catalog lookup *before* the tool executes. The model receives the refusal; this is distinct from a lookup that runs but finds no entry. |
 | [query](basic_chat.clj) / [query-multi](basic_chat.clj) | `h/query-once!!` owns the one-shot client and session. `query-multi` reuses a client, not conversation history. |
-| [query-streaming](session_events.clj) / [query-async](session_events.clj) | Stream reply text through an `:on-event` callback or consume a `core.async` subscription yourself. Both await the result of the request; no lazy sequence owns a hidden session. |
+| [query-streaming](session_events.clj) / [query-async](session_events.clj) | Compare a callback with a channel consumer. In `query-async`, `alts!!` waits for session events or the turn result on the application thread, not inside `go`. Both show live text separately from the request's final answer. |
 | [reasoning-effort](reasoning_effort.clj) | Select a model and a reasoning level it advertises. Set `COPILOT_DEMO_REASONING_EFFORT` to request a particular level. |
-| [session-events](session_events.clj) | `h/with-subscription` scopes observation of a dedicated conversation. Use the `start-turn!` result, not the event feed, for this prompt's final reply. |
+| [session-events](session_events.clj) | Inspect the events behind the live text. The channel reader also prints counts for the user message, assistant turn boundaries, text deltas, final message and idle, when observed. The final reply comes from this turn's result, not the event feed. |
 | [session-resume](session_resume.clj) | Teach a session the word `PINEAPPLE`, detach, and ask a **new turn** after resume to recall it without repeating the word. Check clean resume, then delete the demo session. |
-| [structured-answer](structured_output.clj) | `h/query-json!!` returns data with string keys. Check the model's reported confidence is in `[0,1]`; it is not a measured probability. |
+| [structured-answer](structured_output.clj) | Request a number and check `[0,1]` in Clojure. Some providers reject numeric `minimum` and `maximum` in the output schema. Confidence is the model's estimate, not a measured probability. |
 | [structured-output](structured_output.clj) | `h/query-json!!` asks for a meeting-note summary and actions. Select `structured-output-primitive` by name to send the same schema, read the final event and decode its text yourself. Both use the same application validation and one send. |
 | [tool-integration](tool_integration.clj) | Look up Clojure, Python, Rust and an unlisted name. The same custom tool returns `:success` or `:failure`. Pass other language names to choose the queries. |
 | [user-input](user_input.clj) / [user-input-simple](user_input.clj) | The first runs both an answered and a skipped question; the simple variant chooses a preset and greets the user in that style. Neither waits for stdin. |

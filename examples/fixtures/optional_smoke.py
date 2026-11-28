@@ -27,7 +27,8 @@ def completion(request):
             if len(results) == 1:
                 return tool_call(summary, {"files": results[0].splitlines()})
             assert results[1:] == ["2 files: garden.md, weather.csv."]
-    return {"role": "assistant", "content": "Fixture complete."}, "stop"
+        return {"role": "assistant", "content": results[-1]}, "stop"
+    return {"role": "assistant", "content": "2 + 2 is 4."}, "stop"
 
 
 def tool_call(name, args):

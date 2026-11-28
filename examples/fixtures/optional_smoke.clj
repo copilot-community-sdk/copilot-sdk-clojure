@@ -33,13 +33,14 @@
   (try
     (let [{:keys [error fail]} (run-tests 'fixtures.optional-smoke)]
       (when-not (zero? (+ error fail)) (throw (ex-info "Provider configuration checks failed." {}))))
-    (doseq [[demo run prompt] [["byok-provider" byok/run byok/default-prompt]
-                               ["empty-mode" empty-mode/run empty-mode/default-prompt]
-                               ["mcp-local-server" mcp/run mcp/default-prompt]
-                               ["mcp-local-server-with-custom-tools" mcp/run-with-custom-tools mcp/summary-prompt]]]
+    (doseq [[demo run prompt expected] [["byok-provider" byok/run byok/default-prompt "2 + 2 is 4."]
+                                        ["empty-mode" empty-mode/run empty-mode/default-prompt "2 + 2 is 4."]
+                                        ["mcp-local-server" mcp/run mcp/default-prompt "garden.md\nweather.csv"]
+                                        ["mcp-local-server-with-custom-tools" mcp/run-with-custom-tools mcp/summary-prompt
+                                         "2 files: garden.md, weather.csv."]]]
       (let [dir (io/file (System/getenv "HOME") demo)]
         (when-not (.mkdir dir) (throw (ex-info "Could not create demo state." {})))
-        (when-not (= "Fixture complete." (run (.getAbsolutePath dir) prompt))
+        (when-not (= expected (run (.getAbsolutePath dir) prompt))
           (throw (ex-info "Unexpected model reply." {:demo demo})))
         (println "PASS:" demo)))
     (finally (shutdown-agents))))

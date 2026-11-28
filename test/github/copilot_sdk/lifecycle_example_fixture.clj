@@ -1,8 +1,9 @@
 (ns github.copilot-sdk.lifecycle-example-fixture
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
-            [github.copilot-sdk.native-offline-fixture :as fixture]
             [lifecycle-hooks :as hooks]))
+
+(def ^:private bridge-answer "Steel expands when it warms up. Expansion joints give a bridge room to move without buckling.")
 
 (defn- model [requests]
   (let [{:keys [tools messages]} (peek requests)
@@ -27,8 +28,8 @@
       3 (do (when-not (= (select-keys last-message [:role :tool_call_id :content])
                          {:role "tool" :tool_call_id "reader-note" :content note})
               (throw (ex-info "The writer did not receive the reader's note" {})))
-            [[{:role "assistant" :content fixture/answer}] "stop"]))))
+            [[{:role "assistant" :content bridge-answer}] "stop"]))))
 
 (def recipe
-  [model 3 {:answer fixture/answer
+  [model 3 {:answer bridge-answer
             :hooks #{:session-start :prompt :pre-tool :post-tool :subagent-start :subagent-stop :agent-stop :session-end}}])

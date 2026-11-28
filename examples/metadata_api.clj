@@ -14,6 +14,7 @@
     (println "Runtime:" version "| protocol:" protocol-version)
     (println "Saved session:" id "| last modified:" (str (:modified-time metadata)))
     (copilot/delete-session!! client id)
+    (println "Deleted this demo session.")
     :found-and-deleted))
 
 (defn switch-model [client options prompt]

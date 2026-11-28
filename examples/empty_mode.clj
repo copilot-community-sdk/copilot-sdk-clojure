@@ -15,6 +15,7 @@
                        :state {:create-session-fs-provider provider}
                        :tools {:available-tools tool-set/isolated}
                        :permissions {:on-request (constantly {:kind :reject})})]
+    (println "Catalog model:" (:model options) "| storage: in-memory | tools: session-bounded")
     (try
       (let [config {:client {:mode :empty :base-directory state-dir :github {:use-logged-in-user? false}
                              :session-fs {:initial-cwd "/" :session-state-path "/session" :conventions "posix"}}

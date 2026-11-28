@@ -43,6 +43,7 @@
   ([state-dir prompt] (run state-dir prompt basic-chat/run))
   ([state-dir prompt demo]
    (let [options (assoc (session-options (System/getenv)) :working-directory state-dir)]
+     (println "Catalog model:" (:model options) "| deployment:" (get-in options [:inference :models 0 :wire-model]))
      (copilot/with-client [client {:mode :empty :base-directory state-dir
                                    :github {:use-logged-in-user? false}}]
        (demo client options prompt)))))

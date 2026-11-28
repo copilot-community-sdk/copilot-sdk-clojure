@@ -26,13 +26,16 @@
         read? (atom false)
         tool {:name "read_attachment" :description "Read the single attached demo manifest."
               :parameters {:type "object" :properties {} :additionalProperties false}
-              :handler (fn [_ _] (reset! read? true) (slurp (.toFile path) :encoding "UTF-8"))}
+              :handler (fn [_ _]
+                         (println "Reading attachment:" (str (.getFileName path)))
+                         (reset! read? true)
+                         (slurp (.toFile path) :encoding "UTF-8"))}
         permit (fn [{:keys [kind tool-name args]} _]
                  (if (and (= kind "custom-tool") (= tool-name (:name tool)) (= args {}))
                    {:kind :approve-once} {:kind :reject}))]
     (try
       (spit (.toFile path) "{:deps {org.clojure/data.json {:mvn/version \"2.5.1\"}}}" :encoding "UTF-8")
-      (println "Attached manifest:" (.getFileName path))
+      (println "Attached manifest:" (str (.getFileName path)))
       (copilot/with-session [session client (assoc options :tools {:available-tools ["custom:read_attachment"] :definitions [tool]}
                                                    :permissions {:on-request permit})]
         (let [answer (basic-chat/ask session {:prompt prompt :attachments [{:type :file :path (str path)}]})]

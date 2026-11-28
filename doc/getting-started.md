@@ -23,7 +23,8 @@ directory or system keychain. Supply non-sensitive prompts. Use
 with default prompts. See `examples/README.md` for the catalog.
 
 For a credential-free smoke test, omit `--live`: `./run-all-examples.sh basic-chat`.
-The fixture supplies a model that returns a fixed answer. The application
+The fixture explains how a rainbow forms and answers the follow-up with
+conditions to look for outdoors. The application
 runs in a separate test JVM with a fresh home and no inherited account
 credentials. Inside that JVM the SDK loads the Rust runtime and exchanges
 JSON-RPC messages in memory. Only the model request uses loopback HTTP.

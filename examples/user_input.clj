@@ -42,9 +42,10 @@
   (ask!! client options prompt (constantly nil)))
 
 (defn run [client options prompt]
-  (let [answered (run-simple client options prompt)
-        skipped (run-cancel client options prompt)]
-    {:answered answered :skipped skipped}))
+  (println "When the application answers:")
+  (let [answered (run-simple client options prompt)]
+    (println "When the application skips the question:")
+    {:answered answered :skipped (run-cancel client options prompt)}))
 
 (defn run-stdin
   "Read a literal answer before opening the session. Match an offered choice by

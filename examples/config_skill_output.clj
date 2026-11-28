@@ -48,6 +48,7 @@
           (str "---\nname: garden-label\ndescription: Write a label for a kitchen herb.\n---\n"
                "Give the plant name and one care tip in a single line.\n")
           :encoding "UTF-8")
+    (println "Tool output above" (get-in config [:tools :large-output :max-size-bytes]) "bytes is saved to a file.")
     (copilot/with-session [session client config]
       (let [answer (basic-chat/ask session prompt)
             entry (deref loaded 5000 nil)

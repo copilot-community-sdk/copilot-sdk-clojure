@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (examples)
+- The `structured-answer` demo no longer sends `minimum` and `maximum` in its
+  response schema. Providers that reject those keywords can still return a
+  number; the application checks that it is between 0 and 1.
+- The default suite starts with one question before moving to shared history,
+  structured answers, tools and multi-client recovery. Offline demos now show
+  the answers their prompts ask for, including both meeting-note actions, the
+  selected herb and the filenames returned by the local MCP server.
+
 ### Changed (Clojure API)
 - **BREAKING**: Require `copilot.sdk` for primitives, `copilot.sdk.helpers`
   for convenience, and `copilot.sdk.specs`, `copilot.sdk.instrument` and

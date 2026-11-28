@@ -22,7 +22,8 @@
   note)
 
 (defn answer [client options prompt]
-  (let [schema {:type "object" :properties {:answer {:type "string"} :confidence {:type "number" :minimum 0 :maximum 1}}
+  (let [schema {:type "object" :properties {:answer {:type "string"}
+                                            :confidence {:type "number" :description "A confidence estimate from 0 to 1."}}
                 :required ["answer" "confidence"] :additionalProperties false}]
     (copilot/with-session [session client options]
       (println "You:" prompt)
@@ -30,7 +31,7 @@
         (when-not (and (map? result) (= #{"answer" "confidence"} (set (keys result))) (nonblank-text? answer)
                        (number? confidence) (<= 0 confidence 1))
           (throw (ex-info "Expected a text answer and confidence between zero and one" {})))
-        (println "Answer:" answer "| reported confidence:" confidence)
+        (println "Answer:" answer "| reported confidence:" (str confidence))
         result))))
 
 (defn- extract-note [query client options prompt]
